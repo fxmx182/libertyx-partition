@@ -101,5 +101,6 @@ fails += ExtTests.Run(dir);
 fails += DiskScanTests.Run(dir);
 fails += FormattedTests.Run(dir);
 fails += MixedTests.Run(dir);
+fails += CarveExtraTests.Run();
 Console.WriteLine(fails == 0 ? "\nTUDO OK" : $"\n{fails} FALHA(S)");
 return fails;

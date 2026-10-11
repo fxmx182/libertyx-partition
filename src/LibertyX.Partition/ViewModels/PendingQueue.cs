@@ -27,7 +27,7 @@ public sealed partial class MainViewModel
     /// <summary>A fila de alterações — o mesmo modelo do MiniTool: escolhe, revisa, confirma.</summary>
     public ObservableCollection<PendingOp> Pending { get; } = [];
     public bool HasPending => Pending.Count > 0;
-    public string PendingTitle => Pending.Count == 0 ? "NENHUMA ALTERAÇÃO PENDENTE" : $"{Pending.Count} ALTERAÇ{(Pending.Count == 1 ? "ÃO" : "ÕES")} PENDENTE{(Pending.Count == 1 ? "" : "S")}";
+    public string PendingTitle => Pending.Count == 0 ? "ALTERAÇÕES PENDENTES" : $"{Pending.Count} PENDENTE{(Pending.Count == 1 ? "" : "S")}";
 
     private void HookPending()
     {

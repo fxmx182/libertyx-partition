@@ -102,7 +102,8 @@ public static class Carver
         "mkv" or "webm" => "mkv", "wmv" => "wmv", "mp3" => "mp3", "ogg" or "opus" or "ogv" => "ogg", "pdf" => "pdf",
         "docx" or "xlsx" or "pptx" or "odt" or "ods" or "odp" or "epub" or "zip" or "apk" or "jar" => "docx",
         "doc" or "xls" or "ppt" or "msg" or "msi" or "cfb" => "doc",
-        "rar" => "rar", "7z" => "7z", "sqlite" => "sqlite", "exe" or "dll" => "exe", _ => ext,
+        "rar" => "rar", "7z" => "7z", "sqlite" => "sqlite", "exe" or "dll" => "exe",
+        "mts" or "ts" => "mts", "psd" or "psb" => "psd", _ => ext,
     };
 
     public static CarveHit? Identify(CarveReader r, long s, ReadOnlySpan<byte> h, long max)
@@ -162,6 +163,13 @@ public static class Carver
                 case 0x30 when Bin.Match(h, 0, AsfHeader):
                     return Hit("wmv", Asf(r, s, max), "ASF");
             }
+            // MPEG-TS das filmadoras (AVCHD): pacotes de 188 bytes (ou 192 com carimbo de tempo) começando em 0x47
+            if (h.Length >= 512 && h[4] == 0x47 && h[196] == 0x47 && h[388] == 0x47)
+                return Hit("mts", TransportStream(r, s, 192, 4, max), "Vídeo de câmera");
+            if (h.Length >= 512 && h[0] == 0x47 && h[188] == 0x47 && h[376] == 0x47)
+                return Hit("ts", TransportStream(r, s, 188, 0, max), "Vídeo de câmera");
+            if (Bin.Match(h, 0, "8BPS"u8) && Bin.U16BE(h, 4) is 1 or 2)
+                { var (sz, ext) = Psd(r, s, h, max); return Hit(ext, sz, "Photoshop"); }
             if (Bin.Match(h, 4, "ftyp"u8))
             {
                 var (sz, ext) = IsoBmff(r, s, h, max);
@@ -581,6 +589,42 @@ public static class Carver
             if ((type & 4) != 0) return (p - s, ext);
         }
         return (pages >= 2 ? p - s : null, ext);
+    }
+
+    private static long? TransportStream(CarveReader r, long s, int packet, int syncAt, long max)
+    {
+        long p = s, end = s + max, n = 0;
+        while (p + packet <= end && r.Byte(p + syncAt) == 0x47) { p += packet; n++; }
+        return n >= 64 ? p - s : null;
+    }
+
+    private static (long?, string) Psd(CarveReader r, long s, ReadOnlySpan<byte> h, long max)
+    {
+        bool psb = Bin.U16BE(h, 4) == 2;
+        string ext = psb ? "psb" : "psd";
+        int channels = Bin.U16BE(h, 12), depth = Bin.U16BE(h, 22);
+        long height = Bin.U32BE(h, 14), width = Bin.U32BE(h, 18);
+        if (channels is 0 or > 56 || height == 0 || width == 0 || depth is not (1 or 8 or 16 or 32)) return (null, ext);
+        long p = s + 26;
+        p += 4 + r.BE32(p);                                   // modo de cor
+        p += 4 + r.BE32(p);                                   // recursos da imagem
+        p += psb ? 8 + (long)r.BE64(p) : 4 + r.BE32(p);       // camadas e máscaras
+        int comp = r.BE16(p);
+        p += 2;
+        long rows = channels * height;
+        if (comp == 0) p += rows * ((width * depth + 7) / 8);
+        else if (comp == 1)
+        {
+            // RLE: uma tabela com o tamanho de cada linha comprimida, depois as linhas
+            int w = psb ? 4 : 2;
+            long sum = 0;
+            var table = r.Bytes(p, (int)Math.Min(rows * w, 64 << 20));
+            if (table == null || table.Length < rows * w) return (null, ext);
+            for (long k = 0; k < rows; k++) sum += psb ? Bin.U32BE(table, (int)(k * 4)) : Bin.U16BE(table, (int)(k * 2));
+            p += rows * w + sum;
+        }
+        else return (null, ext);
+        return (p - s <= max && p - s > 64 ? p - s : null, ext);
     }
 
     private static ReadOnlySpan<byte> AsfHeader => [0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C];
