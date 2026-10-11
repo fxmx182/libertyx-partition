@@ -40,6 +40,9 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
     {
         var res = new List<VolumeData>();
         char* name = stackalloc char[300];
+        char* paths = stackalloc char[2048];
+        char* lbl = stackalloc char[261];
+        char* fs = stackalloc char[261];
         IntPtr fh = Native.FindFirstVolumeW(name, 300);
         if (fh == (IntPtr)(-1)) return res;
         try
@@ -47,14 +50,11 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
             do
             {
                 var v = new VolumeData { GuidPath = new string(name) };
-                char* paths = stackalloc char[2048];
                 if (Native.GetVolumePathNamesForVolumeNameW(v.GuidPath, paths, 2048, out _))
                 {
                     var all = new string(paths, 0, 2048).Split('\0', StringSplitOptions.RemoveEmptyEntries);
                     v.Paths.AddRange(all);
                 }
-                char* lbl = stackalloc char[261];
-                char* fs = stackalloc char[261];
                 if (Native.GetVolumeInformationW(v.GuidPath, lbl, 261, out uint serial, out _, out _, fs, 261))
                 {
                     v.Label = new string(lbl);

@@ -20,6 +20,11 @@ public sealed class FoundPartition
     public bool LooksLikeEsp { get; set; }
     public bool LooksLikeRecovery { get; set; }
     public bool LengthGuessed { get; set; }
+    /// <summary>A cópia de reserva do setor de boot (no fim ou nos setores 6/12) confere com este.</summary>
+    public bool BackupConfirmed { get; set; }
+    /// <summary>Sobrepõe outra candidata mais confiável — costuma ser o resto de um volume que foi movido.</summary>
+    public bool Conflicting { get; set; }
+    public int Score => (Verified ? 2 : 0) + (BackupConfirmed ? 4 : 0) + (InCurrentTable ? 8 : 0);
     public long EndLba => StartLba + SectorCount - 1;
 }
 
@@ -116,10 +121,17 @@ public static class PartitionFinder
         if (table != null)
             foreach (var f in list)
                 f.InCurrentTable = table.Entries.Any(e => e.StartLba == f.StartLba && Math.Abs(e.SectorCount - f.SectorCount) <= 1);
-        // volumes "dentro" de outros (ex.: imagem de disco guardada num arquivo) são descartados
-        var result = new List<FoundPartition>();
-        foreach (var f in list.OrderByDescending(f => f.Verified).ThenBy(f => f.StartLba))
-            if (!result.Any(r => f.StartLba > r.StartLba && f.StartLba <= r.EndLba && r.Verified)) result.Add(f);
+        // confirma pela cópia do setor de boot: o resto de um volume movido não tem a cópia no lugar
+        foreach (var f in list) f.BackupConfirmed = HasMatchingBackup(disk, f);
+        // sobreposições: a mais confiável fica; as outras continuam na lista, marcadas
+        var keep = new List<FoundPartition>();
+        foreach (var f in list.OrderByDescending(f => f.Score).ThenBy(f => f.StartLba))
+        {
+            if (keep.Any(k => f.StartLba <= k.EndLba && k.StartLba <= f.EndLba)) f.Conflicting = true;
+            else keep.Add(f);
+        }
+        // volumes "dentro" de outros e só com estrutura quebrada (ex.: imagem guardada num arquivo) somem
+        var result = list.Where(f => !(f.Conflicting && !f.Verified && keep.Any(k => f.StartLba > k.StartLba && f.EndLba <= k.EndLba))).ToList();
         progress?.Report(new("Concluído", 1, result.Count, sectors, sectors));
         return result.OrderBy(f => f.StartLba).ToList();
     }
@@ -252,6 +264,30 @@ public static class PartitionFinder
             }
         }
         return res;
+    }
+
+    private static bool HasMatchingBackup(IBlockDevice disk, FoundPartition f)
+    {
+        try
+        {
+            int ss = disk.SectorSize;
+            var primary = disk.ReadBytes(f.StartLba * ss, 512);
+            long backupLba = f.FileSystem switch
+            {
+                FsKind.Ntfs => f.EndLba,
+                FsKind.Fat32 => f.StartLba + 6,
+                FsKind.ExFat => f.StartLba + 12,
+                _ => -1,
+            };
+            if (backupLba < 0 || backupLba * ss >= disk.Length) return false;
+            var backup = disk.ReadBytes(backupLba * ss, 512);
+            // mesmo volume: mesmo número de série e mesma geometria
+            return primary.Length == 512 && backup.Length == 512 && primary.AsSpan(3, 8).SequenceEqual(backup.AsSpan(3, 8))
+                && (f.FileSystem == FsKind.Ntfs ? U64(primary, 72) == U64(backup, 72) && U64(primary, 40) == U64(backup, 40)
+                  : f.FileSystem == FsKind.Fat32 ? U32(primary, 67) == U32(backup, 67)
+                  : U32(primary, 100) == U32(backup, 100));
+        }
+        catch { return false; }
     }
 
     private static bool IsRecoveryLabel(string? l) => l != null && (l.Contains("Recovery", StringComparison.OrdinalIgnoreCase) || l.Contains("Recupera", StringComparison.OrdinalIgnoreCase) || l.Contains("WinRE", StringComparison.OrdinalIgnoreCase));

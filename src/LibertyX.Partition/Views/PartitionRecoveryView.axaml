@@ -104,6 +104,8 @@
                   </StackPanel>
                   <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,14,0">
                     <Border Classes="chip" IsVisible="{Binding InTable}"><TextBlock Text="Já está na tabela" /></Border>
+                    <Border Classes="chip gold" IsVisible="{Binding Confirmed}" ToolTip.Tip="A cópia de reserva do setor de boot confere"><TextBlock Text="Cópia confere" /></Border>
+                    <Border Classes="chip orange" IsVisible="{Binding Conflicting}" ToolTip.Tip="Sobrepõe outra candidata mais confiável. Costuma ser o resto de um volume que foi movido ou recriado."><TextBlock Text="Sobreposta" /></Border>
                     <Border Classes="chip green" IsVisible="{Binding Verified}"><TextBlock Text="Estrutura íntegra" /></Border>
                     <Border Classes="chip orange" IsVisible="{Binding NotVerified}"><TextBlock Text="Estrutura danificada" /></Border>
                   </StackPanel>

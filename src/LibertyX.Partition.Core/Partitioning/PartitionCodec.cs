@@ -182,7 +182,7 @@ public static class PartitionCodec
             var e = o[i];
             if (e.SectorCount <= 0) err.Add($"Partição {e.Slot}: tamanho zero.");
             if (e.StartLba < lo || e.EndLba > hi) err.Add($"Partição {e.Slot}: fora da área utilizável ({lo}–{hi}).");
-            if (i > 0 && e.StartLba <= o[i - 1].EndLba) err.Add($"Partições {o[i - 1].Slot} e {e.Slot} se sobrepõem.");
+            if (i > 0 && e.StartLba <= o[i - 1].EndLba) err.Add($"Duas partições se sobrepõem (setores {o[i - 1].StartLba:N0}–{o[i - 1].EndLba:N0} e {e.StartLba:N0}–{e.EndLba:N0}). Desmarque uma delas.");
             if (t.Style == TableStyle.Mbr && (e.EndLba > uint.MaxValue)) err.Add($"Partição {e.Slot}: além de 2 TiB, impossível em MBR.");
         }
         if (t.Style == TableStyle.Mbr)

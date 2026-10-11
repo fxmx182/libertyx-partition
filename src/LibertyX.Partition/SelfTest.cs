@@ -156,7 +156,7 @@ public static class SelfTest
     }
 
     private static Dictionary<string, string> HashTree(string root) =>
-        Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Where(f => !f.Contains("System Volume Information"))
+        Directory.EnumerateFiles(root, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.System | FileAttributes.Hidden })
             .ToDictionary(f => Path.GetRelativePath(root, f), f => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(f))));
 
     private static async Task VhdTests()
@@ -193,7 +193,9 @@ public static class SelfTest
                 var data = new byte[rnd.Next(1, 3) * (i % 3 == 0 ? 600 : 300_000)];
                 rnd.NextBytes(data);
                 string rel = i < 4 ? $@"Fotos\foto{i}.bin" : $@"Docs\Antigos\doc{i}.bin";
-                File.WriteAllBytes($@"{letter}\{rel}", data);
+                // write-through: sem isso o arquivo fica só no cache e, apagado logo depois, nunca chega ao disco
+                using (var fs = new FileStream($@"{letter}\{rel}", FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                { fs.Write(data); fs.Flush(true); }
                 files[rel] = Convert.ToHexString(SHA256.HashData(data));
             }
             File.WriteAllText($@"{letter}\leia-me.txt", "LibertyX autoteste");
@@ -202,6 +204,7 @@ public static class SelfTest
             Directory.Delete($@"{letter}\Docs\Antigos", true);
             foreach (var k in files.Keys.Where(k => k.StartsWith(@"Docs\Antigos"))) deleted[Path.GetFileName(k)] = files[k];
             foreach (var k in files.Keys.Where(k => deleted.ContainsKey(Path.GetFileName(k))).ToList()) files.Remove(k);
+            await WinCommands.PowerShell($"Write-VolumeCache -DriveLetter {letter[0]}");
             await Task.Delay(1500);
             d = DiskSystem.Enumerate().First(x => x.Number == n);
             var p = Part(d, FsKind.Ntfs);
@@ -323,9 +326,10 @@ public static class SelfTest
             Check(d.Table.Entries.Count == 0, "todas excluídas");
             List<FoundPartition> found;
             using (var dev = DiskSystem.OpenDisk(d, false)) found = PartitionFinder.Scan(dev, false, null, CancellationToken.None);
-            W($"   achadas: {string.Join(", ", found.Select(f => $"{FsDetect.Name(f.FileSystem)} '{f.Label}' @{f.StartLba}"))}");
-            Check(found.Count == 2, "busca rápida acha NTFS e FAT32");
-            DiskOperations.RestoreFound(d, found, TableStyle.Gpt, sink);
+            W($"   achadas: {string.Join(", ", found.Select(f => $"{FsDetect.Name(f.FileSystem)} '{f.Label}' @{f.StartLba}{(f.BackupConfirmed ? " cópia-ok" : "")}{(f.Conflicting ? " SOBREPOSTA" : "")}"))}");
+            var good = found.Where(f => !f.Conflicting).ToList();
+            Check(good.Count == 2 && good.Any(f => f.FileSystem == FsKind.Ntfs) && good.Any(f => f.FileSystem == FsKind.Fat32), "busca rápida acha NTFS e FAT32 (restos de volume movido ficam marcados como sobrepostos)");
+            DiskOperations.RestoreFound(d, good, TableStyle.Gpt, sink);
             d = await Settle(n, x => x.Partitions.Any(p => p.FileSystem == FsKind.Ntfs && p.Letter != null));
             letter = Part(d, FsKind.Ntfs).Letter ?? letter;
             var now = HashTree(letter + "\\");

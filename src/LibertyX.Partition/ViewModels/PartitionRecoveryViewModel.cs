@@ -14,7 +14,7 @@ public sealed partial class FoundRow : ObservableObject
 {
     public FoundPartition F { get; }
     private readonly PartitionRecoveryViewModel _owner;
-    public FoundRow(FoundPartition f, PartitionRecoveryViewModel owner, int ss) { F = f; _owner = owner; SectorSize = ss; _isChecked = !f.InCurrentTable && f.Verified; }
+    public FoundRow(FoundPartition f, PartitionRecoveryViewModel owner, int ss) { F = f; _owner = owner; SectorSize = ss; _isChecked = !f.InCurrentTable && f.Verified && !f.Conflicting; }
     public int SectorSize { get; }
     [ObservableProperty] private bool _isChecked;
     partial void OnIsCheckedChanged(bool value) => _owner.Changed();
@@ -26,6 +26,8 @@ public sealed partial class FoundRow : ObservableObject
     public bool Verified => F.Verified;
     public bool NotVerified => !F.Verified;
     public bool InTable => F.InCurrentTable;
+    public bool Conflicting => F.Conflicting;
+    public bool Confirmed => F.BackupConfirmed;
     public Avalonia.Media.IBrush ColorBrush => new Avalonia.Media.SolidColorBrush(F.LooksLikeEsp ? Avalonia.Media.Color.Parse("#FFE08A") : Ui.FsColor(F.FileSystem));
     public IRelayCommand Explore => new RelayCommand(() => _owner.ExploreRow(this));
 }

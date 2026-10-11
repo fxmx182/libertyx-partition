@@ -74,7 +74,6 @@ public static class FileSystemScanner
         public NtfsAttr? Data;
         public List<NtfsAttr>? Ext;
         public RecoveredItem? Item;
-        public bool Keep;
     }
 
     public static ScanResult ScanNtfs(NtfsVolume v, ScanOptions opt, IProgress<ScanProgress>? progress, CancellationToken ct)
