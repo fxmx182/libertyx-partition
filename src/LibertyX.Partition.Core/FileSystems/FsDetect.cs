@@ -15,6 +15,31 @@ public static class FsDetect
         FsKind.Empty => "Não formatada", _ => "Desconhecido",
     };
 
+    /// <summary>ext2, ext3 ou ext4, pelas marcas de recurso do superbloco (que fica 1024 bytes após o início).</summary>
+    public static string ExtVariant(ReadOnlySpan<byte> sb)
+    {
+        uint compat = U32(sb, 92), incompat = U32(sb, 96);
+        if ((incompat & (0x40 | 0x80 | 0x200)) != 0) return "ext4";      // extents, 64 bits, flex_bg
+        if ((compat & 0x4) != 0) return "ext3";                           // journal
+        return "ext2";
+    }
+
+    public sealed record ExtInfo(string Variant, long BlockSize, long Blocks, long FreeBlocks, long BlocksPerGroup, long FirstDataBlock, int Group, string Label, Guid Uuid);
+
+    /// <summary>Lê um superbloco ext (principal ou cópia de reserva). Nulo se não for um superbloco plausível.</summary>
+    public static ExtInfo? ParseExt(ReadOnlySpan<byte> sb)
+    {
+        if (sb.Length < 512 || U16(sb, 56) != 0xEF53) return null;
+        uint logBs = U32(sb, 24), rev = U32(sb, 76), inodes = U32(sb, 0), bpg = U32(sb, 32);
+        if (logBs > 6 || rev > 1 || inodes == 0 || bpg == 0 || bpg > 65536 * 8) return null;
+        uint incompat = U32(sb, 96);
+        long blocks = U32(sb, 4) | ((incompat & 0x80) != 0 && sb.Length >= 0x154 ? (long)U32(sb, 0x150) << 32 : 0);
+        long free = U32(sb, 12) | ((incompat & 0x80) != 0 && sb.Length >= 0x15C ? (long)U32(sb, 0x158) << 32 : 0);
+        if (blocks == 0 || free > blocks) return null;
+        string label = System.Text.Encoding.UTF8.GetString(sb.Slice(120, 16)).TrimEnd('\0');
+        return new ExtInfo(ExtVariant(sb), 1024L << (int)logBs, blocks, free, bpg, U32(sb, 20), U16(sb, 90), label, new Guid(sb.Slice(104, 16)));
+    }
+
     public static bool IsFat(FsKind k) => k is FsKind.Fat12 or FsKind.Fat16 or FsKind.Fat32;
     public static bool CanRead(FsKind k) => k is FsKind.Ntfs or FsKind.ExFat || IsFat(k);
 

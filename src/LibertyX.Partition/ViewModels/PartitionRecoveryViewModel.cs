@@ -18,7 +18,7 @@ public sealed partial class FoundRow : ObservableObject
     public int SectorSize { get; }
     [ObservableProperty] private bool _isChecked;
     partial void OnIsCheckedChanged(bool value) => _owner.Changed();
-    public string FsText => FsDetect.Name(F.FileSystem);
+    public string FsText => F.Variant ?? FsDetect.Name(F.FileSystem);
     public string LabelText => string.IsNullOrEmpty(F.Label) ? (F.LooksLikeEsp ? "Sistema EFI" : F.LooksLikeRecovery ? "Recuperação" : "Sem rótulo") : F.Label!;
     public string SizeText => Fmt.Size(F.SectorCount * SectorSize);
     public string RangeText => $"setores {F.StartLba:N0} – {F.EndLba:N0}";

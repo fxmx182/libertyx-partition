@@ -97,5 +97,6 @@ foreach (var deep in new[] { false, true })
         Check(hashes.Contains(manifest[n]), $"escavado por assinatura com hash idêntico: {n}");
 }
 fails += await Ops.Run(dir);
+fails += ExtTests.Run(dir);
 Console.WriteLine(fails == 0 ? "\nTUDO OK" : $"\n{fails} FALHA(S)");
 return fails;

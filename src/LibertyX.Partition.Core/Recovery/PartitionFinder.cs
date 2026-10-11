@@ -20,6 +20,8 @@ public sealed class FoundPartition
     public bool LooksLikeEsp { get; set; }
     public bool LooksLikeRecovery { get; set; }
     public bool LengthGuessed { get; set; }
+    /// <summary>Detalhe do sistema de arquivos (ext2/ext3/ext4).</summary>
+    public string? Variant { get; set; }
     /// <summary>A cópia de reserva do setor de boot (no fim ou nos setores 6/12) confere com este.</summary>
     public bool BackupConfirmed { get; set; }
     /// <summary>Sobrepõe outra candidata mais confiável — costuma ser o resto de um volume que foi movido.</summary>
@@ -249,19 +251,19 @@ public static class PartitionFinder
             return res;
         }
 
-        if (plus1024.Length >= 512 && U16(plus1024, 56) == 0xEF53)
+        if (plus1024.Length >= 512 && FsDetect.ParseExt(plus1024) is { } ext)
         {
-            long blocks = U32(plus1024, 4);
-            int logBs = (int)U32(plus1024, 24);
-            if (logBs <= 6)
-            {
-                long bs = 1024L << logBs;
+            // cada grupo de blocos guarda uma cópia do superbloco, dizendo de qual grupo é: uma cópia
+            // não vira partição fantasma — aponta para o início verdadeiro do volume
+            long sbByte = lba * ss + 1024;
+            long primaryByte = ext.Group == 0 ? sbByte - 1024 : sbByte - ((long)ext.Group * ext.BlocksPerGroup + ext.FirstDataBlock) * ext.BlockSize;
+            if (primaryByte >= 0 && primaryByte % ss == 0)
                 res.Add(new FoundPartition
                 {
-                    StartLba = lba, SectorCount = blocks * bs / ss, FileSystem = FsKind.Ext, Evidence = "superbloco ext",
-                    Verified = true, Label = Encoding.UTF8.GetString(plus1024.Slice(120, 16)).TrimEnd('\0'),
+                    StartLba = primaryByte / ss, SectorCount = ext.Blocks * ext.BlockSize / ss, FileSystem = FsKind.Ext, Variant = ext.Variant,
+                    Evidence = ext.Group == 0 ? "superbloco " + ext.Variant : $"cópia do superbloco (grupo {ext.Group})",
+                    Verified = true, Label = ext.Label,
                 });
-            }
         }
         return res;
     }
@@ -271,6 +273,14 @@ public static class PartitionFinder
         try
         {
             int ss = disk.SectorSize;
+            if (f.FileSystem == FsKind.Ext)
+            {
+                var main = FsDetect.ParseExt(disk.ReadBytes(f.StartLba * ss + 1024, 1024));
+                if (main == null) return false;
+                long b1 = f.StartLba * ss + (main.BlocksPerGroup + main.FirstDataBlock) * main.BlockSize;
+                var copy = FsDetect.ParseExt(disk.ReadBytes(b1, 1024));
+                return copy != null && copy.Uuid == main.Uuid && copy.Group == 1;
+            }
             var primary = disk.ReadBytes(f.StartLba * ss, 512);
             long backupLba = f.FileSystem switch
             {

@@ -53,6 +53,8 @@ public sealed class PartitionInfo
     public bool HasPageFile { get; set; }
     public uint VolumeSerial { get; set; }
     public bool BitLocker { get; set; }
+    /// <summary>ext2/ext3/ext4 quando o sistema é ext.</summary>
+    public string? FsVariant { get; set; }
 
     public long StartLba => Offset / Disk.SectorSize;
     public long Sectors => Length / Disk.SectorSize;
@@ -128,7 +130,16 @@ public static class LayoutBuilder
             if (e.StartLba - cur >= min) d.Partitions.Add(new PartitionInfo { Disk = d, Offset = cur * ss, Length = (e.StartLba - cur) * ss });
             var p = new PartitionInfo { Disk = d, Entry = e, Offset = e.StartLba * ss, Length = e.SectorCount * ss };
             if (p.Offset + p.Length <= dev.Length)
+            {
                 p.FileSystem = SafeDetect(dev.Slice(p.Offset, p.Length));
+                if (p.FileSystem == FsKind.Ext)
+                    try
+                    {
+                        var x = FsDetect.ParseExt(dev.ReadBytes(p.Offset + 1024, 1024));
+                        if (x != null) { p.FsVariant = x.Variant; p.Label = x.Label.Length > 0 ? x.Label : null; p.Used = (x.Blocks - x.FreeBlocks) * x.BlockSize; p.Free = x.FreeBlocks * x.BlockSize; }
+                    }
+                    catch { }
+            }
             d.Partitions.Add(p);
             cur = Math.Max(cur, e.EndLba + 1);
         }
