@@ -75,7 +75,7 @@ public static class PartitionFinder
                 candidates.Remove(l);
                 if (l <= 0 || l >= sectors || !checkedSet.Add(l)) continue;
                 byte[] buf;
-                try { buf = disk.ReadBytes(l * ss, Math.Max(ss, 2048)); } catch (MediaReadException) { continue; }
+                try { buf = disk.ReadBytes(l * ss, Math.Max(ss, 4096)); } catch (MediaReadException) { continue; }
                 int before = found.Count;
                 Consider(l, buf, buf.Length >= 1024 + 512 ? buf.AsSpan(1024) : default);
                 if (found.Count > before || found.Values.Any(f => f.StartLba == l))
@@ -95,7 +95,7 @@ public static class PartitionFinder
         else
         {
             const int block = 4 << 20;
-            var buf = new byte[block + 2048];
+            var buf = new byte[block + 4096];
             for (long p = 0; p < disk.Length; p += block)
             {
                 ct.ThrowIfCancellationRequested();
@@ -108,8 +108,10 @@ public static class PartitionFinder
                     var s = buf.AsSpan(o, ss);
                     bool boot = s[510] == 0x55 && s[511] == 0xAA || (ss > 512 && s[ss - 2] == 0x55);
                     bool ext = o + 1024 + 512 <= got && U16(buf, o + 1024 + 56) == 0xEF53;
-                    if (!boot && !ext && !Match(s, 3, "NTFS    "u8) && !Match(s, 3, "EXFAT   "u8)) continue;
-                    Consider((p + o) / ss, buf.AsSpan(o, Math.Min(ss * 4, got - o)), ext ? buf.AsSpan(o + 1024) : default);
+                    bool hfs = o + 1024 + 512 <= got && (Match(buf, o + 1024, "H+\0\x04"u8) || Match(buf, o + 1024, "HX\0\x05"u8));
+                    bool other = Match(s, 32, "NXSB"u8) || Match(s, 3, "ReFS"u8) || (o + 4096 <= got && Match(buf, o + 4086, "SWAPSPACE2"u8));
+                    if (!boot && !ext && !hfs && !other && !Match(s, 3, "NTFS    "u8) && !Match(s, 3, "EXFAT   "u8)) continue;
+                    Consider((p + o) / ss, buf.AsSpan(o, Math.Min(4096, got - o)), ext || hfs ? buf.AsSpan(o + 1024) : default);
                 }
                 progress?.Report(new("Lendo o disco inteiro", (double)p / disk.Length, found.Count, p / ss, sectors));
             }
@@ -251,6 +253,42 @@ public static class PartitionFinder
             return res;
         }
 
+        if (Match(sec, 3, "ReFS"u8) && sec.Length >= 0x28 && Match(sec, 16, "FSRS"u8))
+        {
+            long n = (long)U64(sec, 0x18), bps = U32(sec, 0x20);
+            if (n > 0 && bps is 512 or 4096)
+                res.Add(new FoundPartition { StartLba = lba, SectorCount = n * bps / ss, FileSystem = FsKind.ReFS, Variant = "ReFS", Evidence = "setor de boot ReFS", Verified = true });
+            return res;
+        }
+        if (sec.Length >= 48 && Match(sec, 32, "NXSB"u8))
+        {
+            long bs = U32(sec, 36), count = (long)U64(sec, 40);
+            if (bs is >= 4096 and <= 65536 && count > 0)
+                res.Add(new FoundPartition { StartLba = lba, SectorCount = bs * count / ss, FileSystem = FsKind.Apfs, Variant = "APFS", Evidence = "superbloco do contêiner APFS", Verified = true });
+            return res;
+        }
+        if (sec.Length >= 4096 && Match(sec, 4086, "SWAPSPACE2"u8) && U32(sec, 1024) == 1)
+        {
+            long last = U32(sec, 1028);
+            if (last > 0)
+                res.Add(new FoundPartition
+                {
+                    StartLba = lba, SectorCount = (last + 1) * 4096 / ss, FileSystem = FsKind.LinuxSwap, Variant = "Linux swap", Evidence = "cabeçalho de swap",
+                    Verified = true, Label = Encoding.UTF8.GetString(sec.Slice(1024 + 28, 16)).TrimEnd('\0'),
+                });
+            return res;
+        }
+        if (plus1024.Length >= 512 && (Match(plus1024, 0, "H+"u8) || Match(plus1024, 0, "HX"u8)) && U16BE(plus1024, 2) is 4 or 5)
+        {
+            long bs = U32BE(plus1024, 40), total = U32BE(plus1024, 44);
+            if (bs is >= 512 and <= 65536 && (bs & (bs - 1)) == 0 && total > 0)
+                res.Add(new FoundPartition
+                {
+                    StartLba = lba, SectorCount = bs * total / ss, FileSystem = FsKind.HfsPlus, Variant = Match(plus1024, 0, "HX"u8) ? "HFSX" : "HFS+",
+                    Evidence = "cabeçalho de volume HFS+", Verified = true,
+                });
+            return res;
+        }
         if (plus1024.Length >= 512 && FsDetect.ParseExt(plus1024) is { } ext)
         {
             // cada grupo de blocos guarda uma cópia do superbloco, dizendo de qual grupo é: uma cópia
@@ -337,19 +375,32 @@ public static class PartitionFinder
             if (style == TableStyle.Gpt)
             {
                 e.TypeGuid = p.LooksLikeEsp ? PartitionTypes.Esp : p.LooksLikeRecovery ? PartitionTypes.WinRecovery
-                    : p.FileSystem == FsKind.Ext ? PartitionTypes.LinuxFs : PartitionTypes.BasicData;
+                    : p.FileSystem switch
+                    {
+                        FsKind.Ext => PartitionTypes.LinuxFs, FsKind.LinuxSwap => PartitionTypes.LinuxSwap,
+                        FsKind.HfsPlus => PartitionTypes.AppleHfs, FsKind.Apfs => PartitionTypes.AppleApfs, _ => PartitionTypes.BasicData,
+                    };
                 if (p.LooksLikeRecovery) e.Attributes = PartitionTypes.RecoveryAttributes;
                 if (p.LooksLikeEsp && string.IsNullOrEmpty(e.Name)) e.Name = "EFI system partition";
                 e.UniqueGuid = Guid.NewGuid();
             }
             else
             {
-                e.MbrType = p.LooksLikeEsp ? (byte)0xEF : p.LooksLikeRecovery ? (byte)0x27 : PartitionTypes.GptToMbr(PartitionTypes.BasicData, p.FileSystem) ?? 0x07;
+                e.MbrType = p.LooksLikeEsp ? (byte)0xEF : p.LooksLikeRecovery ? (byte)0x27 : p.FileSystem switch
+                {
+                    FsKind.LinuxSwap => (byte)0x82, FsKind.HfsPlus or FsKind.Apfs => (byte)0xAF,
+                    _ => PartitionTypes.GptToMbr(PartitionTypes.BasicData, p.FileSystem) ?? 0x07,
+                };
             }
             t.Entries.Add(e);
         }
         if (style == TableStyle.Mbr && t.Entries.Count > 4)
-            throw new InvalidOperationException("MBR comporta só 4 partições primárias — escolha GPT ou menos partições.");
+        {
+            // mais de 4: as 3 primeiras ficam primárias e as demais viram lógicas numa estendida,
+            // que é como esses discos costumavam ser (o codec põe um EBR antes de cada lógica)
+            var ord = t.Entries.OrderBy(e => e.StartLba).ToList();
+            for (int i = 3; i < ord.Count; i++) { ord[i].IsLogical = true; ord[i].Active = false; }
+        }
         // o GPT precisa de folga no começo e no fim
         if (style == TableStyle.Gpt)
         {
