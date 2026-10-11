@@ -237,7 +237,8 @@ public static class DiskOperations
             if (shadow is { } s)
             {
                 sink.Log("Instantâneo pronto: a cópia sai consistente mesmo com o Windows em uso.");
-                var dev = new WinDevice(s.device, false, p.Disk.SectorSize, null, isVolume: true);
+                // o tamanho vem da partição: nem todo Windows responde IOCTL_DISK_GET_LENGTH_INFO no instantâneo
+                var dev = new WinDevice(s.device, false, p.Disk.SectorSize, p.Length, isVolume: true);
                 return (dev, async () => { dev.Dispose(); await WinCommands.DeleteShadow(s.id); });
             }
         }

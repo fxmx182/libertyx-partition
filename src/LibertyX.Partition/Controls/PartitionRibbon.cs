@@ -126,6 +126,8 @@ public sealed class PartitionRibbon : Control
         }
     }
 
+    public PartitionVM? HitTest(Point p) => _hit.FirstOrDefault(t => t.rect.Contains(p)).vm;
+
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         var p = e.GetPosition(this);
