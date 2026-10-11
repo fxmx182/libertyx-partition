@@ -174,6 +174,20 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
         return s;
     }
 
+    /// <summary>Discos presentes e seus tamanhos, só com consultas que não leem a mídia.</summary>
+    public static string QuickSignature()
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int n = 0; n < 64; n++)
+        {
+            using var h = Native.Open($@"\\.\PhysicalDrive{n}", 0);
+            if (h.IsInvalid) continue;
+            var geo = Native.Ioctl(h, Native.IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, null, 256);
+            sb.Append(n).Append(':').Append(geo is { Length: >= 32 } ? I64(geo, 24) : -1).Append(';');
+        }
+        return sb.ToString();
+    }
+
     public IBlockDevice OpenDisk(DiskInfo d, bool write)
     {
         if (d.IsImage) return new ImageFileDevice(d.ImagePath!, write, d.SectorSize);

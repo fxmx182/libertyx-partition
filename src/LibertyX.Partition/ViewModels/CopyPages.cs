@@ -58,9 +58,14 @@ public sealed partial class CopyPartitionViewModel : PageViewModel
         var s = Source.Selected!.Partition!;
         var t = Target.Selected!.Partition!;
         long start = (t.Offset + 1024 * 1024 - 1) / (1024 * 1024) * (1024 * 1024);
-        if (!await Main.Confirm("Copiar partição", $"{Source.Selected.Title} ({Fmt.Size(s.Length)}) será copiada para o espaço livre de {t.Disk.Title}, começando em {Fmt.Size(start)}.", "Copiar", false, null, "CopyPartition")) return;
         bool used = UsedOnly, vss = UseVss;
-        await Main.Run("Copiando partição", sink => DiskOperations.CopyPartition(s, t.Disk, start / t.Disk.SectorSize, used, vss, sink), canPause: true);
+        Main.Queue("Copiar partição", $"{Source.Selected.Title} ({Fmt.Size(s.Length)}) → espaço livre de {t.Disk.Title}, em {Fmt.Size(start)}", "CopyPartition", async sink =>
+        {
+            var sq = MainViewModel.FreshPart(s);
+            var tq = MainViewModel.FreshPart(t);
+            await DiskOperations.CopyPartition(sq, tq.Disk, start / tq.Disk.SectorSize, used, vss, sink);
+        }, t.Disk, canPause: true);
+        await Task.CompletedTask;
     }
 }
 
@@ -177,17 +182,26 @@ public sealed partial class CloneViewModel : PageViewModel
             await Main.Alert("Não dá para reduzir tanto", $"O Windows consegue reduzir {sc.Letter} só até {Fmt.Size(sup.Value.min)} (há arquivos fixos no fim do volume). Libere espaço ou escolha um disco maior.", "warn");
             return;
         }
-        if (!await Main.Confirm("Reduzir a partição de origem", $"{sc.Letter} passa de {Fmt.Size(sc.Length)} para {Fmt.Size(newSize)}. É o mesmo recurso de “Diminuir volume” do Gerenciamento de Disco do Windows.", "Reduzir")) return;
-        await Main.Run("Reduzindo " + sc.Letter, async s => { var r = await WinCommands.Resize(sc.Disk.Number, sc.Offset, newSize, s.Token); if (!r.Ok) throw new InvalidOperationException(r.Message); });
+        Main.Queue("Reduzir " + sc.Letter, $"{sc.Letter}: {Fmt.Size(sc.Length)} → {Fmt.Size(newSize)} (Diminuir volume do Windows, sem perder dados)", "Resize", async s =>
+        {
+            var q = MainViewModel.FreshPart(sc);
+            var r = await WinCommands.Resize(q.Disk.Number, q.Offset, newSize, s.Token);
+            if (!r.Ok) throw new InvalidOperationException(r.Message);
+        }, sc.Disk);
     }
 
     [RelayCommand]
     private async Task Run()
     {
         var plan = _plan; if (plan == null) return;
-        if (!await Main.Confirm(Title, $"Origem: {plan.Source.Title} · {plan.Source.Model}\nDestino: {plan.Target.Title} · {plan.Target.Model}\n\nTodo o conteúdo atual do destino será substituído.", _migrate ? "Migrar" : "Copiar", true, "CLONAR", IconKey)) return;
-        bool used = UsedOnly, vss = UseVss, boot = MakeBootable;
-        await Main.Run(_migrate ? "Migrando o sistema" : "Copiando disco", s => DiskOperations.Clone(plan, used, vss, boot, s), canPause: true);
+        bool used = UsedOnly, vss = UseVss, boot = MakeBootable, sysOnly = SystemOnly, fit = FitToTarget;
+        var src = plan.Source; var dst = plan.Target;
+        Main.Queue(_migrate ? "Migrar sistema" : "Copiar disco", $"{src.Title} ({src.Model}) → {dst.Title} ({dst.Model}) — apaga o conteúdo atual do destino", IconKey, async s =>
+        {
+            var fresh = DiskOperations.PlanClone(MainViewModel.Fresh(src), MainViewModel.Fresh(dst), sysOnly, fit);
+            await DiskOperations.Clone(fresh, used, vss, boot, s);
+        }, dst, dangerous: true, canPause: true);
+        await Task.CompletedTask;
     }
 }
 
@@ -289,9 +303,14 @@ public sealed partial class BackupViewModel : PageViewModel
     {
         var t = RestoreTarget.Selected; if (t == null) return;
         string what = t.Partition == null ? $"o disco {t.Disk.Title} ({t.Disk.Model}) inteiro" : $"a partição {t.Title}";
-        if (!await Main.Confirm("Restaurar imagem", $"{Path.GetFileName(RestoreFile)} vai sobrescrever {what}.", "Restaurar", true, "RESTAURAR", "Restore")) return;
         string file = RestoreFile;
-        await Main.Run("Restaurando imagem", s => DiskOperations.RestoreImage(file, t.Disk, t.Partition, s), canPause: true);
+        var td = t.Disk; var tp = t.Partition;
+        Main.Queue("Restaurar imagem", $"{Path.GetFileName(file)} sobrescreve {what}", "Restore", s =>
+        {
+            var pq = tp == null ? null : MainViewModel.FreshPart(tp);
+            DiskOperations.RestoreImage(file, pq?.Disk ?? MainViewModel.Fresh(td), pq, s);
+        }, td, dangerous: true, canPause: true);
+        await Task.CompletedTask;
     }
 
     [RelayCommand]

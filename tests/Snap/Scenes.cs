@@ -70,6 +70,21 @@ public static class Scenes
                     snap("09-recuperar-foto");
                     break;
                 }
+            case "fila":
+                vm.Navigate("discos");
+                disks.Select(Part(FsKind.Ntfs));
+                vm.Queue("Mover / redimensionar", "DADOS: 120 MB → 180 MB · Imagem · disk.img", "Resize", _ => Task.CompletedTask, disks.Disks[0].D);
+                vm.Queue("Formatar partição", "PENDRIVE → exFAT, rótulo “FOTOS” — apaga o conteúdo", "Format", _ => Task.CompletedTask, disks.Disks[0].D, dangerous: true);
+                vm.Queue("Converter para MBR", "Imagem · disk.img: GPT → MBR, sem apagar partições", "Convert", _ => Task.CompletedTask, disks.Disks[0].D);
+                pump(300);
+                snap("10-fila");
+                _ = vm.ApplyPendingCommand.ExecuteAsync(null);
+                pump(400);
+                snap("11-fila-confirmar");
+                vm.Dialog?.Close(false);
+                vm.Pending.Clear();
+                pump(100);
+                break;
             default:
                 vm.Navigate(scene);
                 pump(500);

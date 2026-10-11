@@ -36,7 +36,7 @@
       <!-- barra lateral -->
       <Border Background="#59000000" BorderBrush="#10FFFFFF" BorderThickness="0,0,1,0">
         <DockPanel Margin="14,18,14,14">
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8,10,0,22">
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8,10,0,18">
             <Path Data="{StaticResource LogoMark}" Fill="{StaticResource OuroGradiente}" Width="40" Height="40" Stretch="Uniform" />
             <StackPanel VerticalAlignment="Center">
               <TextBlock Text="LIBERTYX" FontSize="10.5" FontWeight="Bold" LetterSpacing="2.6" Foreground="{StaticResource Ouro}" />
@@ -44,18 +44,46 @@
             </StackPanel>
           </StackPanel>
 
-          <Border DockPanel.Dock="Bottom" Classes="inset" Padding="12,10" Margin="0,10,0,0">
-            <StackPanel Spacing="3">
-              <StackPanel Orientation="Horizontal" Spacing="7">
-                <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Verde}" IsVisible="{Binding IsAdmin}" />
-                <PathIcon Data="{StaticResource IcAlert}" Classes="small" Foreground="{StaticResource Laranja}" IsVisible="{Binding !IsAdmin}" />
-                <TextBlock Text="{Binding AdminText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Apagado}" />
+          <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,10,0,0">
+            <!-- a fila: nada vai para o disco antes do Confirmar -->
+            <Border Classes="inset pendingbox" Classes.active="{Binding HasPending}" Padding="10,10,10,10">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="section" Text="{Binding PendingTitle}" Classes.goldtext="{Binding HasPending}" Margin="2,0,0,0" />
+                <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasPending}">
+                  <ItemsControl ItemsSource="{Binding Pending}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PendingOp">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                          <PathIcon Data="{Binding Icon}" Width="14" Height="14" VerticalAlignment="Top" Margin="2,2,8,0" Classes="tree" Classes.del="{Binding Dangerous}" />
+                          <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{StaticResource Tenue}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <Button Grid.Column="2" Classes="ghost" Padding="4" VerticalAlignment="Top" Command="{Binding Remove}" ToolTip.Tip="Tirar da fila">
+                            <PathIcon Data="{StaticResource IcClose}" Width="11" Height="11" />
+                          </Button>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+                <TextBlock Text="O que você alterar espera aqui até ser confirmado. Nada é gravado antes disso." FontSize="11" Foreground="{StaticResource Tenue}" TextWrapping="Wrap" IsVisible="{Binding !HasPending}" Margin="2,0" />
+                <Grid ColumnDefinitions="*,8,*">
+                  <Button Content="Cancelar" Command="{Binding DiscardPendingCommand}" IsEnabled="{Binding HasPending}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="8,9" />
+                  <Button Grid.Column="2" Classes="primary" Command="{Binding ApplyPendingCommand}" IsEnabled="{Binding HasPending}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="4,9">
+                    <StackPanel Orientation="Horizontal" Spacing="5"><PathIcon Data="{StaticResource IcCheck}" Width="13" Height="13" /><TextBlock Text="Confirmar" FontSize="13" /></StackPanel>
+                  </Button>
+                </Grid>
               </StackPanel>
-              <TextBlock FontSize="11" Foreground="{StaticResource Tenue}">
-                <Run Text="LibertyX Partition" /><Run Text=" · " /><Run Text="{Binding Version}" />
+            </Border>
+            <StackPanel Orientation="Horizontal" Spacing="7" Margin="6,0,0,0">
+              <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Verde}" IsVisible="{Binding IsAdmin}" />
+              <PathIcon Data="{StaticResource IcAlert}" Classes="small" Foreground="{StaticResource Laranja}" IsVisible="{Binding !IsAdmin}" />
+              <TextBlock FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center">
+                <Run Text="{Binding AdminText}" /><Run Text=" · " /><Run Text="{Binding Version}" />
               </TextBlock>
             </StackPanel>
-          </Border>
+          </StackPanel>
 
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Nav}">

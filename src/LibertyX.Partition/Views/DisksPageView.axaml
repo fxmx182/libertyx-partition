@@ -41,6 +41,7 @@
                         <TextBlock Text="{Binding Info}" FontSize="12.5" Foreground="{StaticResource Tenue}" Margin="0,2,0,0" />
                       </StackPanel>
                       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <Border Classes="chip orange" IsVisible="{Binding HasPending}"><TextBlock Text="{Binding PendingText}" /></Border>
                         <Border Classes="chip gold" IsVisible="{Binding IsSystem}"><TextBlock Text="Windows" /></Border>
                         <Border Classes="chip" IsVisible="{Binding IsImage}"><TextBlock Text="Imagem · leitura" /></Border>
                         <Border Classes="chip" IsVisible="{Binding HasTemp}"><TextBlock Text="{Binding TempText}" /></Border>

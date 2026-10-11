@@ -212,8 +212,8 @@ public sealed partial class ConvertViewModel : PageViewModel
     {
         var d = _d; if (d == null) return;
         var target = d.Table.Style == TableStyle.Gpt ? TableStyle.Mbr : TableStyle.Gpt;
-        if (!await Main.Confirm($"Converter para {To}", $"{d.Title} ({d.Model}) passa de {From} para {To}. Só a tabela é reescrita, e um backup dela é salvo antes.", "Converter", false, null, "Convert")) return;
-        await Main.Run($"Convertendo para {To}", s => DiskOperations.ConvertStyle(d, target, s));
+        Main.Queue($"Converter para {To}", $"{d.Title} ({d.Model}): {From} → {To}, sem apagar partições", "Convert", s => DiskOperations.ConvertStyle(MainViewModel.Fresh(d), target, s), d);
+        await Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -222,13 +222,13 @@ public sealed partial class ConvertViewModel : PageViewModel
         var d = _d; if (d == null) return;
         if (!await Main.Confirm("Converter o disco do Windows com MBR2GPT",
             "O MBR2GPT é o conversor oficial da Microsoft: converte o disco do sistema sem perder dados e cria a partição EFI.\n\nDepois, é OBRIGATÓRIO entrar na configuração do firmware (BIOS) e trocar o modo de inicialização de Legado/CSM para UEFI, senão o Windows não inicia.", "Converter", true)) return;
-        await Main.Run("MBR2GPT", async s =>
+        Main.Queue("Converter o disco do Windows (MBR2GPT)", $"{d.Title} ({d.Model}) → GPT; depois mude o firmware para UEFI", "Convert", async s =>
         {
             s.Progress(-1, "Validando e convertendo");
             var r = await WinCommands.Mbr2Gpt(d.Number, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
             if (!r.Ok) throw new InvalidOperationException("O MBR2GPT recusou: " + r.Message);
             s.Log("Pronto. Agora mude o firmware para UEFI antes de reiniciar.");
-        });
+        }, d, dangerous: true);
     }
 }
 
@@ -276,8 +276,7 @@ public sealed partial class AlignViewModel : PageViewModel
         var d = _d; if (d == null) return;
         var todo = Rows.Where(r => r.IsChecked && r.CanCheck).ToList();
         if (todo.Count == 0) return;
-        if (!await Main.Confirm("Alinhar partições", $"{todo.Count} partição(ões) serão deslocadas no disco. Isso copia todos os dados delas; o computador não pode desligar no meio.", "Alinhar", false, null, "Align")) return;
-        await Main.Run("Alinhando partições", s =>
+        Main.Queue("Alinhar partições", $"{todo.Count} partição(ões) de {d.Title} deslocadas até o limite de 1 MB (move os dados)", "Align", s =>
         {
             foreach (var r in todo)
             {
@@ -287,7 +286,8 @@ public sealed partial class AlignViewModel : PageViewModel
                 if (target == null) { s.Log($"{r.Title}: sem espaço — pulada."); continue; }
                 DiskOperations.MovePartition(p, target.Value, s);
             }
-        }, canPause: true);
+        }, d, canPause: true);
+        await Task.CompletedTask;
     }
 }
 
@@ -320,8 +320,13 @@ public sealed partial class WipeViewModel : PageViewModel
         var sel = Picker.Selected; if (sel == null) return;
         var m = (WipeMethod)Method;
         string what = sel.Partition == null ? $"o disco {sel.Disk.Title} inteiro ({sel.Disk.Model}, {Fmt.Size(sel.Disk.Size)}), com todas as partições" : $"a partição {sel.Title} ({Fmt.Size(sel.Partition.Length)})";
-        if (!await Main.Confirm("Limpar — sem volta", $"Vai sobrescrever {what}.\n\nMétodo: {Wiper.Describe(m)}.\n\nDepois disso, NENHUM programa de recuperação traz os dados de volta.", "Limpar", true, "APAGAR", "Wipe")) return;
-        await Main.Run("Limpando", s => DiskOperations.Wipe(sel.Disk, sel.Partition, m, s));
+        var sd = sel.Disk; var sp = sel.Partition;
+        Main.Queue("Limpar (sobrescrever)", $"{what} — {Wiper.Describe(m)}. Sem volta: nenhuma recuperação traz os dados depois.", "Wipe", s =>
+        {
+            var pq = sp == null ? null : MainViewModel.FreshPart(sp);
+            DiskOperations.Wipe(pq?.Disk ?? MainViewModel.Fresh(sd), pq, m, s);
+        }, sd, dangerous: true);
+        await Task.CompletedTask;
     }
 }
 
@@ -350,7 +355,8 @@ public sealed partial class DeleteAllViewModel : PageViewModel
     private async Task Delete()
     {
         var d = Picker.Selected?.Disk; if (d == null) return;
-        if (!await Main.Confirm("Excluir todas as partições", $"Todas as {d.Table.Entries.Count} partições de {d.Title} ({d.Model}) saem da tabela. Os dados continuam lá até serem sobrescritos (Recuperar partição traz de volta), e um backup da tabela é salvo.", "Excluir todas", true, "EXCLUIR", "DeleteAll")) return;
-        await Main.Run("Excluindo partições", s => DiskOperations.DeleteAllPartitions(d, s));
+        Main.Queue("Excluir todas as partições", $"As {d.Table.Entries.Count} partições de {d.Title} ({d.Model}) saem da tabela (Recuperar partição traz de volta)", "DeleteAll",
+            s => DiskOperations.DeleteAllPartitions(MainViewModel.Fresh(d), s), d, dangerous: true);
+        await Task.CompletedTask;
     }
 }

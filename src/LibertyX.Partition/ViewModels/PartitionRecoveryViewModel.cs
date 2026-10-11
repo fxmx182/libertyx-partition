@@ -152,12 +152,10 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
         if (_disk == null) return;
         var chosen = Found.Where(f => f.IsChecked).Select(f => f.F).ToList();
         var style = StyleIndex == 0 ? TableStyle.Gpt : TableStyle.Mbr;
-        if (!await Main.Confirm("Restaurar partições",
-            $"{chosen.Count} partição(ões) serão gravadas na tabela {(style == TableStyle.Gpt ? "GPT" : "MBR")} de {_disk.Title}. Só a tabela é escrita — o conteúdo das partições não é tocado — e um backup da tabela atual é salvo antes.",
-            "Restaurar", false, null, "RecoverPartition")) return;
         var d = _disk;
-        await Main.Run("Restaurando partições", s => DiskOperations.RestoreFound(d, chosen, style, s));
-        Step = 0;
+        Main.Queue("Restaurar partições", $"{chosen.Count} partição(ões) gravadas na tabela {(style == TableStyle.Gpt ? "GPT" : "MBR")} de {d.Title} — só a tabela é escrita", "RecoverPartition",
+            s => DiskOperations.RestoreFound(MainViewModel.Fresh(d), chosen, style, s), d);
+        await Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -168,7 +166,7 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
         var file = await MainViewModel.PickFile("Backup de tabela", ("Backup do LibertyX Partition", ["*.lxbak"]));
         if (file == null) return;
         var info = TableBackup.Describe(file);
-        if (!await Main.Confirm("Restaurar backup de tabela", $"Backup de “{info.disk}”, {info.when:dd/MM/yyyy HH:mm}, salvo antes de: {info.reason}.", "Restaurar", true)) return;
-        await Main.Run("Restaurando tabela", s => DiskOperations.RestoreTableBackup(d, file, s));
+        Main.Queue("Restaurar backup de tabela", $"{d.Title}: tabela de {info.when:dd/MM/yyyy HH:mm} (antes de: {info.reason})", "Restore",
+            s => DiskOperations.RestoreTableBackup(MainViewModel.Fresh(d), file, s), d, dangerous: true);
     }
 }

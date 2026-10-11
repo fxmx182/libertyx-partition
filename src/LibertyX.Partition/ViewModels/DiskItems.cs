@@ -73,6 +73,11 @@ public sealed partial class DiskVM : ObservableObject
         }
     }
     public IRelayCommand SelectCommand => new RelayCommand(() => MainViewModel.Instance.Page<DisksPageViewModel>("discos").Select(this));
+
+    public int PendingCount => MainViewModel.Instance.Pending.Count(o => o.DiskNumber == D.Number);
+    public bool HasPending => PendingCount > 0;
+    public string PendingText => PendingCount == 1 ? "1 alteração pendente" : $"{PendingCount} alterações pendentes";
+    public void RefreshPending() { OnPropertyChanged(nameof(PendingCount)); OnPropertyChanged(nameof(HasPending)); OnPropertyChanged(nameof(PendingText)); }
 }
 
 public sealed partial class ActionItem : ObservableObject

@@ -58,6 +58,7 @@ public sealed partial class MainViewModel : ViewModelBase
     public MainViewModel()
     {
         Instance = this;
+        HookPending();
         Nav =
         [
             new("Painel", new NavItem("discos", "Discos e partições", "Dashboard")),
@@ -110,7 +111,46 @@ public sealed partial class MainViewModel : ViewModelBase
         foreach (var a in args.Where(File.Exists)) DiskSystem.AttachedImages.Add(Path.GetFullPath(a));
         Navigate("discos");
         _ = Refresh();
+        StartHotplug();
     }
+
+    // ───────── plug and play ─────────
+
+    private string? _signature;
+    private bool _checking;
+
+    /// <summary>A cada 2 s compara a impressão digital dos discos; se mudou, relê e avisa o que entrou/saiu.</summary>
+    private void StartHotplug()
+    {
+        _ = Task.Run(() => _signature = SafeSignature());
+        var t = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        t.Tick += async (_, _) =>
+        {
+            if (_checking || Loading || Operation != null) return;
+            _checking = true;
+            try
+            {
+                var sig = await Task.Run(SafeSignature);
+                if (sig == null || sig == _signature) return;
+                bool first = _signature == null;
+                _signature = sig;
+                if (first) return;
+                var before = Disks.ToDictionary(d => (d.Number, d.IsImage), d => d);
+                await Refresh();
+                var after = Disks.ToDictionary(d => (d.Number, d.IsImage), d => d);
+                var added = after.Where(kv => !before.ContainsKey(kv.Key) || before[kv.Key].Size != kv.Value.Size).Select(kv => kv.Value).ToList();
+                var removed = before.Where(kv => !after.ContainsKey(kv.Key)).Select(kv => kv.Value).ToList();
+                if (added.Count > 0) ShowToast($"Conectado: {string.Join(", ", added.Select(d => $"{d.Model} ({Fmt.Size(d.Size)})"))}");
+                else if (removed.Count > 0) ShowToast($"Removido: {string.Join(", ", removed.Select(d => d.Model))}" +
+                    (Pending.Any(o => removed.Any(r => r.Number == o.DiskNumber)) ? " — havia alterações pendentes para ele" : ""));
+                else ShowToast("Volumes mudaram — lista atualizada.");
+            }
+            finally { _checking = false; }
+        };
+        t.Start();
+    }
+
+    private static string? SafeSignature() { try { return DiskSystem.Signature(); } catch { return null; } }
 
     public void Navigate(string key, object? arg = null)
     {

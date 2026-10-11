@@ -10,8 +10,11 @@ namespace LibertyX.Partition.ViewModels;
 /// <summary>As ações do menu de partição/disco: cada uma abre um formulário e roda a operação.</summary>
 public static partial class ActionsBuilder
 {
-    private static FormDialogViewModel Form(string title, string icon, string? subtitle = null, string confirm = "Aplicar", bool danger = false) =>
+    private static FormDialogViewModel Form(string title, string icon, string? subtitle = null, string confirm = "Adicionar", bool danger = false) =>
         new() { Title = title, IconKey = icon, Subtitle = subtitle, ConfirmText = confirm, Danger = danger };
+
+    private static Task Exec(Func<OpSink, Task> f, OpSink s) => f(s);
+    private static Task Exec(Action<OpSink> f, OpSink s) { f(s); return Task.CompletedTask; }
 
     private static string Who(PartitionInfo p) => p.Letter ?? (string.IsNullOrEmpty(p.Label) ? $"partição em {Fmt.Size(p.Offset)}" : p.Label!);
 
@@ -26,7 +29,11 @@ public static partial class ActionsBuilder
         f.Note("Cria uma tabela de partições vazia. Se este disco tinha partições, use antes Recuperar partição — inicializar por cima atrapalha a busca.", "warn");
         if (!await Main.ShowDialog(f)) return;
         var t = new PartitionTable { Style = style.SelectedIndex == 0 ? TableStyle.Gpt : TableStyle.Mbr, SectorSize = d.SectorSize, DiskSectors = d.Size / d.SectorSize };
-        await Main.Run("Inicializando disco", s => DiskOperations.WriteTable(d, t, "Inicializar disco", s));
+        Main.Queue("Inicializar disco", $"{d.Title} · {d.Model}", "Create", async s =>
+        {
+            var dq = MainViewModel.Fresh(d);
+            await Exec(s => DiskOperations.WriteTable(dq, t, "Inicializar disco", s), s);
+        }, d, dangerous: true, canPause: false);
     }
 
     private static async Task RestoreTableBackup(DiskInfo d)
@@ -35,8 +42,12 @@ public static partial class ActionsBuilder
         if (file == null) return;
         var (disk, bytes, when, reason) = TableBackup.Describe(file);
         if (bytes != d.Size) { await Main.Alert("Backup de outro disco", $"Este backup é de “{disk}” ({Fmt.Size(bytes)}); o disco escolhido tem {Fmt.Size(d.Size)}.", "danger"); return; }
-        if (!await Main.Confirm("Restaurar backup de tabela", $"Backup de {when:dd/MM/yyyy HH:mm}, feito antes de: {reason}.\n\nA tabela atual de {d.Title} será substituída pela salva.", "Restaurar", true)) return;
-        await Main.Run("Restaurando tabela", s => DiskOperations.RestoreTableBackup(d, file, s));
+        if (!await Main.Confirm("Restaurar backup de tabela", $"Backup de {when:dd/MM/yyyy HH:mm}, feito antes de: {reason}.\n\nA tabela atual de {d.Title} será substituída pela salva.", "Adicionar", true)) return;
+        Main.Queue("Restaurar backup de tabela", $"{d.Title} · {d.Model}", "Restore", async s =>
+        {
+            var dq = MainViewModel.Fresh(d);
+            await Exec(s => DiskOperations.RestoreTableBackup(dq, file, s), s);
+        }, d, dangerous: true, canPause: false);
     }
 
     // ───────────── criar ─────────────
@@ -44,7 +55,7 @@ public static partial class ActionsBuilder
     private static async Task CreatePartition(PartitionVM pv)
     {
         var p = pv.P;
-        var f = Form("Criar partição", "Create", $"{Fmt.Size(p.Length)} livres em {p.Disk.Title}", "Criar");
+        var f = Form("Criar partição", "Create", $"{Fmt.Size(p.Length)} livres em {p.Disk.Title}", "Adicionar");
         var size = f.Add(new SizeField { Label = "Tamanho", MinMb = 16, MaxMb = Math.Floor(p.Length / (double)MB) - 1, ValueMb = Math.Floor(p.Length / (double)MB) - 1 });
         var fs = f.Add(new ChoiceField { Label = "Sistema de arquivos" });
         foreach (var o in new[] { "NTFS", "exFAT", "FAT32", "Não formatar" }) fs.Options.Add(o);
@@ -55,31 +66,35 @@ public static partial class ActionsBuilder
         long start = (p.Offset + MB - 1) / MB * MB;
         long bytes = Math.Min(size.Bytes, (p.Offset + p.Length - start) / MB * MB);
         string? fsName = fs.SelectedIndex switch { 0 => "NTFS", 1 => "exFAT", 2 => "FAT32", _ => null };
-        await Main.Run("Criando partição", async s =>
+        Main.Queue("Criar partição", $"{Fmt.Size(bytes)} em {fsName ?? "sem formatação"}, rótulo “{label.Value}” · {p.Disk.Title}", "Create", async s =>
         {
-            if (Win && !p.Disk.IsImage && !(fsName == "FAT32" && bytes > 32L << 30))
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
+        {
+            if (Win && !q.Disk.IsImage && !(fsName == "FAT32" && bytes > 32L << 30))
             {
-                var r = await WinCommands.CreatePartition(p.Disk.Number, start, bytes, null, null, fsName, label.Value, 0, letter.Value, s.Token);
+                var r = await WinCommands.CreatePartition(q.Disk.Number, start, bytes, null, null, fsName, label.Value, 0, letter.Value, s.Token);
                 Ensure(r, "Criar partição");
                 return;
             }
-            var t = p.Disk.Table.Clone();
-            var e = new PartitionEntry { StartLba = start / p.Disk.SectorSize, SectorCount = bytes / p.Disk.SectorSize, Name = label.Value };
+            var t = q.Disk.Table.Clone();
+            var e = new PartitionEntry { StartLba = start / q.Disk.SectorSize, SectorCount = bytes / q.Disk.SectorSize, Name = label.Value };
             if (t.Style == TableStyle.Gpt) { e.TypeGuid = PartitionTypes.BasicData; e.UniqueGuid = Guid.NewGuid(); }
             else e.MbrType = fsName == "FAT32" ? (byte)0x0C : (byte)0x07;
             t.Entries.Add(e);
             if (fsName == "FAT32")
             {
-                using var dev = DiskSystem.OpenDisk(p.Disk, true);
+                using var dev = DiskSystem.OpenDisk(q.Disk, true);
                 Fat32Formatter.Format(new SubDevice(dev, start, bytes), label.Value, 0, e.StartLba, new Progress<double>(x => s.Progress(x, "Formatando FAT32")));
             }
-            DiskOperations.WriteTable(p.Disk, t, "Criar partição", s);
+            DiskOperations.WriteTable(q.Disk, t, "Criar partição", s);
             if (Win && fsName == "FAT32" && letter.Value)
             {
                 await Task.Delay(1500);
-                await WinCommands.AssignTemporaryLetter(p.Disk.Number, start);
+                await WinCommands.AssignTemporaryLetter(q.Disk.Number, start);
             }
-        });
+        }, s);
+        }, p.Disk, dangerous: false, canPause: false);
     }
 
     // ───────────── mover / redimensionar / estender ─────────────
@@ -158,7 +173,11 @@ public static partial class ActionsBuilder
         double bb = pos?.ValueMb ?? origBefore;
         long ns = Math.Abs(bb - origBefore) < 0.5 ? p.Offset : (regionStart + (long)bb * MB + MB - 1) / MB * MB;
         long nb = Math.Abs(size.ValueMb - origMb) < 0.5 ? p.Length : size.Bytes;
-        await Main.Run("Mover / redimensionar", s => ApplyGeometry(p, ns, nb, s), canPause: true);
+        Main.Queue("Mover / redimensionar", $"{Who(p)}: {Fmt.Size(p.Length)} → {Fmt.Size(nb)}{(ns != p.Offset ? $", início em {Fmt.Size(ns)} (move os dados)" : "")} · {p.Disk.Title}", "Resize", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(s => ApplyGeometry(q, ns, nb, s), s);
+        }, p.Disk, dangerous: false, canPause: true);
     }
 
     private static async Task Extend(PartitionVM pv)
@@ -176,7 +195,11 @@ public static partial class ActionsBuilder
         long extra = add.Bytes;
         long newStart = p.Offset;
         if (extra > freeAfter) newStart = Math.Max(p.Offset - freeBefore, (p.Offset - (extra - freeAfter)) / MB * MB);
-        await Main.Run("Estender partição", s => ApplyGeometry(p, newStart, p.Length + extra, s), canPause: true);
+        Main.Queue("Estender partição", $"{Who(p)}: {Fmt.Size(p.Length)} → {Fmt.Size(p.Length + extra)} · {p.Disk.Title}", "Extend", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(s => ApplyGeometry(q, newStart, q.Length + extra, s), s);
+        }, p.Disk, dangerous: false, canPause: true);
     }
 
     // ───────────── unir / dividir ─────────────
@@ -186,15 +209,18 @@ public static partial class ActionsBuilder
         var p = pv.P;
         var (_, next) = Neighbors(pv);
         if (next == null) return;
-        var f = Form("Unir partições", "Merge", $"{Who(p)} + {Who(next)}", "Unir", true);
+        var f = Form("Unir partições", "Merge", $"{Who(p)} + {Who(next)}", "Adicionar", true);
         var folder = f.Add(new TextField { Label = $"Os arquivos de {next.Letter} vão para esta pasta em {p.Letter}", Value = $"Conteúdo de {next.Letter?.TrimEnd(':')}" });
         f.Note($"1. Copia tudo de {next.Letter} para {p.Letter}\\{folder.Value}\n2. Exclui a partição {next.Letter}\n3. Estende {p.Letter} sobre o espaço liberado", "gold");
         if ((p.Free ?? 0) < (next.Used ?? next.Length)) f.Note($"{p.Letter} tem {Fmt.Size(p.Free)} livres e {next.Letter} usa {Fmt.Size(next.Used)}: não cabe.", "danger");
         f.Validate = () => (p.Free ?? 0) < (next.Used ?? next.Length) ? "Espaço insuficiente." : string.IsNullOrWhiteSpace(folder.Value) ? "Dê um nome à pasta." : null;
         if (!await Main.ShowDialog(f)) return;
-        await Main.Run("Unindo partições", async s =>
+        Main.Queue("Unir partições", $"{Who(next)} vai para {p.Letter}\\{folder.Value}, é excluída e {p.Letter} cresce", "Merge", async s =>
         {
-            string dest = Path.Combine(p.Letter + "\\", RecoveryNames.Safe(folder.Value));
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
+        {
+            string dest = Path.Combine(q.Letter + "\\", RecoveryNames.Safe(folder.Value));
             s.Log($"Copiando {next.Letter} → {dest}");
             s.Progress(-1, "Copiando arquivos");
             var r = await WinCommands.Robocopy(next.Letter + "\\", dest, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
@@ -203,8 +229,9 @@ public static partial class ActionsBuilder
             Ensure(await WinCommands.Delete(next.Disk.Number, next.Offset), "Excluir");
             await Task.Delay(1500, s.Token);
             s.Progress(-1, "Estendendo");
-            Ensure(await WinCommands.ExtendFileSystem(p.Letter![0], s.Token), "Estender");
-        });
+            Ensure(await WinCommands.ExtendFileSystem(q.Letter![0], s.Token), "Estender");
+        }, s);
+        }, p.Disk, dangerous: true, canPause: false);
     }
 
     private static async Task Split(PartitionVM pv)
@@ -222,15 +249,19 @@ public static partial class ActionsBuilder
         if (sup == null) f.Note("Não foi possível consultar quanto o Windows consegue reduzir este volume.", "warn");
         if (!await Main.ShowDialog(f)) return;
         long keep = size.Bytes;
-        await Main.Run("Dividindo partição", async s =>
+        Main.Queue("Dividir partição", $"{Who(p)} fica com {Fmt.Size(keep)}; o resto vira partição nova em {fs.Options[fs.SelectedIndex]}", "Split", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
         {
             s.Progress(-1, "Reduzindo");
-            Ensure(await WinCommands.Resize(p.Disk.Number, p.Offset, keep, s.Token), "Reduzir");
-            long start = (p.Offset + keep + MB - 1) / MB * MB;
-            long len = (p.Offset + p.Length - start) / MB * MB;
+            Ensure(await WinCommands.Resize(q.Disk.Number, q.Offset, keep, s.Token), "Reduzir");
+            long start = (q.Offset + keep + MB - 1) / MB * MB;
+            long len = (q.Offset + q.Length - start) / MB * MB;
             s.Progress(-1, "Criando a nova partição");
-            Ensure(await WinCommands.CreatePartition(p.Disk.Number, start, len, null, null, fs.Options[fs.SelectedIndex], label.Value, 0, true, s.Token), "Criar");
-        });
+            Ensure(await WinCommands.CreatePartition(q.Disk.Number, start, len, null, null, fs.Options[fs.SelectedIndex], label.Value, 0, true, s.Token), "Criar");
+        }, s);
+        }, p.Disk, dangerous: false, canPause: false);
     }
 
     // ───────────── cluster / conversão (cópia de passagem) ─────────────
@@ -291,7 +322,11 @@ public static partial class ActionsBuilder
         f.Validate = () => StagingCheck(path, p);
         if (!await Main.ShowDialog(f)) return;
         string fs = p.FileSystem == FsKind.ExFat ? "exFAT" : FsDetect.IsFat(p.FileSystem) ? "FAT32" : "NTFS";
-        await Main.Run("Alterando o cluster", s => StagedReformat(p, path.Value, fs, Clusters[c.SelectedIndex], s));
+        Main.Queue("Alterar tamanho do cluster", $"{Who(p)} · {p.Disk.Title} ({p.Disk.Model})", "Cluster", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(s => StagedReformat(q, path.Value, fs, Clusters[c.SelectedIndex], s), s);
+        }, p.Disk, dangerous: true, canPause: false);
     }
 
     private static async Task FsConvert(PartitionVM pv)
@@ -299,13 +334,17 @@ public static partial class ActionsBuilder
         var p = pv.P;
         if (FsDetect.IsFat(p.FileSystem))
         {
-            if (!await Main.Confirm("Converter FAT → NTFS", $"{Who(p)} será convertida para NTFS pelo conversor do próprio Windows, sem apagar os arquivos. A conversão não tem volta direta.", "Converter")) return;
-            await Main.Run("Convertendo para NTFS", async s =>
+            if (!await Main.Confirm("Converter FAT → NTFS", $"{Who(p)} será convertida para NTFS pelo conversor do próprio Windows, sem apagar os arquivos. A conversão não tem volta direta.", "Adicionar")) return;
+            Main.Queue("Converter FAT → NTFS", $"{Who(p)} · {p.Disk.Title} ({p.Disk.Model})", "FsConvert", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
             {
                 s.Progress(-1, "Convertendo");
-                var r = await WinCommands.ConvertToNtfs(p.Letter![0], p.Label, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
+                var r = await WinCommands.ConvertToNtfs(q.Letter![0], q.Label, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
                 Ensure(r, "Converter");
-            });
+            }, s);
+        }, p.Disk, dangerous: false, canPause: false);
             return;
         }
         var f = Form("Converter NTFS → FAT", "FsConvert", $"{Who(p)} · {Fmt.Size(p.Used)} usados");
@@ -317,17 +356,21 @@ public static partial class ActionsBuilder
         f.Validate = () => StagingCheck(path, p) ?? (target.SelectedIndex == 0 && p.Length > 2L * 1024 * 1024 * 1024 * 1024 ? "FAT32 não passa de 2 TB." : null);
         if (!await Main.ShowDialog(f)) return;
         string fs = target.SelectedIndex == 0 ? "FAT32" : "exFAT";
-        await Main.Run($"Convertendo para {fs}", async s =>
+        Main.Queue($"Converter NTFS → {fs}", $"{Who(p)} · {p.Disk.Title} ({p.Disk.Model})", "FsConvert", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
         {
             if (fs == "FAT32")
             {
                 s.Progress(-1, "Procurando arquivos acima de 4 GB");
-                var big = new DirectoryInfo(p.Letter + "\\").EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true })
+                var big = new DirectoryInfo(q.Letter + "\\").EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true })
                     .Where(x => x.Length >= 4L << 30).Take(5).ToList();
                 if (big.Count > 0) throw new InvalidOperationException("FAT32 não guarda arquivos de 4 GB ou mais:\n" + string.Join("\n", big.Select(b => b.FullName)) + "\nEscolha exFAT ou mova esses arquivos.");
             }
-            await StagedReformat(p, path.Value, fs, 0, s);
-        });
+            await StagedReformat(q, path.Value, fs, 0, s);
+        }, s);
+        }, p.Disk, dangerous: true, canPause: false);
     }
 
     // ───────────── formatar / excluir / alinhar ─────────────
@@ -335,7 +378,7 @@ public static partial class ActionsBuilder
     private static async Task Format(PartitionVM pv)
     {
         var p = pv.P;
-        var f = Form("Formatar partição", "Format", $"{Who(p)} · {Fmt.Size(p.Length)}", "Formatar", true);
+        var f = Form("Formatar partição", "Format", $"{Who(p)} · {Fmt.Size(p.Length)}", "Adicionar", true);
         var fs = f.Add(new ChoiceField { Label = "Sistema de arquivos" });
         var fsList = p.Disk.IsImage ? new[] { "FAT32" } : new[] { "NTFS", "exFAT", "FAT32", "ReFS" };
         foreach (var o in fsList) fs.Options.Add(o);
@@ -344,40 +387,47 @@ public static partial class ActionsBuilder
         foreach (var x in Clusters) c.Options.Add(x == 0 ? "Padrão" : $"{x / 1024} KB");
         var quick = f.Add(new ToggleField { Label = "Formatação rápida", Value = true, Hint = "Sem ela, o Windows lê a partição inteira procurando setores ruins (demora)." });
         f.Note($"Tudo em {Who(p)} será apagado. A recuperação de dados ainda pode achar arquivos depois de uma formatação rápida — mas não conte com isso.", "danger");
-        f.ConfirmPhrase = "FORMATAR";
         if (!await Main.ShowDialog(f)) return;
         string fsName = fsList[fs.SelectedIndex];
         int cl = Clusters[c.SelectedIndex];
-        await Main.Run("Formatando", async s =>
+        Main.Queue("Formatar partição", $"{Who(p)} → {fsList[fs.SelectedIndex]}, rótulo “{label.Value}” — apaga o conteúdo", "Format", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
         {
             s.Progress(-1, "Formatando");
-            if (fsName == "FAT32" && (p.Disk.IsImage || !Win || p.Length > 32L << 30))
+            if (fsName == "FAT32" && (q.Disk.IsImage || !Win || q.Length > 32L << 30))
             {
-                using (var dev = DiskSystem.OpenDisk(p.Disk, true))
-                using (DiskSystem.Native.LockVolumes(p.Disk, [p]))
-                    Fat32Formatter.Format(new SubDevice(dev, p.Offset, p.Length), label.Value, cl, p.StartLba, new Progress<double>(x => s.Progress(x, "Formatando FAT32")));
-                DiskSystem.Native.Rescan(p.Disk);
-                if (p.Disk.Table.Style == TableStyle.Mbr && p.Entry!.MbrType != 0x0C)
+                using (var dev = DiskSystem.OpenDisk(q.Disk, true))
+                using (DiskSystem.Native.LockVolumes(q.Disk, [q]))
+                    Fat32Formatter.Format(new SubDevice(dev, q.Offset, q.Length), label.Value, cl, q.StartLba, new Progress<double>(x => s.Progress(x, "Formatando FAT32")));
+                DiskSystem.Native.Rescan(q.Disk);
+                if (q.Disk.Table.Style == TableStyle.Mbr && q.Entry!.MbrType != 0x0C)
                 {
-                    if (Win && !p.Disk.IsImage) await WinCommands.SetMbrType(p.Disk.Number, p.Offset, 0x0C);
-                    else DiskOperations.ChangeTypeRaw(p, null, 0x0C, s);
+                    if (Win && !q.Disk.IsImage) await WinCommands.SetMbrType(q.Disk.Number, q.Offset, 0x0C);
+                    else DiskOperations.ChangeTypeRaw(q, null, 0x0C, s);
                 }
                 return;
             }
-            Ensure(await WinCommands.Format(p.Disk.Number, p.Offset, fsName, label.Value, cl, quick.Value, s.Token), "Formatar");
-        });
+            Ensure(await WinCommands.Format(q.Disk.Number, q.Offset, fsName, label.Value, cl, quick.Value, s.Token), "Formatar");
+        }, s);
+        }, p.Disk, dangerous: true, canPause: false);
     }
 
     private static async Task Delete(PartitionVM pv)
     {
         var p = pv.P;
         string extra = p.IsEsp ? "\n\nEsta é a partição de sistema EFI: sem ela, um Windows instalado neste disco não inicia." : p.IsRecovery ? "\n\nEsta é a partição de recuperação do Windows." : "";
-        if (!await Main.Confirm("Excluir partição", $"{Who(p)} ({FsDetect.Name(p.FileSystem)}, {Fmt.Size(p.Length)}) será removida da tabela.{extra}\n\nOs dados continuam no disco até serem sobrescritos — Recuperar partição consegue trazê-la de volta.", "Excluir", true)) return;
-        await Main.Run("Excluindo partição", async s =>
+        if (!await Main.Confirm("Excluir partição", $"{Who(p)} ({FsDetect.Name(p.FileSystem)}, {Fmt.Size(p.Length)}) será removida da tabela.{extra}\n\nOs dados continuam no disco até serem sobrescritos — Recuperar partição consegue trazê-la de volta.", "Adicionar", true)) return;
+        Main.Queue("Excluir partição", $"{Who(p)} ({FsDetect.Name(p.FileSystem)}, {Fmt.Size(p.Length)}) · {p.Disk.Title}", "Delete", async s =>
         {
-            if (Win && !p.Disk.IsImage) Ensure(await WinCommands.Delete(p.Disk.Number, p.Offset), "Excluir");
-            else DiskOperations.DeletePartitionRaw(p, s);
-        });
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
+        {
+            if (Win && !q.Disk.IsImage) Ensure(await WinCommands.Delete(q.Disk.Number, q.Offset), "Excluir");
+            else DiskOperations.DeletePartitionRaw(q, s);
+        }, s);
+        }, p.Disk, dangerous: true, canPause: false);
     }
 
     private static async Task Align(PartitionVM pv)
@@ -385,8 +435,12 @@ public static partial class ActionsBuilder
         var p = pv.P;
         var target = DiskOperations.AlignedTarget(p);
         if (target == null) { await Main.Alert("Sem espaço para alinhar", "Não há espaço livre ao lado da partição para deslocá-la até um limite de 1 MB. Reduza-a um pouco antes."); return; }
-        if (!await Main.Confirm("Alinhar partição", $"{Who(p)} começa no setor {p.StartLba:N0}, fora do limite de 1 MB — em SSD e discos de 4K isso faz cada escrita tocar dois blocos físicos.\n\nEla será deslocada para o setor {target:N0}. Leva o tempo de copiar {Fmt.Size(p.Length)} e o computador não pode desligar no meio.", "Alinhar")) return;
-        await Main.Run("Alinhando partição", s => DiskOperations.MovePartition(p, target.Value, s), canPause: true);
+        if (!await Main.Confirm("Alinhar partição", $"{Who(p)} começa no setor {p.StartLba:N0}, fora do limite de 1 MB — em SSD e discos de 4K isso faz cada escrita tocar dois blocos físicos.\n\nEla será deslocada para o setor {target:N0}. Leva o tempo de copiar {Fmt.Size(p.Length)} e o computador não pode desligar no meio.", "Adicionar")) return;
+        Main.Queue("Alinhar partição", $"{Who(p)}: setor {p.StartLba:N0} → {target:N0} (move os dados)", "Align", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(s => DiskOperations.MovePartition(q, target.Value, s), s);
+        }, p.Disk, dangerous: false, canPause: true);
     }
 
     // ───────────── rótulo / letra / tipo / série / ativa ─────────────
@@ -397,7 +451,11 @@ public static partial class ActionsBuilder
         var f = Form("Definir rótulo", "Label", Who(p));
         var t = f.Add(new TextField { Label = "Rótulo", Value = p.Label ?? "", MaxLength = FsDetect.IsFat(p.FileSystem) ? 11 : 32 });
         if (!await Main.ShowDialog(f)) return;
-        await Main.Run("Definindo rótulo", async s => Ensure(await WinCommands.SetLabel(p.Disk.Number, p.Offset, t.Value), "Rótulo"));
+        Main.Queue("Definir rótulo", $"{Who(p)} → “{t.Value}”", "Label", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s => Ensure(await WinCommands.SetLabel(q.Disk.Number, q.Offset, t.Value), "Rótulo"), s);
+        }, p.Disk, dangerous: false, canPause: false);
     }
 
     private static async Task SetLetter(PartitionVM pv)
@@ -413,7 +471,11 @@ public static partial class ActionsBuilder
         if (!await Main.ShowDialog(f)) return;
         char? nl = c.SelectedIndex == 0 ? null : c.Options[c.SelectedIndex][0];
         if (nl != null && p.Letter != null && nl == p.Letter[0]) return;
-        await Main.Run("Alterando letra", async s => Ensure(await WinCommands.SetLetter(p.Disk.Number, p.Offset, nl, p.Letter), "Letra"));
+        Main.Queue("Alterar letra", $"{Who(p)} → {(nl == null ? "sem letra" : nl + ":")}", "Letter", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s => Ensure(await WinCommands.SetLetter(q.Disk.Number, q.Offset, nl, q.Letter), "Letra"), s);
+        }, p.Disk, dangerous: false, canPause: false);
     }
 
     private static async Task ChangeType(PartitionVM pv)
@@ -437,12 +499,16 @@ public static partial class ActionsBuilder
         bool isCustom = c.SelectedIndex == c.Options.Count - 1;
         Guid? g = gpt ? (isCustom ? Guid.Parse(custom.Value) : PartitionTypes.CommonGpt[c.SelectedIndex].id) : null;
         byte? m = !gpt ? (isCustom ? byte.Parse(custom.Value.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber) : PartitionTypes.CommonMbr[c.SelectedIndex]) : null;
-        await Main.Run("Alterando ID de tipo", async s =>
+        Main.Queue("Alterar ID de tipo", $"{Who(p)} · {p.Disk.Title} ({p.Disk.Model})", "TypeId", async s =>
         {
-            if (Win && !p.Disk.IsImage)
-                Ensure(g != null ? await WinCommands.SetGptType(p.Disk.Number, p.Offset, g.Value) : await WinCommands.SetMbrType(p.Disk.Number, p.Offset, m!.Value), "Tipo");
-            else DiskOperations.ChangeTypeRaw(p, g, m, s);
-        });
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
+        {
+            if (Win && !q.Disk.IsImage)
+                Ensure(g != null ? await WinCommands.SetGptType(q.Disk.Number, q.Offset, g.Value) : await WinCommands.SetMbrType(q.Disk.Number, q.Offset, m!.Value), "Tipo");
+            else DiskOperations.ChangeTypeRaw(q, g, m, s);
+        }, s);
+        }, p.Disk, dangerous: false, canPause: false);
     }
 
     private static async Task ChangeSerial(PartitionVM pv)
@@ -456,24 +522,32 @@ public static partial class ActionsBuilder
         f.Validate = () => BootSector.TryParseSerial(t.Value, p.FileSystem, out _) ? null : $"Use até {(p.FileSystem == FsKind.Ntfs ? 16 : 8)} dígitos hexadecimais.";
         if (!await Main.ShowDialog(f)) return;
         BootSector.TryParseSerial(t.Value, p.FileSystem, out var serial);
-        await Main.Run("Alterando número de série", s => DiskOperations.ChangeSerial(p, serial, s));
+        Main.Queue("Alterar número de série", $"{Who(p)} → {t.Value}", "Serial", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await Exec(s => DiskOperations.ChangeSerial(q, serial, s), s);
+        }, p.Disk, dangerous: false, canPause: false);
     }
 
     private static async Task SetActive(PartitionVM pv)
     {
         var p = pv.P;
         bool active = !p.Entry!.Active;
-        if (active && !await Main.Confirm("Definir como ativa", $"Em discos MBR, a BIOS inicia pela partição ativa. Só uma pode ser ativa: as outras deste disco serão desmarcadas.", "Definir")) return;
-        await Main.Run(active ? "Definindo como ativa" : "Desmarcando", async s =>
+        if (active && !await Main.Confirm("Definir como ativa", $"Em discos MBR, a BIOS inicia pela partição ativa. Só uma pode ser ativa: as outras deste disco serão desmarcadas.", "Adicionar")) return;
+        Main.Queue(active ? "Definir como ativa" : "Desmarcar como ativa", $"{Who(p)} · {p.Disk.Title} ({p.Disk.Model})", "Active", async s =>
         {
-            if (Win && !p.Disk.IsImage) Ensure(await WinCommands.SetActive(p.Disk.Number, p.Offset, active), "Ativa");
+            var q = MainViewModel.FreshPart(p);
+            await Exec(async s =>
+        {
+            if (Win && !q.Disk.IsImage) Ensure(await WinCommands.SetActive(q.Disk.Number, q.Offset, active), "Ativa");
             else
             {
-                var t = p.Disk.Table.Clone();
-                foreach (var e in t.Entries) e.Active = active && e.StartLba == p.Entry.StartLba;
-                DiskOperations.WriteTable(p.Disk, t, "Partição ativa", s);
+                var t = q.Disk.Table.Clone();
+                foreach (var e in t.Entries) e.Active = active && e.StartLba == q.Entry.StartLba;
+                DiskOperations.WriteTable(q.Disk, t, "Partição ativa", s);
             }
-        });
+        }, s);
+        }, p.Disk, dangerous: false, canPause: false);
     }
 
     // ───────────── verificar / propriedades ─────────────
@@ -490,7 +564,7 @@ public static partial class ActionsBuilder
         if (p.IsWindowsVolume) f.Note("No volume do Windows, a correção é agendada para a próxima reinicialização.", "gold");
         if (!await Main.ShowDialog(f)) return;
         string target = p.Letter ?? p.VolumePath!.TrimEnd('\\');
-        await Main.Run("Verificando " + Who(p), async s =>
+        Func<OpSink, Task> work = async s =>
         {
             s.Progress(-1, "chkdsk em andamento");
             var r = await WinCommands.Chkdsk(target, mode.SelectedIndex >= 1, mode.SelectedIndex == 2, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
@@ -501,7 +575,9 @@ public static partial class ActionsBuilder
                 2 => "Limpeza feita (sem erros graves).",
                 _ => "Foram encontrados problemas que não puderam ser corrigidos agora.",
             });
-        }, refresh: false);
+        };
+        if (mode.SelectedIndex == 0) await Main.Run("Verificando " + Who(p), work, refresh: false);
+        else Main.Queue(mode.SelectedIndex == 2 ? "Corrigir erros e setores ruins" : "Corrigir erros do sistema de arquivos", $"chkdsk em {Who(p)}", "CheckFs", work, p.Disk);
     }
 
     private static Task Properties(PartitionVM pv)

@@ -170,6 +170,23 @@ public static class SelfTest
         var files = new Dictionary<string, string>();
         var deleted = new Dictionary<string, string>();
 
+        await Step("Plug and play (anexar e remover um segundo disco virtual)", async () =>
+        {
+            string sig1 = DiskSystem.Signature();
+            string vhd2 = Path.Combine(Path.GetTempPath(), "lx-hotplug.vhdx");
+            string dp = Path.Combine(Path.GetTempPath(), "lx-dp.txt");
+            await File.WriteAllTextAsync(dp, $"create vdisk file=\"{vhd2}\" maximum=64 type=expandable\r\nattach vdisk\r\n");
+            var r = await WinCommands.Run("diskpart.exe", $"/s \"{dp}\"");
+            await Task.Delay(2000);
+            string sig2 = DiskSystem.Signature();
+            Check(r.Ok && sig2 != sig1, "disco novo muda a impressão digital (o app relê sozinho)");
+            await File.WriteAllTextAsync(dp, $"select vdisk file=\"{vhd2}\"\r\ndetach vdisk\r\n");
+            await WinCommands.Run("diskpart.exe", $"/s \"{dp}\"");
+            await Task.Delay(2000);
+            Check(DiskSystem.Signature() == sig1, "remover volta à impressão digital original");
+            try { File.Delete(vhd2); } catch { }
+        });
+
         await Step("VHD: inicializar GPT e criar NTFS", async () =>
         {
             var t = new PartitionTable { Style = TableStyle.Gpt, SectorSize = d.SectorSize, DiskSectors = d.Size / d.SectorSize };
@@ -239,6 +256,7 @@ public static class SelfTest
             d = await Settle(n, x => Part(x, FsKind.Ntfs).StartLba == target && Part(x, FsKind.Ntfs).Letter != null);
             var np = Part(d, FsKind.Ntfs);
             Check(np.StartLba == target, "partição no setor novo");
+            Check(ViewModels.MainViewModel.FreshPart(p).StartLba == target, "a fila reencontra a partição movida (pelo GUID)");
             letter = np.Letter ?? letter;
             var now = HashTree(letter + "\\");
             Check(files.All(kv => now.TryGetValue(kv.Key, out var h) && h == kv.Value), "arquivos idênticos depois de mover (Windows remontou)");

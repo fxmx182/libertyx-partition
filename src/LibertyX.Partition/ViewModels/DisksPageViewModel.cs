@@ -47,6 +47,8 @@ public sealed partial class DisksPageViewModel : PageViewModel
         OnPropertyChanged(nameof(HasSelection));
     }
 
+    public override void OnPendingChanged() { foreach (var d in Disks) d.RefreshPending(); }
+
     public override void OnShown(object? arg) { if (Disks.Count == 0 && Main.Disks.Count > 0) OnDisksChanged(); }
 
     public void Select(DiskVM d)

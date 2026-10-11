@@ -38,6 +38,25 @@ public static class DiskSystem
         return list;
     }
 
+    /// <summary>
+    /// Impressão digital barata do hardware de armazenamento (quais discos existem e de que
+    /// tamanho, quais letras estão montadas). Muda quando um pendrive entra ou sai, ou quando
+    /// um cartão é posto no leitor — é o gatilho do plug and play, sem reler tudo a cada segundo.
+    /// </summary>
+    public static string Signature()
+    {
+        var sb = new System.Text.StringBuilder();
+        if (OperatingSystem.IsWindows()) sb.Append(WinDiskSystem.QuickSignature());
+        else if (Directory.Exists("/sys/block"))
+            foreach (var dir in Directory.GetDirectories("/sys/block").OrderBy(x => x))
+            {
+                try { sb.Append(Path.GetFileName(dir)).Append(':').Append(File.ReadAllText(Path.Combine(dir, "size")).Trim()).Append(';'); } catch { }
+            }
+        try { sb.Append('|').Append(string.Join(",", Environment.GetLogicalDrives())); } catch { }
+        sb.Append('|').Append(string.Join(",", AttachedImages));
+        return sb.ToString();
+    }
+
     public static IBlockDevice OpenDisk(DiskInfo d, bool write) =>
         d.IsImage ? new ImageFileDevice(d.ImagePath!, write, d.SectorSize) : Native.OpenDisk(d, write);
 

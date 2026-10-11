@@ -21,6 +21,8 @@ public abstract partial class PageViewModel : ViewModelBase
     public virtual void OnShown(object? arg) { }
     /// <summary>A lista de discos foi relida.</summary>
     public virtual void OnDisksChanged() { }
+    /// <summary>A fila de alterações pendentes mudou.</summary>
+    public virtual void OnPendingChanged() { }
 }
 
 public static class Ui

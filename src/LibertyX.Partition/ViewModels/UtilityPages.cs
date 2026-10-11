@@ -479,9 +479,12 @@ public sealed partial class BootMediaViewModel : PageViewModel
         try { hybrid = BootMedia.IsHybrid(Iso); } catch { }
         int mode = Mode == 0 ? (hybrid ? 2 : 1) : Mode;
         if (mode == 1 && !OperatingSystem.IsWindows()) { await Main.Alert("Só no Windows", "Montar a ISO do Windows e dividir o install.wim exigem o Windows."); return; }
-        if (!await Main.Confirm("Criar mídia inicializável", $"TUDO em {d.Title} ({d.Model}, {Fmt.Size(d.Size)}) será apagado.\n\nModo: {(mode == 1 ? "instalação do Windows" : "gravação direta (DD)")}.", "Criar", true, "APAGAR", "Boot")) return;
         string iso = Iso, label = Label;
-        await Main.Run("Criando mídia inicializável", s => mode == 1 ? BootMedia.WriteWindows(iso, d, label, s) : Task.Run(() => BootMedia.WriteRaw(iso, d, s)));
+        Main.Queue("Criar mídia inicializável", $"{Path.GetFileName(iso)} → {d.Title} ({d.Model}, {Fmt.Size(d.Size)}), modo {(mode == 1 ? "instalação do Windows" : "gravação direta (DD)")} — apaga o pendrive", "Boot", s =>
+        {
+            var dq = MainViewModel.Fresh(d);
+            return mode == 1 ? BootMedia.WriteWindows(iso, dq, label, s) : Task.Run(() => BootMedia.WriteRaw(iso, dq, s));
+        }, d, dangerous: true);
     }
 }
 

@@ -374,6 +374,11 @@
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="FontSize" Value="13" />
   </Style>
+  <Style Selector="Border.pendingbox.active">
+    <Setter Property="BorderBrush" Value="#88FBC501" />
+    <Setter Property="Background" Value="#14FBC501" />
+  </Style>
+  <Style Selector="TextBlock.goldtext"><Setter Property="Foreground" Value="{StaticResource Ouro}" /></Style>
   <Style Selector=":is(Control).hidden"><Setter Property="IsVisible" Value="False" /></Style>
   <Style Selector="TextBlock.failed"><Setter Property="Foreground" Value="{StaticResource Vermelho}" /></Style>
   <Style Selector="Border.dangerbox">
