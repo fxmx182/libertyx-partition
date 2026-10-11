@@ -179,6 +179,11 @@ public static class UsageCalculator
                         long total = v.ClusterCount * v.ClusterSize;
                         return (total - free, free, v.Label);
                     }
+                case FsKind.Ext:
+                    {
+                        var x = FsDetect.ParseExt(vol.ReadBytes(1024, 1024));
+                        return x == null ? null : ((x.Blocks - x.FreeBlocks) * x.BlockSize, x.FreeBlocks * x.BlockSize, x.Label);
+                    }
                 case FsKind.ExFat:
                     {
                         var v = ExFatVolume.Open(vol, out _);

@@ -60,6 +60,44 @@ public static class ExtTests
             var f = PartitionFinder.Scan(d, false, null, CancellationToken.None);
             Check(f.Count == 1 && f[0].Variant == "ext4" && f[0].StartLba == 2048 && f[0].SectorCount == 250L * 2048 && f[0].Label == "MBR64", "ext4 de 64 bits em disco MBR");
         }
+        Files(dir);
         return fails;
+    }
+
+    static void Files(string dir)
+    {
+        string img = Path.Combine(dir, "extfiles.img");
+        if (!File.Exists(img)) return;
+        var man = File.ReadAllLines(Path.Combine(dir, "extfiles-manifest.txt")).Select(l => l.Split('|')).ToList();
+        var deletedRel = new[] { "fotos/praia.jpg", "docs/contrato.pdf", "video/clipe.mp4", "projetos/codigo/main.py" };
+        var info = new DiskInfo { Number = 301, IsImage = true, ImagePath = img };
+        using var dev = new ImageFileDevice(img);
+        info.Size = dev.Length;
+        LayoutBuilder.Build(info, dev);
+        foreach (var p in info.Partitions.Where(x => x.FileSystem == FsKind.Ext))
+        {
+            var vol = dev.Slice(p.Offset, p.Length);
+            var res = FileSystemScanner.Scan(vol, new ScanOptions { IncludeLive = true }, null, CancellationToken.None);
+            string fs = res.FileSystem;
+            var exp = man.Where(m => m[0] == fs).ToDictionary(m => m[1], m => m[2]);
+            var got = new Dictionary<string, (string hash, ItemOrigin origin, Condition cond, string? note)>();
+            foreach (var f in res.Items.Where(i => !i.IsDirectory))
+            {
+                string rel = string.Join('/', f.FullPath.Split('\\').Skip(1));
+                string h = "";
+                if (f.Data != null) { var b = new byte[f.Size]; f.Data.Read(0, b); h = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(b)); }
+                got[rel] = (h, f.Origin, f.Condition, f.Note);
+            }
+            int liveOk = exp.Count(kv => !deletedRel.Contains(kv.Key) && got.TryGetValue(kv.Key, out var g) && g.hash == kv.Value && g.origin == ItemOrigin.Live);
+            int liveTotal = exp.Count(kv => !deletedRel.Contains(kv.Key));
+            Check(liveOk == liveTotal, $"{fs}: {liveOk}/{liveTotal} arquivos existentes lidos com hash idêntico (pastas e nomes certos)");
+            int delFound = deletedRel.Count(r => got.TryGetValue(r, out var g) && g.origin == ItemOrigin.Deleted);
+            int delOk = deletedRel.Count(r => got.TryGetValue(r, out var g) && g.origin == ItemOrigin.Deleted && g.hash == exp[r]);
+            if (fs != "ext2") Check(delFound == deletedRel.Length, $"{fs}: {delFound}/4 apagados listados com nome e pasta (inclusive dentro de pasta apagada)");
+            else Check(res.Log.Any(l => l.Contains("ext2 não tem journal")), "ext2: o app explica que sem journal só a varredura profunda acha apagados");
+            Console.WriteLine($"         {fs}: {delOk}/4 apagados recuperados com hash idêntico · " + string.Join(" | ", res.Log));
+            foreach (var r in deletedRel) if (got.TryGetValue(r, out var g)) Console.WriteLine($"           {r}: {g.cond} {(g.hash == exp[r] ? "íntegro" : "diferente")} {g.note}");
+            if (fs != "ext2") Check(delOk == 4, $"{fs}: apagados recuperados pelo journal");
+        }
     }
 }

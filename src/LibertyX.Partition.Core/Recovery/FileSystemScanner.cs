@@ -30,6 +30,10 @@ public static class FileSystemScanner
                     var x = ExFatVolume.Open(vol, out err);
                     if (x != null) r = ScanExFat(x, opt, progress, ct);
                     break;
+                case FsKind.Ext:
+                    var e = ExtVolume.Open(vol, out err);
+                    if (e != null) r = ScanExt(e, opt, progress, ct);
+                    break;
                 default:
                     // Boot destruído? Tenta as cópias de reserva de cada formato.
                     var n2 = NtfsVolume.Open(vol, out _);
@@ -307,6 +311,105 @@ public static class FileSystemScanner
         if (!string.IsNullOrEmpty(v.Label)) res.Root.Name = v.Label!;
         if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
         RecycleBin.Annotate(res.Root);
+        return res;
+    }
+
+    // ───────────────────────────── ext2/3/4 ─────────────────────────────
+
+    public static ScanResult ScanExt(ExtVolume v, ScanOptions opt, IProgress<ScanProgress>? progress, CancellationToken ct)
+    {
+        string label = v.Info.Label;
+        var res = new ScanResult
+        {
+            Root = new RecoveredItem { Id = 2, Name = label.Length > 0 ? label : "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            FileSystem = v.Info.Variant, Label = label, ClusterSize = v.BlockSize,
+        };
+        if (v.UsedBackupSuperblock) res.Log.Add("Superbloco principal destruído — usada a cópia de reserva do grupo 1.");
+        progress?.Report(new("Lendo o mapa de blocos", 0, 0, 0, 1));
+        byte[]? bmp = null;
+        try { bmp = v.LoadBlockBitmap(); var b = bmp; res.Allocation = new AllocationMap(0, v.BlockSize, v.Info.Blocks, c => NtfsVolume.IsSet(b, c)); }
+        catch (Exception ex) { res.Log.Add("Mapa de blocos ilegível: " + ex.Message); }
+        bool journalUsed = false;
+        int fromJournal = 0, lost = 0;
+
+        Condition Eval(ExtInode ino)
+        {
+            if (bmp == null) return Condition.Unknown;
+            long alloc = 0, total = 0;
+            foreach (var r in v.Map(ino))
+            {
+                long step = Math.Max(1, r.Length / 2048);
+                for (long c = 0; c < r.Length; c += step) { total++; if (NtfsVolume.IsSet(bmp, r.Physical + c)) alloc++; }
+            }
+            return total == 0 ? Condition.Excellent : alloc == 0 ? Condition.Good : alloc >= total ? Condition.Overwritten : Condition.Partial;
+        }
+
+        var visited = new HashSet<uint> { 2 };
+        var queue = new Queue<(ExtInode dir, RecoveredItem item, bool deleted)>();
+        var rootIno = v.ReadInode(2);
+        if (rootIno == null) { res.Log.Add("Inode raiz ilegível."); return res; }
+        queue.Enqueue((rootIno, res.Root, false));
+        long dirs = 0, nextId = 3_000_000_000;
+        while (queue.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var (dir, parent, delDir) = queue.Dequeue();
+            List<ExtVolume.DirEntry> entries;
+            try { entries = v.ReadDirectory(dir, history: true); }
+            catch (MediaReadException) { res.Log.Add($"Pasta ilegível: {parent.FullPath}"); continue; }
+            foreach (var e in entries)
+            {
+                bool deleted = e.Deleted || delDir;
+                var ino = v.ReadInode(e.Inode);
+                if (ino == null) continue;
+                bool reused = deleted && !ino.Deleted;     // o número do inode já é de outro arquivo
+                bool isDir = e.Type == 2 || (e.Type == 0 && ino.IsDir);
+                if (!deleted && !isDir && !opt.IncludeLive) continue;
+                if (!deleted && ino.Deleted) continue;   // entrada viva apontando para inode morto: lixo
+                if (!deleted && !(ino.IsDir || ino.IsFile)) continue;
+                var item = new RecoveredItem { Id = nextId++, Name = e.Name, IsDirectory = isDir, Origin = deleted ? ItemOrigin.Deleted : ItemOrigin.Live };
+                ExtInode? use = reused ? null : ino;
+                if (deleted && (use == null || !use.HasMapping))
+                {
+                    // ext3/ext4 zeram o mapa ao apagar: a cópia antiga do inode pode estar no journal
+                    var hist = v.HistoricInode(e.Inode, (ushort)(isDir ? 0x4000 : 0x8000));
+                    journalUsed = true;
+                    if (hist != null) { use = hist; fromJournal++; item.Note = "mapa de blocos recuperado do journal"; }
+                }
+                if (use != null)
+                {
+                    item.Modified = ExtVolume.Time(use.Mtime);
+                    item.Created = ExtVolume.Time(use.Crtime != 0 ? use.Crtime : use.Ctime);
+                }
+                if (isDir)
+                {
+                    item.Condition = deleted ? Condition.Good : Condition.Excellent;
+                    if (use != null && use.HasMapping && visited.Add(e.Inode)) queue.Enqueue((use, item, deleted));
+                    else if (deleted) item.Note = "conteúdo da pasta perdido";
+                }
+                else if (use != null && use.HasMapping && use.IsFile)
+                {
+                    item.Data = v.DataSource(use);
+                    item.Size = use.Size;
+                    item.Condition = !deleted ? Condition.Excellent : Eval(use);
+                }
+                else
+                {
+                    if (!deleted) continue;
+                    item.Size = use?.Size ?? 0;
+                    item.Condition = Condition.Overwritten;
+                    item.Note = reused ? "inode já reaproveitado por outro arquivo" : "mapa de blocos apagado e sem cópia no journal — tente a varredura profunda";
+                    lost++;
+                }
+                res.Attach(parent, item);
+            }
+            dirs++;
+            progress?.Report(new("Lendo pastas", Math.Min(0.99, dirs / (double)(dirs + queue.Count + 1)), res.Items.Count, dirs, dirs + queue.Count));
+        }
+        if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
+        if (!v.HasJournal && v.Info.Variant == "ext2") res.Log.Add("ext2 não tem journal: no Linux atual, nome e mapa de um arquivo apagado somem do disco — só a varredura profunda (por assinatura) acha o conteúdo.");
+        if (journalUsed) res.Log.Add($"Journal: {v.JournalCopies:N0} cópias de blocos; {fromJournal} arquivo(s)/pasta(s) apagado(s) reconstruído(s) a partir dele.");
+        if (lost > 0) res.Log.Add($"{lost} apagado(s) sem mapa de blocos recuperável (ext3/ext4 zeram o mapa; o journal já tinha sido reciclado).");
         return res;
     }
 

@@ -98,5 +98,6 @@ foreach (var deep in new[] { false, true })
 }
 fails += await Ops.Run(dir);
 fails += ExtTests.Run(dir);
+fails += DiskScanTests.Run(dir);
 Console.WriteLine(fails == 0 ? "\nTUDO OK" : $"\n{fails} FALHA(S)");
 return fails;

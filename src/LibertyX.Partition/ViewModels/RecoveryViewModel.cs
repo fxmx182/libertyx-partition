@@ -229,32 +229,13 @@ public sealed partial class RecoveryViewModel : PageViewModel
         }
         var disk = DiskSystem.OpenDisk(d, false);
         _dev = disk;
+        var res2 = new ScanResult { Root = new RecoveredItem { Id = 0, Name = d.Title, IsDirectory = true, Origin = ItemOrigin.Live } };
+        holder[0] = res2;
         if (p != null)
         {
-            var slice = disk.Slice(p.Offset, p.Length);
-            var res = new ScanResult { Root = new RecoveredItem { Id = 0, Name = "Espaço não alocado", IsDirectory = true, Origin = ItemOrigin.Live } };
-            holder[0] = res;
-            Carver.Carve(slice, [(0, slice.Length)], res, opt, progress, ct, 4096);
-            return res;
+            return DiskScanner.Scan(disk, d.Table, p.Offset, p.Length, "Espaço não alocado", opt, progress, ct, res2);
         }
-        var master = new ScanResult { Root = new RecoveredItem { Id = 0, Name = d.Title, IsDirectory = true, Origin = ItemOrigin.Live } };
-        holder[0] = master;
-        var carveRanges = new List<(long, long)>();
-        foreach (var part in d.Partitions)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (part.IsUnallocated || !FsDetect.CanRead(part.FileSystem)) { carveRanges.Add((part.Offset, part.Length)); continue; }
-            var vol = disk.Slice(part.Offset, part.Length);
-            var sub = FileSystemScanner.Scan(vol, opt, progress, ct);
-            sub.Root.Name = $"{part.Letter ?? part.Label ?? "Partição"} ({sub.FileSystem})";
-            master.Attach(master.Root, sub.Root);
-            master.Items.AddRange(sub.Items);
-            master.Log.AddRange(sub.Log);
-            if (sub.Allocation != null && opt.CarveFreeSpaceOnly) carveRanges.AddRange(sub.Allocation.FreeRanges(vol.Length).Select(r => (r.offset + part.Offset, r.length)));
-            else carveRanges.Add((part.Offset, part.Length));
-        }
-        if (opt.DeepScan) Carver.Carve(disk, carveRanges.OrderBy(r => r.Item1).ToList(), master, opt, progress, ct);
-        return master;
+        return DiskScanner.Scan(disk, d.Table, 0, disk.Length, d.Title, opt, progress, ct, res2);
     }
 
     [RelayCommand]
