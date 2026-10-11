@@ -655,7 +655,7 @@ public static class Carver
         var buf = new byte[block];
         var root = into.GetOrAddFolder(into.Root, "Encontrados por assinatura", "varredura profunda: sem nome nem pasta originais");
         var counters = new Dictionary<string, int>();
-        var orphanFolder = (RecoveredItem?)null;
+        var orphans = new List<(NtfsRecord rec, long abs)>();
         long found = 0, lastReport = 0;
         int ntfsRecSize = 1024;
 
@@ -680,24 +680,15 @@ public static class Carver
                 {
                     var h = buf.AsSpan(o, Math.Min(512, got - o));
                     long abs = pos + o;
-                    if (ntfsClusterSize is { } cs && opt.OrphanMftRecords && Bin.Match(h, 0, "FILE"u8) && h.Length >= 48)
+                    if (ntfsClusterSize != null && opt.OrphanMftRecords && Bin.Match(h, 0, "FILE"u8) && h.Length >= 48)
                     {
+                        // registro MFT solto (de um NTFS formatado ou com o MFT perdido): guarda para montar a árvore no fim
                         var raw = reader.Bytes(abs, ntfsRecSize);
-                        var rec = raw != null ? NtfsVolume.ParseRecordStatic(raw, -1) : null;
-                        if (rec?.BestName is { } fn && !rec.IsDir && rec.BaseIndex == 0 && rec.UnnamedData is { } data)
+                        if (raw != null)
                         {
-                            orphanFolder ??= into.GetOrAddFolder(into.Root, "Registros MFT avulsos", "nome original preservado, pasta perdida");
-                            IDataSource src = !data.NonResident ? new ResidentSource(data.Resident ?? [])
-                                : new ExtentSource(dev, (data.Runs ?? []).Select(x => new Extent(x.Sparse ? -1 : x.Lcn * cs, x.Length * cs)), data.RealSize);
-                            if (src.Length > 0 && src.Length < dev.Length)
-                            {
-                                into.Attach(orphanFolder, new RecoveredItem
-                                {
-                                    Id = into.NewId(), Name = fn.Name, Origin = ItemOrigin.Orphan, Size = src.Length, Data = src,
-                                    Created = rec.Created, Modified = rec.Modified, Condition = Condition.Unknown, DeviceOffset = abs,
-                                });
-                                found++;
-                            }
+                            uint recNo = Bin.U16(raw, 4) >= 0x30 ? Bin.U32(raw, 44) : uint.MaxValue;
+                            var rec = NtfsVolume.ParseRecordStatic(raw, recNo);
+                            if (rec?.BestName != null && rec.BaseIndex == 0) orphans.Add((rec, abs));
                         }
                         continue;
                     }
@@ -729,5 +720,143 @@ public static class Carver
             }
         }
         into.Log.Add($"Varredura profunda: {found:N0} arquivos reconhecidos pelo conteúdo.");
+        if (orphans.Count > 0) BuildOrphanTree(dev, orphans, into, ntfsClusterSize ?? 4096);
+    }
+
+    /// <summary>
+    /// Monta a árvore de um MFT antigo a partir dos registros soltos: cada registro sabe o próprio
+    /// número e o número da pasta-mãe. O tamanho de cluster antigo (pode diferir do atual depois de
+    /// uma formatação) é deduzido do registro do $MFT antigo: ele diz em que cluster começa, e nós
+    /// sabemos em que byte o encontramos.
+    /// </summary>
+    /// <summary>Quanto dos dados caiu em área que o sistema de arquivos atual usa (= foi sobrescrito).</summary>
+    private static Condition Overlap(AllocationMap? map, IDataSource src)
+    {
+        if (map == null || src is not ExtentSource es) return Condition.Unknown;
+        long total = 0, hit = 0;
+        foreach (var e in es.Extents)
+        {
+            if (e.Sparse) continue;
+            long step = Math.Max(map.ClusterSize, e.Length / 512);
+            for (long o = 0; o < e.Length; o += step)
+            {
+                long c = (e.DeviceOffset + o - map.DataStart) / map.ClusterSize;
+                if (c < 0 || c >= map.ClusterCount) continue;
+                total++;
+                if (map.IsClusterAllocated(c)) hit++;
+            }
+        }
+        return total == 0 ? Condition.Unknown : hit == 0 ? Condition.Good : hit >= total ? Condition.Overwritten : Condition.Partial;
+    }
+
+    private static void BuildOrphanTree(IBlockDevice dev, List<(NtfsRecord rec, long abs)> orphans, ScanResult into, long fallbackCluster)
+    {
+        // qual $MFT e qual cluster explicam a posição dos registros soltos? (o $MFT novo também
+        // aparece por aí, e com outro tamanho de cluster: votação, não o primeiro que achar)
+        long cs = fallbackCluster;
+        int best = 0;
+        var numbered = orphans.Where(o => o.rec.Index != uint.MaxValue).ToList();
+        foreach (var cand in orphans.Where(o => o.rec.Index == 0 && o.rec.BestName?.Name == "$MFT" && o.rec.UnnamedData?.Runs is { Count: > 0 }))
+        {
+            var runs = cand.rec.UnnamedData!.Runs!;
+            for (long c = 512; c <= 65536; c *= 2)
+            {
+                if (runs[0].Lcn * c != cand.abs) continue;
+                int votes = 0;
+                foreach (var o in numbered.Take(4000))
+                {
+                    long byteOfs = (long)o.rec.Index * 1024, vcnBase = 0;
+                    foreach (var r in runs)
+                    {
+                        long len = r.Length * c;
+                        if (byteOfs < vcnBase + len) { if (!r.Sparse && r.Lcn * c + byteOfs - vcnBase == o.abs) votes++; break; }
+                        vcnBase += len;
+                    }
+                }
+                if (votes > best) { best = votes; cs = c; }
+            }
+        }
+        if (best == 0)
+        {
+            // sem o $MFT antigo: índices de pasta ("INDX") e assinaturas de arquivo dizem qual cluster acerta
+            var reader = new CarveReader(dev);
+            var magic = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["jpg"] = [0xFF, 0xD8, 0xFF], ["jpeg"] = [0xFF, 0xD8, 0xFF], ["png"] = [0x89, 0x50, 0x4E, 0x47], ["pdf"] = "%PDF"u8.ToArray(),
+                ["zip"] = "PK"u8.ToArray(), ["docx"] = "PK"u8.ToArray(), ["xlsx"] = "PK"u8.ToArray(), ["pptx"] = "PK"u8.ToArray(),
+                ["gif"] = "GIF8"u8.ToArray(), ["mp3"] = "ID3"u8.ToArray(), ["exe"] = "MZ"u8.ToArray(), ["dll"] = "MZ"u8.ToArray(),
+            };
+            var probes = new List<(long lcn, byte[] sig)>();
+            foreach (var (rec, _) in orphans)
+            {
+                if (rec.IsDir)
+                {
+                    var ia = rec.Attrs.FirstOrDefault(a => a.Type == 0xA0 && a.NonResident && a.Runs is { Count: > 0 });
+                    if (ia != null && !ia.Runs![0].Sparse) probes.Add((ia.Runs[0].Lcn, "INDX"u8.ToArray()));
+                }
+                else if (rec.UnnamedData is { NonResident: true, Runs.Count: > 0 } d && !d.Runs![0].Sparse
+                         && magic.TryGetValue(Path.GetExtension(rec.BestName!.Name).TrimStart('.'), out var m))
+                    probes.Add((d.Runs[0].Lcn, m));
+                if (probes.Count > 400) break;
+            }
+            for (long c = 512; c <= 65536 && probes.Count > 0; c *= 2)
+            {
+                int votes = 0;
+                foreach (var (lcn, sig) in probes)
+                {
+                    var b = lcn * c + sig.Length <= dev.Length ? reader.Bytes(lcn * c, sig.Length) : null;
+                    if (b != null && b.AsSpan().SequenceEqual(sig)) votes++;
+                }
+                if (votes > best) { best = votes; cs = c; }
+            }
+        }
+        // o mesmo registro pode aparecer mais de uma vez (cópias antigas): fica a de maior sequência
+        var byIndex = orphans.Where(o => o.rec.Index != uint.MaxValue && o.rec.Index >= 16)
+            .GroupBy(o => o.rec.Index).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.rec.Seq).First());
+        var unnumbered = orphans.Where(o => o.rec.Index == uint.MaxValue).ToList();
+        var top = into.GetOrAddFolder(into.Root, "MFT antigo (antes da formatação)", $"registros soltos reorganizados · cluster antigo de {cs / 1024.0:0.#} KB");
+        var items = new Dictionary<long, RecoveredItem>();
+        foreach (var (idx, (rec, abs)) in byIndex)
+        {
+            var fn = rec.BestName!;
+            var item = new RecoveredItem
+            {
+                Id = into.NewId(), Name = fn.Name, IsDirectory = rec.IsDir, Origin = ItemOrigin.Orphan,
+                Created = rec.Created, Modified = rec.Modified, Condition = Condition.Unknown, DeviceOffset = abs,
+            };
+            if (!rec.IsDir && rec.UnnamedData is { } data)
+            {
+                item.Data = !data.NonResident ? new ResidentSource(data.Resident ?? [])
+                    : new ExtentSource(dev, (data.Runs ?? []).Select(x => new Extent(x.Sparse ? -1 : x.Lcn * cs, x.Length * cs)), data.RealSize);
+                item.Size = item.Data.Length;
+                if (item.Size <= 0 || item.Size > dev.Length) continue;
+                item.Condition = Overlap(into.Allocation, item.Data);
+            }
+            else if (!rec.IsDir) continue;
+            items[idx] = item;
+        }
+        int linked = 0;
+        foreach (var (idx, item) in items)
+        {
+            var fn = byIndex[(uint)idx].rec.BestName!;
+            RecoveredItem parent = top;
+            if (fn.ParentIndex == 5) parent = top;
+            else if (items.TryGetValue(fn.ParentIndex, out var p) && p.IsDirectory) { parent = p; linked++; }
+            else parent = into.GetOrAddFolder(top, "$Pasta perdida", "a pasta-mãe deste registro não foi encontrada");
+            parent.Children ??= [];
+            parent.Children.Add(item);
+            item.Parent = parent;
+            item.ParentId = parent.Id;
+            into.Items.Add(item);
+        }
+        // pastas vazias (sem nenhum arquivo dentro, em nenhum nível) não ajudam
+        static bool HasFiles(RecoveredItem d) => d.Children?.Any(c => !c.IsDirectory || HasFiles(c)) == true;
+        foreach (var d in items.Values.Where(i => i.IsDirectory && !HasFiles(i)).ToList())
+        {
+            d.Parent?.Children?.Remove(d);
+            into.Items.Remove(d);
+        }
+        into.Log.Add($"MFT antigo: {items.Count(i => !i.Value.IsDirectory):N0} arquivos com nome original, {items.Count(i => i.Value.IsDirectory)} pastas reconstruídas, cluster antigo {cs} bytes.");
+        _ = unnumbered;
     }
 }
