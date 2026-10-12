@@ -10,8 +10,9 @@ using LibertyX.Partition.ViewModels;
 namespace LibertyX.Partition.Controls;
 
 /// <summary>
-/// O mapa do disco: cada partição é um bloco proporcional ao tamanho (com largura mínima para
-/// as pequenas não sumirem), preenchido até o quanto está usado. Clique seleciona.
+/// O mapa do disco: cada partição é uma placa de vidro proporcional ao tamanho (com largura
+/// mínima para as pequenas não sumirem). A cor do sistema de arquivos aparece só num ponto ao
+/// lado do nome e num trilho fino de uso no rodapé, para o disco ler-se de longe sem gritar.
 /// </summary>
 public sealed class PartitionRibbon : Control
 {
@@ -53,7 +54,7 @@ public sealed class PartitionRibbon : Control
 
     private void OnVm(object? s, System.ComponentModel.PropertyChangedEventArgs e) => InvalidateVisual();
 
-    protected override Size MeasureOverride(Size availableSize) => new(0, Compact ? 34 : 74);
+    protected override Size MeasureOverride(Size availableSize) => new(0, Compact ? 30 : 68);
 
     public override void Render(DrawingContext ctx)
     {
@@ -73,7 +74,7 @@ public sealed class PartitionRibbon : Control
             for (int i = 0; i < w.Count; i++) if (w[i] > minW) w[i] -= over * w[i] / big;
         }
         double x = 0, h = b.Height;
-        double r = Compact ? 7 : 12;
+        double r = Compact ? 6 : 10;
         for (int i = 0; i < items.Count; i++)
         {
             var vm = items[i];
@@ -81,45 +82,45 @@ public sealed class PartitionRibbon : Control
             _hit.Add((vm, rect));
             var c = vm.Color;
             bool sel = vm.IsSelected, hov = vm == _hover;
+            byte bg = (byte)(sel ? 20 : hov ? 15 : 9);
             if (vm.IsUnallocated)
-            {
-                var hatch = new Rect(rect.X, rect.Y, rect.Width, rect.Height);
-                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)), new Pen(new SolidColorBrush(Color.FromArgb(46, 255, 255, 255)), 1, new DashStyle([3, 3], 0)), hatch, r, r);
-            }
+                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(bg / 2), 255, 255, 255)), new Pen(new SolidColorBrush(Color.FromArgb(34, 255, 255, 255)), 1, new DashStyle([2, 3], 0)), rect.Deflate(0.5), r, r);
             else
             {
-                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(28, c.R, c.G, c.B)), new Pen(new SolidColorBrush(Color.FromArgb(70, c.R, c.G, c.B)), 1), rect, r, r);
-                double used = vm.HasUsage ? vm.UsedFraction : 0;
-                if (used > 0)
+                // vidro com um leve tom da cor do sistema de arquivos, quase imperceptível
+                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(bg, 255, 255, 255)), null, rect, r, r);
+                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(10, c.R, c.G, c.B)), new Pen(new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)), 1), rect.Deflate(0.5), r, r);
+                // trilho de uso no rodapé
+                double th = Compact ? 3 : 4, pad = Compact ? 5 : 10;
+                if (rect.Width > pad * 2 + 6)
                 {
-                    var fill = new Rect(rect.X, rect.Y, Math.Max(r * 1.2, rect.Width * used), rect.Height);
-                    var grad = new LinearGradientBrush
-                    {
-                        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                        GradientStops = { new GradientStop(Color.FromArgb(150, c.R, c.G, c.B), 0), new GradientStop(Color.FromArgb(85, c.R, c.G, c.B), 1) },
-                    };
-                    using (ctx.PushClip(new RoundedRect(rect, r)))
-                        ctx.DrawRectangle(grad, null, fill);
+                    var track = new Rect(rect.X + pad, rect.Bottom - pad - th + (Compact ? 1 : 0), rect.Width - pad * 2, th);
+                    ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(22, 255, 255, 255)), null, track, th / 2, th / 2);
+                    double used = vm.HasUsage ? vm.UsedFraction : 0;
+                    double fw = used > 0 ? Math.Max(th, track.Width * used) : th;
+                    ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(vm.HasUsage ? 230 : 120), c.R, c.G, c.B)), null, new Rect(track.X, track.Y, fw, th), th / 2, th / 2);
                 }
-                // fio de cor no topo: identifica o tipo mesmo com pouco uso
-                using (ctx.PushClip(new RoundedRect(rect, r)))
-                    ctx.DrawRectangle(new SolidColorBrush(c), null, new Rect(rect.X, rect.Y, rect.Width, Compact ? 3 : 4));
             }
-            if (sel || hov)
-                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(sel ? Color.Parse("#FBC501") : Color.FromArgb(120, 255, 255, 255)), sel ? 2 : 1.2), rect.Deflate(sel ? 1 : 0.6), r, r);
+            if (sel)
+                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb(170, 255, 255, 255)), 1.3), rect.Deflate(0.65), r, r);
+            else if (hov)
+                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)), 1), rect.Deflate(0.5), r, r);
 
             if (!Compact && rect.Width > 54)
             {
-                var title = new FormattedText(vm.Short, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Bold, 13, new SolidColorBrush(Color.FromArgb(240, 255, 255, 255)));
-                var sub = new FormattedText(vm.SizeText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Regular, 11.5, new SolidColorBrush(Color.FromArgb(170, 235, 235, 245)));
-                title.MaxTextWidth = rect.Width - 16; title.MaxLineCount = 1; title.Trimming = TextTrimming.CharacterEllipsis;
-                sub.MaxTextWidth = rect.Width - 16; sub.MaxLineCount = 1; sub.Trimming = TextTrimming.CharacterEllipsis;
-                ctx.DrawText(title, new Point(rect.X + 10, rect.Y + 14));
-                ctx.DrawText(sub, new Point(rect.X + 10, rect.Y + 34));
-                if (vm.HasUsage && rect.Width > 110)
+                bool dot = !vm.IsUnallocated && rect.Width > 70;
+                double tx = rect.X + (dot ? 24 : 12);
+                var title = new FormattedText(vm.Short, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Bold, 12.5, new SolidColorBrush(Color.FromArgb((byte)(vm.IsUnallocated ? 150 : 235), 237, 237, 240)));
+                var sub = new FormattedText(vm.SizeText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Regular, 11.5, new SolidColorBrush(Color.FromArgb(130, 237, 237, 240)));
+                title.MaxTextWidth = Math.Max(1, rect.Right - tx - 10); title.MaxLineCount = 1; title.Trimming = TextTrimming.CharacterEllipsis;
+                sub.MaxTextWidth = Math.Max(1, rect.Right - rect.X - 22); sub.MaxLineCount = 1; sub.Trimming = TextTrimming.CharacterEllipsis;
+                if (dot) ctx.DrawEllipse(new SolidColorBrush(c), null, new Point(rect.X + 15, rect.Y + 20.5), 3.5, 3.5);
+                ctx.DrawText(title, new Point(tx, rect.Y + 12));
+                ctx.DrawText(sub, new Point(rect.X + 12, rect.Y + 32));
+                if (vm.HasUsage && rect.Width > 120)
                 {
-                    var pct = new FormattedText(vm.UsagePercent, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Regular, 11, new SolidColorBrush(Color.FromArgb(150, 235, 235, 245)));
-                    ctx.DrawText(pct, new Point(rect.Right - pct.Width - 10, rect.Y + 14));
+                    var pct = new FormattedText(vm.UsagePercent, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Regular, 11, new SolidColorBrush(Color.FromArgb(120, 237, 237, 240)));
+                    ctx.DrawText(pct, new Point(rect.Right - pct.Width - 12, rect.Y + 12));
                 }
             }
             x += w[i] + gap;
@@ -152,11 +153,11 @@ public sealed class PartitionRibbon : Control
     }
 }
 
-/// <summary>Anel de uso: o prato do disco preenchido em ouro (ou na cor do sistema de arquivos).</summary>
+/// <summary>Anel de uso: um traço fino e liso sobre um trilho discreto, na cor do sistema de arquivos.</summary>
 public sealed class UsageRing : Control
 {
     public static readonly StyledProperty<double> ValueProperty = AvaloniaProperty.Register<UsageRing, double>(nameof(Value));
-    public static readonly StyledProperty<Color> ColorProperty = AvaloniaProperty.Register<UsageRing, Color>(nameof(Color), Color.Parse("#FBC501"));
+    public static readonly StyledProperty<Color> ColorProperty = AvaloniaProperty.Register<UsageRing, Color>(nameof(Color), Color.Parse("#E7C064"));
     public static readonly StyledProperty<double> ThicknessProperty = AvaloniaProperty.Register<UsageRing, double>(nameof(Thickness), 10);
     public static readonly StyledProperty<bool> IndeterminateProperty = AvaloniaProperty.Register<UsageRing, bool>(nameof(Indeterminate));
 
@@ -195,18 +196,10 @@ public sealed class UsageRing : Control
         if (s <= 0) return;
         double t = Thickness, rad = (s - t) / 2;
         var c = new Point(Bounds.Width / 2, Bounds.Height / 2);
-        ctx.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb(26, 255, 255, 255)), t), c, rad, rad);
-        // sulcos do prato
-        for (int i = 1; i <= 2; i++)
-            ctx.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb(10, 255, 255, 255)), 1), c, rad - t / 2 - i * 5, rad - t / 2 - i * 5);
+        ctx.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)), t), c, rad, rad);
         double start = Indeterminate ? _spin : -90, sweep = Indeterminate ? 90 : Math.Clamp(Value, 0, 1) * 360;
         if (sweep <= 0.2) return;
-        var col = Color;
-        var pen = new Pen(new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-            GradientStops = { new GradientStop(Lighten(col), 0), new GradientStop(col, 0.5), new GradientStop(Darken(col), 1) },
-        }, t, lineCap: PenLineCap.Round);
+        var pen = new Pen(new SolidColorBrush(Color), t, lineCap: PenLineCap.Round);
         if (sweep >= 359.9) { ctx.DrawEllipse(null, pen, c, rad, rad); return; }
         ctx.DrawGeometry(null, pen, Arc(c, rad, start, sweep));
     }
@@ -224,6 +217,4 @@ public sealed class UsageRing : Control
         return g;
     }
 
-    private static Color Lighten(Color c) => Color.FromRgb((byte)Math.Min(255, c.R + 60), (byte)Math.Min(255, c.G + 60), (byte)Math.Min(255, c.B + 60));
-    private static Color Darken(Color c) => Color.FromRgb((byte)(c.R * 0.72), (byte)(c.G * 0.72), (byte)(c.B * 0.72));
 }

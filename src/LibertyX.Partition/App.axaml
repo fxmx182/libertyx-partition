@@ -20,10 +20,10 @@
   <Application.Styles>
     <FluentTheme>
       <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Dark" Accent="#FBC501" RegionColor="#0C0B0A" AltHigh="#0C0B0A"
+        <ColorPaletteResources x:Key="Dark" Accent="#E7C064" RegionColor="#111113" AltHigh="#111113"
                                ChromeMediumLow="#16151A" ChromeLow="#1E1D22" ChromeMedium="#26252B" ChromeAltLow="#EBEBF5"
                                BaseHigh="#F0F0F2" BaseMediumHigh="#CFCFD6" BaseMedium="#9C9CA6" BaseMediumLow="#5A5963" BaseLow="#2E2D33"
-                               ListLow="#14FFFFFF" ListMedium="#24FFFFFF" ErrorText="#FF5A5A" />
+                               ListLow="#14FFFFFF" ListMedium="#24FFFFFF" ErrorText="#E07C7C" />
       </FluentTheme.Palettes>
     </FluentTheme>
     <StyleInclude Source="/Styles/Theme.axaml" />

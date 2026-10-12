@@ -28,7 +28,7 @@ public sealed partial class FoundRow : ObservableObject
     public bool InTable => F.InCurrentTable;
     public bool Conflicting => F.Conflicting;
     public bool Confirmed => F.BackupConfirmed;
-    public Avalonia.Media.IBrush ColorBrush => new Avalonia.Media.SolidColorBrush(F.LooksLikeEsp ? Avalonia.Media.Color.Parse("#FFE08A") : Ui.FsColor(F.FileSystem));
+    public Avalonia.Media.IBrush ColorBrush => new Avalonia.Media.SolidColorBrush(F.LooksLikeEsp ? Avalonia.Media.Color.Parse("#BDB39A") : Ui.FsColor(F.FileSystem));
     public IRelayCommand Explore => new RelayCommand(() => _owner.ExploreRow(this));
 }
 

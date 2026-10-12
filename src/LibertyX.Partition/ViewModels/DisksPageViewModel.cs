@@ -23,7 +23,7 @@ public sealed partial class DisksPageViewModel : PageViewModel
     [ObservableProperty] private double _inspectorUsage;
     [ObservableProperty] private string _inspectorUsageText = "";
     [ObservableProperty] private bool _inspectorHasUsage;
-    [ObservableProperty] private Avalonia.Media.Color _inspectorColor = Avalonia.Media.Color.Parse("#FBC501");
+    [ObservableProperty] private Avalonia.Media.Color _inspectorColor = Ui.Accent;
     [ObservableProperty] private string? _inspectorWarning;
 
     public bool HasSelection => SelectedDisk != null;
@@ -59,7 +59,7 @@ public sealed partial class DisksPageViewModel : PageViewModel
         var D = d.D;
         InspectorTitle = d.Title;
         InspectorSubtitle = d.Model;
-        InspectorColor = Avalonia.Media.Color.Parse("#FBC501");
+        InspectorColor = Ui.Accent;
         InspectorUsage = d.UsedFraction;
         InspectorHasUsage = true;
         InspectorUsageText = $"{d.UsedFraction * 100:0}%";

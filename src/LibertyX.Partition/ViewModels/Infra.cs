@@ -36,21 +36,25 @@ public static class Ui
         else Dispatcher.UIThread.Post(a);
     }
 
+    /// <summary>O acento da casa (ouro suave) e a família de tons dessaturados das partições:
+    /// todos com o mesmo brilho, para nenhum gritar mais que o outro.</summary>
+    public static readonly Color Accent = Color.Parse("#E7C064");
+
     public static Color FsColor(FsKind fs) => fs switch
     {
-        FsKind.Ntfs => Color.Parse("#FBC501"),
-        FsKind.Fat32 or FsKind.Fat16 or FsKind.Fat12 => Color.Parse("#35D0BE"),
-        FsKind.ExFat => Color.Parse("#9B8CFF"),
-        FsKind.Ext => Color.Parse("#FF8A5B"),
-        FsKind.BitLocker => Color.Parse("#FF6FA8"),
-        FsKind.ReFS => Color.Parse("#7FB2FF"),
-        FsKind.HfsPlus or FsKind.Apfs => Color.Parse("#C9C9D1"),
-        FsKind.LinuxSwap => Color.Parse("#B07CFF"),
-        _ => Color.Parse("#77767F"),
+        FsKind.Ntfs => Color.Parse("#D2B67A"),
+        FsKind.Fat32 or FsKind.Fat16 or FsKind.Fat12 => Color.Parse("#8DB8A8"),
+        FsKind.ExFat => Color.Parse("#A3A1CC"),
+        FsKind.Ext => Color.Parse("#C99D88"),
+        FsKind.BitLocker => Color.Parse("#C4929F"),
+        FsKind.ReFS => Color.Parse("#92A9C6"),
+        FsKind.HfsPlus or FsKind.Apfs => Color.Parse("#B4B4BC"),
+        FsKind.LinuxSwap => Color.Parse("#AC9AC4"),
+        _ => Color.Parse("#7A7980"),
     };
 
     public static Color PartitionColor(PartitionInfo p) =>
-        p.IsUnallocated ? Color.Parse("#3A3940") : p.IsEsp ? Color.Parse("#FFE08A") : p.IsMsr ? Color.Parse("#5C5B66") : p.IsRecovery ? Color.Parse("#F08A4B") : FsColor(p.FileSystem);
+        p.IsUnallocated ? Color.Parse("#3A3940") : p.IsEsp ? Color.Parse("#BDB39A") : p.IsMsr ? Color.Parse("#5C5B63") : p.IsRecovery ? Color.Parse("#A99683") : FsColor(p.FileSystem);
 
     public static IBrush Brush(Color c) => new SolidColorBrush(c);
 

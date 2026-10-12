@@ -16,10 +16,10 @@ public sealed class SectorMap : Control
     private static readonly IBrush[] Brushes =
     [
         new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
-        new SolidColorBrush(Color.FromArgb(200, 0x35, 0xD0, 0xBE)),
-        new SolidColorBrush(Color.Parse("#FBC501")),
-        new SolidColorBrush(Color.Parse("#FFA24D")),
-        new SolidColorBrush(Color.Parse("#FF5A5A")),
+        new SolidColorBrush(Color.FromArgb(150, 0x7C, 0xC4, 0xAA)),
+        new SolidColorBrush(Color.Parse("#E7C064")),
+        new SolidColorBrush(Color.Parse("#D9A56C")),
+        new SolidColorBrush(Color.Parse("#E07C7C")),
     ];
 
     public override void Render(DrawingContext ctx)
@@ -81,7 +81,7 @@ public sealed class LineChart : Control
             foreach (var p in pts.Skip(1)) g.LineTo(p);
             g.EndFigure(false);
         }
-        ctx.DrawGeometry(null, new Pen(new SolidColorBrush(Color.Parse("#FBC501")), 2, lineJoin: PenLineJoin.Round), line);
+        ctx.DrawGeometry(null, new Pen(new SolidColorBrush(Color.Parse("#E7C064")), 1.6, lineJoin: PenLineJoin.Round), line);
         var tf = new Typeface(new FontFamily("avares://LibertyXPartition/Assets/Fonts#Manrope"));
         var label = new FormattedText($"{max / 1.12:0} {Unit}", System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight, tf, 11, new SolidColorBrush(Color.FromArgb(150, 235, 235, 245)));
         ctx.DrawText(label, new Point(4, 2));
@@ -104,16 +104,16 @@ public sealed class TreemapView : Control
 
     public static Color ColorFor(LibertyX.Partition.Core.Tools.SpaceNode n)
     {
-        if (n.IsDir) return Color.Parse("#FBC501");
+        if (n.IsDir) return Color.Parse("#D2B67A");
         return LibertyX.Partition.Core.Recovery.FileTypes.Categorize(n.Extension) switch
         {
-            LibertyX.Partition.Core.Recovery.FileCategory.Image => Color.Parse("#35D0BE"),
-            LibertyX.Partition.Core.Recovery.FileCategory.Video => Color.Parse("#9B8CFF"),
-            LibertyX.Partition.Core.Recovery.FileCategory.Audio => Color.Parse("#FF8A5B"),
-            LibertyX.Partition.Core.Recovery.FileCategory.Document => Color.Parse("#7FB2FF"),
-            LibertyX.Partition.Core.Recovery.FileCategory.Archive => Color.Parse("#FF6FA8"),
-            LibertyX.Partition.Core.Recovery.FileCategory.Executable => Color.Parse("#C9C9D1"),
-            _ => Color.Parse("#8A8994"),
+            LibertyX.Partition.Core.Recovery.FileCategory.Image => Color.Parse("#8DB8A8"),
+            LibertyX.Partition.Core.Recovery.FileCategory.Video => Color.Parse("#A3A1CC"),
+            LibertyX.Partition.Core.Recovery.FileCategory.Audio => Color.Parse("#C99D88"),
+            LibertyX.Partition.Core.Recovery.FileCategory.Document => Color.Parse("#92A9C6"),
+            LibertyX.Partition.Core.Recovery.FileCategory.Archive => Color.Parse("#C4929F"),
+            LibertyX.Partition.Core.Recovery.FileCategory.Executable => Color.Parse("#B4B4BC"),
+            _ => Color.Parse("#7A7980"),
         };
     }
 
@@ -134,10 +134,10 @@ public sealed class TreemapView : Control
             var fill = new LinearGradientBrush
             {
                 StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(Color.FromArgb(sel ? (byte)120 : (byte)70, c.R, c.G, c.B), 0), new GradientStop(Color.FromArgb(sel ? (byte)70 : (byte)28, c.R, c.G, c.B), 1) },
+                GradientStops = { new GradientStop(Color.FromArgb(sel ? (byte)80 : (byte)46, c.R, c.G, c.B), 0), new GradientStop(Color.FromArgb(sel ? (byte)50 : (byte)22, c.R, c.G, c.B), 1) },
             };
             double rad = Math.Min(10, Math.Min(rect.Width, rect.Height) / 4);
-            ctx.DrawRectangle(fill, new Pen(new SolidColorBrush(sel ? Color.Parse("#FBC501") : Color.FromArgb(70, c.R, c.G, c.B)), sel ? 2 : 1), rect, rad, rad);
+            ctx.DrawRectangle(fill, new Pen(new SolidColorBrush(sel ? Color.FromArgb(200, 255, 255, 255) : Color.FromArgb(46, c.R, c.G, c.B)), sel ? 1.5 : 1), rect, rad, rad);
             if (rect.Width > 70 && rect.Height > 34)
             {
                 var t = new FormattedText(n.Name, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Tf, 12.5, new SolidColorBrush(Color.FromArgb(235, 255, 255, 255)))

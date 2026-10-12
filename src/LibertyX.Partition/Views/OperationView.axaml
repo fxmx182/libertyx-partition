@@ -4,7 +4,7 @@
              xmlns:c="using:LibertyX.Partition.Controls"
              x:Class="LibertyX.Partition.Views.OperationView"
              x:DataType="vm:OperationViewModel">
-  <Border Width="640" Background="#F2141318" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="26" Padding="30,28" BoxShadow="0 24 60 0 #A0000000">
+  <Border Width="640" Background="#F7161619" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="26" Padding="30,28" BoxShadow="0 24 60 0 #A0000000">
     <StackPanel Spacing="20">
       <TextBlock Text="{Binding Title}" Classes="h2" HorizontalAlignment="Center" />
       <Panel Width="176" Height="176" HorizontalAlignment="Center">

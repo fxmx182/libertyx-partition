@@ -2,9 +2,9 @@
 
   <!-- ───────── tipografia ───────── -->
   <Style Selector="TextBlock.h1">
-    <Setter Property="FontSize" Value="28" />
-    <Setter Property="FontWeight" Value="ExtraBold" />
-    <Setter Property="LetterSpacing" Value="-0.7" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="-0.6" />
   </Style>
   <Style Selector="TextBlock.h2">
     <Setter Property="FontSize" Value="19" />
@@ -21,9 +21,9 @@
     <Setter Property="LetterSpacing" Value="-1.2" />
   </Style>
   <Style Selector="TextBlock.section">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="10.5" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="LetterSpacing" Value="1.6" />
+    <Setter Property="LetterSpacing" Value="1.4" />
     <Setter Property="Foreground" Value="{StaticResource Tenue}" />
   </Style>
   <Style Selector="TextBlock.muted">
@@ -62,12 +62,12 @@
     <Setter Property="Padding" Value="20" />
   </Style>
   <Style Selector="Border.card.selected">
-    <Setter Property="BorderBrush" Value="{StaticResource OuroBorda}" />
-    <Setter Property="Background" Value="#12FBC501" />
+    <Setter Property="BorderBrush" Value="#2EFFFFFF" />
+    <Setter Property="Background" Value="#0EFFFFFF" />
   </Style>
   <Style Selector="Border.inset">
-    <Setter Property="Background" Value="#33000000" />
-    <Setter Property="BorderBrush" Value="#12FFFFFF" />
+    <Setter Property="Background" Value="#26000000" />
+    <Setter Property="BorderBrush" Value="#0FFFFFFF" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="14" />
   </Style>
@@ -100,19 +100,19 @@
   </Style>
   <Style Selector="Border.notice.warn">
     <Setter Property="Background" Value="{StaticResource LaranjaSuave}" />
-    <Setter Property="BorderBrush" Value="#55FFA24D" />
+    <Setter Property="BorderBrush" Value="#38D9A56C" />
   </Style>
   <Style Selector="Border.notice.danger">
     <Setter Property="Background" Value="{StaticResource VermelhoSuave}" />
-    <Setter Property="BorderBrush" Value="#55FF5A5A" />
+    <Setter Property="BorderBrush" Value="#40E07C7C" />
   </Style>
   <Style Selector="Border.notice.good">
     <Setter Property="Background" Value="{StaticResource VerdeSuave}" />
-    <Setter Property="BorderBrush" Value="#5535D0BE" />
+    <Setter Property="BorderBrush" Value="#387CC4AA" />
   </Style>
   <Style Selector="Border.notice.gold">
-    <Setter Property="Background" Value="#14FBC501" />
-    <Setter Property="BorderBrush" Value="#44FBC501" />
+    <Setter Property="Background" Value="#0EE7C064" />
+    <Setter Property="BorderBrush" Value="#33E7C064" />
   </Style>
 
   <Style Selector="PathIcon">
@@ -126,7 +126,7 @@
 
   <!-- ───────── botões ───────── -->
   <Style Selector="Button">
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="CornerRadius" Value="10" />
     <Setter Property="Padding" Value="15,9" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="FontSize" Value="13.5" />
@@ -137,8 +137,8 @@
     <Setter Property="Cursor" Value="Hand" />
   </Style>
   <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#26FFFFFF" />
-    <Setter Property="BorderBrush" Value="#38FFFFFF" />
+    <Setter Property="Background" Value="#1CFFFFFF" />
+    <Setter Property="BorderBrush" Value="#26FFFFFF" />
     <Setter Property="Foreground" Value="{StaticResource Texto}" />
   </Style>
   <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
@@ -153,32 +153,32 @@
   <Style Selector="Button.primary">
     <Setter Property="Background" Value="{StaticResource OuroBotao}" />
     <Setter Property="Foreground" Value="{StaticResource SobreOuro}" />
-    <Setter Property="BorderBrush" Value="#FFE27A" />
+    <Setter Property="BorderBrush" Value="#F0D28A" />
     <Setter Property="FontWeight" Value="Bold" />
   </Style>
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource OuroClaro}" />
-    <Setter Property="BorderBrush" Value="#FFF0B0" />
+    <Setter Property="BorderBrush" Value="#F7E4B4" />
     <Setter Property="Foreground" Value="{StaticResource SobreOuro}" />
   </Style>
   <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#E0A800" />
+    <Setter Property="Background" Value="#D3A84E" />
   </Style>
   <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#33FBC501" />
-    <Setter Property="BorderBrush" Value="#22FBC501" />
-    <Setter Property="Foreground" Value="#66FBC501" />
+    <Setter Property="Background" Value="#0AFFFFFF" />
+    <Setter Property="BorderBrush" Value="#12FFFFFF" />
+    <Setter Property="Foreground" Value="{StaticResource Tenue}" />
   </Style>
 
   <Style Selector="Button.danger">
     <Setter Property="Background" Value="{StaticResource VermelhoSuave}" />
     <Setter Property="Foreground" Value="{StaticResource Vermelho}" />
-    <Setter Property="BorderBrush" Value="#55FF5A5A" />
+    <Setter Property="BorderBrush" Value="#40E07C7C" />
   </Style>
   <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#40FF5A5A" />
-    <Setter Property="BorderBrush" Value="#88FF5A5A" />
-    <Setter Property="Foreground" Value="#FF8A8A" />
+    <Setter Property="Background" Value="#26E07C7C" />
+    <Setter Property="BorderBrush" Value="#66E07C7C" />
+    <Setter Property="Foreground" Value="#EC9A9A" />
   </Style>
 
   <Style Selector="Button.ghost">
@@ -202,13 +202,28 @@
     <Setter Property="FontSize" Value="13.5" />
   </Style>
   <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#12FFFFFF" />
+    <Setter Property="Background" Value="#0AFFFFFF" />
     <Setter Property="Foreground" Value="{StaticResource Texto}" />
   </Style>
   <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource OuroSuave}" />
+    <Setter Property="Background" Value="#10FFFFFF" />
+    <Setter Property="Foreground" Value="{StaticResource Texto}" />
+  </Style>
+  <Style Selector="Button.nav.active PathIcon">
     <Setter Property="Foreground" Value="{StaticResource Ouro}" />
   </Style>
+  <Style Selector="Border.navmark">
+    <Setter Property="Width" Value="3" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="{StaticResource Ouro}" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="-2,0,0,0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Border.navmark.on"><Setter Property="Opacity" Value="1" /></Style>
 
   <Style Selector="Button.action">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -221,20 +236,24 @@
     <Setter Property="Foreground" Value="{StaticResource Texto}" />
   </Style>
   <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource VidroForte}" />
-    <Setter Property="Foreground" Value="{StaticResource OuroClaro}" />
+    <Setter Property="Background" Value="#0DFFFFFF" />
+    <Setter Property="Foreground" Value="{StaticResource Texto}" />
   </Style>
   <Style Selector="Button.action.dangerous:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Foreground" Value="{StaticResource Vermelho}" />
     <Setter Property="Background" Value="{StaticResource VermelhoSuave}" />
   </Style>
+  <Style Selector="Button.action PathIcon"><Setter Property="Foreground" Value="{StaticResource Apagado}" /></Style>
+  <Style Selector="Button.action:pointerover PathIcon"><Setter Property="Foreground" Value="{StaticResource Ouro}" /></Style>
+  <Style Selector="Button.action.dangerous:pointerover PathIcon"><Setter Property="Foreground" Value="{StaticResource Vermelho}" /></Style>
+  <Style Selector="Button.action:disabled PathIcon"><Setter Property="Foreground" Value="#3DFFFFFF" /></Style>
 
   <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#4DEBEBF5" />
+    <Setter Property="Foreground" Value="#4D4D55" />
   </Style>
   <Style Selector="Button.action.sel /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#1AFBC501" />
+    <Setter Property="Background" Value="#10FFFFFF" />
   </Style>
 
   <Style Selector="Button.tile">
@@ -243,23 +262,25 @@
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Stretch" />
     <Setter Property="Padding" Value="16" />
-    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="CornerRadius" Value="16" />
     <Setter Property="Background" Value="{StaticResource Vidro}" />
   </Style>
   <Style Selector="Button.tile:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#16FFFFFF" />
-    <Setter Property="BorderBrush" Value="#55FBC501" />
+    <Setter Property="Background" Value="#10FFFFFF" />
+    <Setter Property="BorderBrush" Value="#30FFFFFF" />
   </Style>
   <Style Selector="Button.tile.selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#1AFBC501" />
-    <Setter Property="BorderBrush" Value="{StaticResource Ouro}" />
+    <Setter Property="Background" Value="#0EE7C064" />
+    <Setter Property="BorderBrush" Value="#99E7C064" />
   </Style>
 
   <!-- ───────── entradas ───────── -->
   <Style Selector="TextBox">
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="CornerRadius" Value="10" />
     <Setter Property="Padding" Value="12,9" />
     <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="Background" Value="{StaticResource Vidro}" />
+    <Setter Property="BorderBrush" Value="#1CFFFFFF" />
   </Style>
   <Style Selector="TextBox /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{StaticResource Vidro}" />
@@ -271,7 +292,7 @@
   </Style>
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="#14FFFFFF" />
-    <Setter Property="BorderBrush" Value="{StaticResource Ouro}" />
+    <Setter Property="BorderBrush" Value="#99E7C064" />
   </Style>
   <Style Selector="ComboBox">
     <Setter Property="CornerRadius" Value="12" />
@@ -288,10 +309,10 @@
     <Setter Property="CornerRadius" Value="12" />
   </Style>
   <Style Selector="ProgressBar">
-    <Setter Property="Foreground" Value="{StaticResource OuroBotao}" />
-    <Setter Property="Background" Value="{StaticResource VidroForte}" />
-    <Setter Property="CornerRadius" Value="5" />
-    <Setter Property="MinHeight" Value="8" />
+    <Setter Property="Foreground" Value="{StaticResource Ouro}" />
+    <Setter Property="Background" Value="#0FFFFFFF" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="MinHeight" Value="6" />
   </Style>
   <Style Selector="ToolTip">
     <Setter Property="Background" Value="{StaticResource Superficie2}" />
@@ -318,17 +339,17 @@
     <Setter Property="Background" Value="#10FFFFFF" />
   </Style>
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#1FFBC501" />
+    <Setter Property="Background" Value="#14FFFFFF" />
   </Style>
   <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#2AFBC501" />
+    <Setter Property="Background" Value="#1AFFFFFF" />
   </Style>
   <Style Selector="TreeViewItem">
     <Setter Property="CornerRadius" Value="9" />
     <Setter Property="MinHeight" Value="30" />
   </Style>
   <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="#1FFBC501" />
+    <Setter Property="Background" Value="#14FFFFFF" />
   </Style>
   <Style Selector="TabItem">
     <Setter Property="FontSize" Value="14" />
@@ -348,9 +369,9 @@
     <Setter Property="Foreground" Value="{StaticResource Apagado}" />
   </Style>
   <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#22FBC501" />
-    <Setter Property="BorderBrush" Value="#77FBC501" />
-    <Setter Property="Foreground" Value="{StaticResource Ouro}" />
+    <Setter Property="Background" Value="#1AFFFFFF" />
+    <Setter Property="BorderBrush" Value="#40FFFFFF" />
+    <Setter Property="Foreground" Value="{StaticResource Texto}" />
   </Style>
   <Style Selector="ToggleButton.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="BorderBrush" Value="#55FFFFFF" />
@@ -362,10 +383,10 @@
     <Setter Property="BorderBrush" Value="#14FFFFFF" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
-  <Style Selector="PathIcon.tree"><Setter Property="Foreground" Value="{StaticResource Ouro}" /></Style>
+  <Style Selector="PathIcon.tree"><Setter Property="Foreground" Value="{StaticResource Apagado}" /></Style>
   <Style Selector="PathIcon.del"><Setter Property="Foreground" Value="{StaticResource Laranja}" /></Style>
   <Style Selector="ContextMenu">
-    <Setter Property="Background" Value="#F41B1A20" />
+    <Setter Property="Background" Value="#F71A1A1E" />
     <Setter Property="BorderBrush" Value="{StaticResource VidroBorda}" />
     <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="6" />
@@ -375,15 +396,15 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
   <Style Selector="Border.pendingbox.active">
-    <Setter Property="BorderBrush" Value="#88FBC501" />
-    <Setter Property="Background" Value="#14FBC501" />
+    <Setter Property="BorderBrush" Value="#55E7C064" />
+    <Setter Property="Background" Value="#0AE7C064" />
   </Style>
   <Style Selector="TextBlock.goldtext"><Setter Property="Foreground" Value="{StaticResource Ouro}" /></Style>
   <Style Selector=":is(Control).hidden"><Setter Property="IsVisible" Value="False" /></Style>
   <Style Selector="TextBlock.failed"><Setter Property="Foreground" Value="{StaticResource Vermelho}" /></Style>
   <Style Selector="Border.dangerbox">
     <Setter Property="Background" Value="{StaticResource VermelhoSuave}" />
-    <Setter Property="BorderBrush" Value="#55FF5A5A" />
+    <Setter Property="BorderBrush" Value="#40E07C7C" />
   </Style>
   <Style Selector="Border.dangerbox > PathIcon"><Setter Property="Foreground" Value="{StaticResource Vermelho}" /></Style>
 </Styles>

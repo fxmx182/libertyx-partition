@@ -11,8 +11,8 @@
           <Button Classes="tile" Classes.selected="{Binding Header.IsSelected}" Command="{Binding Header.Pick}" Padding="14,11"
                   ToolTip.Tip="{Binding Header.Reason}" ToolTip.ShowOnDisabled="True" IsEnabled="{Binding Header.Enabled}">
             <Grid ColumnDefinitions="Auto,*,Auto">
-              <Border Width="38" Height="38" CornerRadius="12" Background="#1AFBC501">
-                <PathIcon Data="{Binding Header.Icon}" Width="20" Height="20" Foreground="{StaticResource Ouro}" />
+              <Border Width="38" Height="38" CornerRadius="11" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                <PathIcon Data="{Binding Header.Icon}" Width="19" Height="19" Foreground="{StaticResource Apagado}" />
               </Border>
               <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Header.Title}" FontWeight="ExtraBold" FontSize="14.5" />

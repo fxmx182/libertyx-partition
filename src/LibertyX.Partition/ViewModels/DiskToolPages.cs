@@ -149,7 +149,7 @@ public sealed partial class HealthViewModel : PageViewModel
         Busy = false;
         Loaded = true;
         HealthText = Ui.HealthText(s.Health);
-        HealthColor = s.Health switch { HealthLevel.Good => Color.Parse("#35D0BE"), HealthLevel.Caution => Color.Parse("#FFA24D"), HealthLevel.Bad => Color.Parse("#FF5A5A"), _ => Color.Parse("#77767F") };
+        HealthColor = s.Health switch { HealthLevel.Good => Color.Parse("#7CC4AA"), HealthLevel.Caution => Color.Parse("#D9A56C"), HealthLevel.Bad => Color.Parse("#E07C7C"), _ => Color.Parse("#77767F") };
         HealthValue = s.Health switch { HealthLevel.Good => 1, HealthLevel.Caution => 0.6, HealthLevel.Bad => 0.25, _ => 0 };
         Summary = s.Summary;
         Source = s.Source;

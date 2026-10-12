@@ -30,13 +30,13 @@
                 <StackPanel Spacing="14">
                   <Button Classes="ghost" Padding="0" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Background="Transparent">
                     <Grid ColumnDefinitions="Auto,*,Auto">
-                      <Border Width="46" Height="46" CornerRadius="14" Background="#1AFBC501" BorderBrush="#33FBC501" BorderThickness="1">
-                        <PathIcon Data="{Binding Icon}" Width="24" Height="24" Foreground="{StaticResource Ouro}" />
+                      <Border Width="42" Height="42" CornerRadius="12" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                        <PathIcon Data="{Binding Icon}" Width="21" Height="21" Foreground="{StaticResource Apagado}" />
                       </Border>
                       <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                          <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="ExtraBold" Foreground="{StaticResource Texto}" />
-                          <TextBlock Text="{Binding Model}" FontSize="14" FontWeight="Medium" Foreground="{StaticResource Apagado}" VerticalAlignment="Bottom" />
+                          <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="Bold" Foreground="{StaticResource Texto}" />
+                          <TextBlock Text="{Binding Model}" FontSize="13.5" FontWeight="Medium" Foreground="{StaticResource Apagado}" VerticalAlignment="Bottom" />
                         </StackPanel>
                         <TextBlock Text="{Binding Info}" FontSize="12.5" Foreground="{StaticResource Tenue}" Margin="0,2,0,0" />
                       </StackPanel>
@@ -74,14 +74,14 @@
                           <Button Classes="action" Classes.sel="{Binding IsSelected}" Command="{Binding SelectCommand}" HorizontalContentAlignment="Stretch" Padding="12,8">
                             <Grid ColumnDefinitions="2.1*,0.95*,0.95*,0.95*,0.9*,2.2*,1.4*">
                               <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Border Width="10" Height="10" CornerRadius="5" Background="{Binding ColorBrush}" VerticalAlignment="Center" />
+                                <Border Width="8" Height="8" CornerRadius="4" Background="{Binding ColorBrush}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Name}" FontWeight="Bold" MinWidth="34" />
                                 <TextBlock Text="{Binding LabelText}" Foreground="{StaticResource Apagado}" TextTrimming="CharacterEllipsis" />
                               </StackPanel>
                               <TextBlock Grid.Column="1" Text="{Binding SizeText}" HorizontalAlignment="Right" />
                               <TextBlock Grid.Column="2" Text="{Binding UsedText}" HorizontalAlignment="Right" Foreground="{StaticResource Apagado}" />
                               <TextBlock Grid.Column="3" Text="{Binding FreeText}" HorizontalAlignment="Right" Foreground="{StaticResource Apagado}" />
-                              <TextBlock Grid.Column="4" Text="{Binding FsText}" Margin="18,0,0,0" />
+                              <TextBlock Grid.Column="4" Text="{Binding FsText}" Margin="18,0,0,0" Foreground="{StaticResource Apagado}" />
                               <TextBlock Grid.Column="5" Text="{Binding TypeText}" Foreground="{StaticResource Apagado}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
                               <TextBlock Grid.Column="6" Text="{Binding StatusText}" Foreground="{StaticResource Apagado}" TextTrimming="CharacterEllipsis" />
                             </Grid>
@@ -104,8 +104,8 @@
         <StackPanel Margin="20,22,20,20" Spacing="16">
           <Grid ColumnDefinitions="Auto,*">
             <Panel Width="84" Height="84">
-              <c:UsageRing Value="{Binding InspectorUsage}" Color="{Binding InspectorColor}" Thickness="9" />
-              <TextBlock Text="{Binding InspectorUsageText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="ExtraBold" FontSize="16" />
+              <c:UsageRing Value="{Binding InspectorUsage}" Color="{Binding InspectorColor}" Thickness="5" />
+              <TextBlock Text="{Binding InspectorUsageText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" FontSize="15" />
             </Panel>
             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
               <TextBlock Text="{Binding InspectorTitle}" Classes="h2" TextWrapping="Wrap" />

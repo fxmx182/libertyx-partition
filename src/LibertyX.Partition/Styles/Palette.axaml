@@ -1,36 +1,40 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!-- A linguagem da família LibertyX: ouro sobre preto quente, vidro, Manrope. -->
+  <!-- Grafite calmo e um único acento: o ouro da LibertyX aparece só onde importa
+       (logo, ação principal, seleção). Cores de estado e de partição são dessaturadas,
+       para a tela descansar os olhos. -->
   <FontFamily x:Key="Manrope">avares://LibertyXPartition/Assets/Fonts#Manrope</FontFamily>
   <FontFamily x:Key="Mono">Cascadia Mono, Consolas, DejaVu Sans Mono, monospace</FontFamily>
 
-  <Color x:Key="OuroColor">#FBC501</Color>
-  <Color x:Key="OuroClaroColor">#FFE08A</Color>
+  <Color x:Key="OuroColor">#E7C064</Color>
+  <Color x:Key="OuroClaroColor">#F2D898</Color>
   <Color x:Key="OuroEscuroColor">#B97A06</Color>
-  <Color x:Key="FundoColor">#0C0B0A</Color>
+  <Color x:Key="FundoColor">#111113</Color>
   <Color x:Key="SuperficieColor">#16151A</Color>
 
-  <SolidColorBrush x:Key="Ouro" Color="#FBC501" />
-  <SolidColorBrush x:Key="OuroClaro" Color="#FFE08A" />
+  <SolidColorBrush x:Key="Ouro" Color="#E7C064" />
+  <SolidColorBrush x:Key="OuroClaro" Color="#F2D898" />
   <SolidColorBrush x:Key="OuroEscuro" Color="#B97A06" />
-  <SolidColorBrush x:Key="OuroSuave" Color="#26FBC501" />
-  <SolidColorBrush x:Key="OuroBorda" Color="#66FBC501" />
-  <SolidColorBrush x:Key="SobreOuro" Color="#1A1200" />
-  <SolidColorBrush x:Key="Fundo" Color="#0C0B0A" />
+  <SolidColorBrush x:Key="OuroSuave" Color="#17E7C064" />
+  <SolidColorBrush x:Key="OuroBorda" Color="#55E7C064" />
+  <SolidColorBrush x:Key="SobreOuro" Color="#1C1608" />
+  <SolidColorBrush x:Key="Fundo" Color="#111113" />
   <SolidColorBrush x:Key="Superficie" Color="#16151A" />
-  <SolidColorBrush x:Key="Superficie2" Color="#1E1D22" />
-  <SolidColorBrush x:Key="Vidro" Color="#0EFFFFFF" />
-  <SolidColorBrush x:Key="VidroForte" Color="#1AFFFFFF" />
-  <SolidColorBrush x:Key="VidroBorda" Color="#1CFFFFFF" />
-  <SolidColorBrush x:Key="Texto" Color="#F0FFFFFF" />
-  <SolidColorBrush x:Key="Apagado" Color="#99EBEBF5" />
-  <SolidColorBrush x:Key="Tenue" Color="#61EBEBF5" />
-  <SolidColorBrush x:Key="Verde" Color="#35D0BE" />
-  <SolidColorBrush x:Key="VerdeSuave" Color="#2635D0BE" />
-  <SolidColorBrush x:Key="Vermelho" Color="#FF5A5A" />
-  <SolidColorBrush x:Key="VermelhoSuave" Color="#26FF5A5A" />
-  <SolidColorBrush x:Key="Laranja" Color="#FFA24D" />
-  <SolidColorBrush x:Key="LaranjaSuave" Color="#26FFA24D" />
-  <SolidColorBrush x:Key="Violeta" Color="#9B8CFF" />
+  <SolidColorBrush x:Key="Superficie2" Color="#1C1C20" />
+  <SolidColorBrush x:Key="Linha" Color="#0FFFFFFF" />
+  <SolidColorBrush x:Key="Destaque" Color="#0DFFFFFF" />
+  <SolidColorBrush x:Key="Vidro" Color="#09FFFFFF" />
+  <SolidColorBrush x:Key="VidroForte" Color="#12FFFFFF" />
+  <SolidColorBrush x:Key="VidroBorda" Color="#14FFFFFF" />
+  <SolidColorBrush x:Key="Texto" Color="#EDEDF0" />
+  <SolidColorBrush x:Key="Apagado" Color="#9A9AA3" />
+  <SolidColorBrush x:Key="Tenue" Color="#66666E" />
+  <SolidColorBrush x:Key="Verde" Color="#7CC4AA" />
+  <SolidColorBrush x:Key="VerdeSuave" Color="#147CC4AA" />
+  <SolidColorBrush x:Key="Vermelho" Color="#E07C7C" />
+  <SolidColorBrush x:Key="VermelhoSuave" Color="#14E07C7C" />
+  <SolidColorBrush x:Key="Laranja" Color="#D9A56C" />
+  <SolidColorBrush x:Key="LaranjaSuave" Color="#14D9A56C" />
+  <SolidColorBrush x:Key="Violeta" Color="#A3A1CC" />
 
   <LinearGradientBrush x:Key="OuroGradiente" StartPoint="0%,0%" EndPoint="100%,100%">
     <GradientStop Offset="0" Color="#FFF6D6" />
@@ -38,10 +42,10 @@
     <GradientStop Offset="1" Color="#B97A06" />
   </LinearGradientBrush>
   <LinearGradientBrush x:Key="OuroBotao" StartPoint="0%,0%" EndPoint="0%,100%">
-    <GradientStop Offset="0" Color="#FFD84A" />
-    <GradientStop Offset="1" Color="#E9A800" />
+    <GradientStop Offset="0" Color="#EDC976" />
+    <GradientStop Offset="1" Color="#DDB258" />
   </LinearGradientBrush>
 
-  <CornerRadius x:Key="RaioCartao">20</CornerRadius>
-  <CornerRadius x:Key="RaioPequeno">12</CornerRadius>
+  <CornerRadius x:Key="RaioCartao">16</CornerRadius>
+  <CornerRadius x:Key="RaioPequeno">10</CornerRadius>
 </ResourceDictionary>
