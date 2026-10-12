@@ -1,5 +1,6 @@
 using LibertyX.Partition.Core.FileSystems;
 using LibertyX.Partition.Core.IO;
+using static LibertyX.Partition.Core.IO.Bin;
 
 namespace LibertyX.Partition.Core.Recovery;
 
@@ -33,6 +34,14 @@ public static class FileSystemScanner
                 case FsKind.Ext:
                     var e = ExtVolume.Open(vol, out err);
                     if (e != null) r = ScanExt(e, opt, progress, ct);
+                    break;
+                case FsKind.HfsPlus:
+                    var h = HfsVolume.Open(vol, out err);
+                    if (h != null) r = ScanHfs(h, opt, progress, ct);
+                    break;
+                case FsKind.Apfs:
+                    var ap = ApfsContainer.Open(vol, out err);
+                    if (ap != null) r = ScanApfs(ap, opt, progress, ct);
                     break;
                 default:
                     // Boot destruído? Tenta as cópias de reserva de cada formato.
@@ -410,6 +419,325 @@ public static class FileSystemScanner
         if (!v.HasJournal && v.Info.Variant == "ext2") res.Log.Add("ext2 não tem journal: no Linux atual, nome e mapa de um arquivo apagado somem do disco — só a varredura profunda (por assinatura) acha o conteúdo.");
         if (journalUsed) res.Log.Add($"Journal: {v.JournalCopies:N0} cópias de blocos; {fromJournal} arquivo(s)/pasta(s) apagado(s) reconstruído(s) a partir dele.");
         if (lost > 0) res.Log.Add($"{lost} apagado(s) sem mapa de blocos recuperável (ext3/ext4 zeram o mapa; o journal já tinha sido reciclado).");
+        return res;
+    }
+
+    // ───────────────────────────── HFS+ ─────────────────────────────
+
+    public static ScanResult ScanHfs(HfsVolume v, ScanOptions opt, IProgress<ScanProgress>? progress, CancellationToken ct)
+    {
+        var res = new ScanResult
+        {
+            Root = new RecoveredItem { Id = 2, Name = v.Label.Length > 0 ? v.Label : "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            FileSystem = v.Variant, Label = v.Label, ClusterSize = v.BlockSize,
+        };
+        if (v.UsedAlternateHeader) res.Log.Add("Cabeçalho principal destruído — usada a cópia do fim do volume.");
+        progress?.Report(new("Lendo o mapa de alocação", 0, 0, 0, 1));
+        byte[]? bmp = null;
+        try { bmp = v.LoadAllocation(); var b = bmp; res.Allocation = new AllocationMap(0, v.BlockSize, v.TotalBlocks, c => HfsVolume.IsAllocated(b, c)); }
+        catch (Exception ex) { res.Log.Add("Mapa de alocação ilegível: " + ex.Message); }
+
+        Condition Eval(List<Extent> ext)
+        {
+            if (bmp == null) return Condition.Unknown;
+            long alloc = 0, total = 0;
+            foreach (var e in ext)
+            {
+                long b0 = e.DeviceOffset / v.BlockSize, n = e.Length / v.BlockSize, step = Math.Max(1, n / 2048);
+                for (long c = 0; c < n; c += step) { total++; if (HfsVolume.IsAllocated(bmp, b0 + c)) alloc++; }
+            }
+            return Evaluate(alloc, total);
+        }
+
+        // 1) a árvore viva, lida do catálogo inteiro de uma vez (as folhas em ordem)
+        progress?.Report(new("Lendo o catálogo", 0.05, 0, 0, 1));
+        var live = new List<HfsRecord>();
+        foreach (var r in v.LiveRecords()) { ct.ThrowIfCancellationRequested(); live.Add(r); }
+        var folders = new Dictionary<uint, RecoveredItem> { [2] = res.Root };
+        var liveFolderRecs = live.Where(r => r.IsFolder && r.Id != 2).ToDictionary(r => r.Id, r => r);
+        var liveIds = new HashSet<uint>(live.Where(r => !r.IsThread).Select(r => r.Id));
+        uint privateDir = 0;
+        foreach (var r in liveFolderRecs.Values)
+            if (r.ParentId == 2 && r.Name.StartsWith("\0\0\0\0HFS+ Private Data", StringComparison.Ordinal)) privateDir = r.Id;
+        var inodes = live.Where(r => r.IsFile && r.ParentId == privateDir && privateDir != 0 && r.Name.StartsWith("iNode", StringComparison.Ordinal))
+                         .ToDictionary(r => r.Name, r => r);
+        static bool Hidden(HfsRecord r) => r.ParentId == 2 && (r.Name.StartsWith('\0') || r.Name.StartsWith(".HFS+ Private Directory Data", StringComparison.Ordinal)
+                                                               || r.Name is ".journal" or ".journal_info_block");
+
+        RecoveredItem LiveFolder(uint id, int depth = 0)
+        {
+            if (folders.TryGetValue(id, out var f)) return f;
+            if (depth > 256 || !liveFolderRecs.TryGetValue(id, out var r)) return res.Root;
+            var parent = LiveFolder(r.ParentId, depth + 1);
+            f = new RecoveredItem { Id = r.Id, Name = r.Name, IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent,
+                                    Created = HfsVolume.Time(r.Created), Modified = HfsVolume.Time(r.Modified) };
+            folders[id] = f;
+            res.Attach(parent, f);
+            return f;
+        }
+        foreach (var r in liveFolderRecs.Values) if (!Hidden(r) && r.Id != privateDir) LiveFolder(r.Id);
+        foreach (var r in live.Where(r => r.IsFile))
+        {
+            if (Hidden(r) || r.ParentId == privateDir || r.IsSymlink) continue;
+            if (!opt.IncludeLive) break;
+            var src = r;
+            if (r.IsHardLink && inodes.TryGetValue("iNode" + r.Special, out var target)) src = target;
+            var item = new RecoveredItem { Id = r.Id, Name = r.Name, Origin = ItemOrigin.Live, Condition = Condition.Excellent,
+                                           Created = HfsVolume.Time(r.Created), Modified = HfsVolume.Time(src.Modified) };
+            item.Data = v.DataSource(src, out var note, out var size);
+            item.Size = size;
+            item.Note = note;
+            if (item.Data == null) item.Condition = Condition.Unknown;
+            res.Attach(folders.TryGetValue(r.ParentId, out var pf) ? pf : res.Root, item);
+        }
+
+        // 2) os apagados: restos de registros nos nós livres, na sobra dos nós e no journal
+        progress?.Report(new("Procurando registros apagados", 0.4, res.Items.Count, 0, 1));
+        var staleFiles = new Dictionary<uint, (HfsRecord rec, string where)>();
+        var staleFolders = new Dictionary<uint, HfsRecord>();
+        var threads = new Dictionary<uint, HfsRecord>();
+        int fromJournal = 0;
+        foreach (var (r, where) in v.StaleRecords(ct))
+        {
+            if (liveIds.Contains(r.Id)) continue;
+            if (r.IsThread) { threads.TryAdd(r.Id, r); continue; }
+            if (r.IsFolder) { staleFolders.TryAdd(r.Id, r); continue; }
+            if (r.IsSymlink || r.ParentId == privateDir) continue;
+            // a mesma versão pode aparecer várias vezes: fica a que ainda tem pedaços e é mais nova
+            if (!staleFiles.TryGetValue(r.Id, out var cur)
+                || (cur.rec.Data!.Extents.Length == 0 && r.Data!.Extents.Length > 0)
+                || (r.Data!.Extents.Length > 0 && r.Modified > cur.rec.Modified))
+                staleFiles[r.Id] = (r, where);
+        }
+
+        var deletedFolders = new Dictionary<uint, RecoveredItem>();
+        RecoveredItem? lostBucket = null;
+        RecoveredItem DeletedFolder(uint id, int depth = 0)
+        {
+            if (folders.TryGetValue(id, out var f) || deletedFolders.TryGetValue(id, out f)) return f;
+            string? name = null; uint parent = 0; HfsRecord? fr = null;
+            if (staleFolders.TryGetValue(id, out fr)) { name = fr.Name; parent = fr.ParentId; }
+            else if (threads.TryGetValue(id, out var th)) { name = th.Name; parent = th.ParentId; }
+            if (name == null || depth > 256)
+            {
+                lostBucket ??= res.GetOrAddFolder(res.Root, "Pastas perdidas", "pastas apagadas cujo nome não sobrou no catálogo");
+                f = new RecoveredItem { Id = res.NewId(), Name = $"Pasta {id}", IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good, Note = "nome original perdido" };
+                deletedFolders[id] = f;
+                res.Attach(lostBucket, f);
+                return f;
+            }
+            var p = DeletedFolder(parent, depth + 1);
+            f = new RecoveredItem { Id = res.NewId(), Name = name, IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good,
+                                    Created = fr == null ? null : HfsVolume.Time(fr.Created), Modified = fr == null ? null : HfsVolume.Time(fr.Modified) };
+            deletedFolders[id] = f;
+            res.Attach(p, f);
+            return f;
+        }
+
+        int lost = 0;
+        foreach (var (r, where) in staleFiles.Values)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (r.ParentId == 2 && r.Name.StartsWith('\0')) continue;
+            var parent = DeletedFolder(r.ParentId);
+            var item = new RecoveredItem { Id = res.NewId(), Name = r.Name, Origin = ItemOrigin.Deleted,
+                                           Created = HfsVolume.Time(r.Created), Modified = HfsVolume.Time(r.Modified), Size = r.Data!.LogicalSize };
+            if (where == "journal") fromJournal++;
+            var ext = v.Map(r.Id, r.Data, 0);
+            long have = ext.Sum(e => e.Length);
+            if (r.Data.LogicalSize == 0 && r.Data.TotalBlocks == 0 && !r.Compressed)
+            {
+                // só sobrou o registro de quando o arquivo foi criado, antes de receber os dados
+                item.Condition = Condition.Overwritten;
+                item.Note = "só sobrou o registro de antes da gravação (tamanho desconhecido) — tente a varredura profunda";
+                lost++;
+            }
+            else if (r.Data.LogicalSize > 0 && ext.Count == 0)
+            {
+                item.Condition = Condition.Overwritten;
+                item.Note = "sem a lista de pedaços — tente a varredura profunda";
+                lost++;
+            }
+            else
+            {
+                item.Data = new ExtentSource(v.Dev, ext, r.Data.LogicalSize);
+                item.Condition = Eval(ext);
+                if (have < r.Data.LogicalSize) { item.Condition = Condition.Partial; item.Note = "só os 8 primeiros pedaços sobreviveram (o resto estava no arquivo de extents)"; }
+                else if (r.Compressed) item.Note = "estava comprimido pelo macOS — o conteúdo pode sair comprimido";
+            }
+            res.Attach(parent, item);
+        }
+        foreach (var id in staleFolders.Keys) if (!folders.ContainsKey(id)) DeletedFolder(id);
+
+        if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
+        if (fromJournal > 0) res.Log.Add($"Journal: {fromJournal} arquivo(s) apagado(s) reconstruído(s) a partir das cópias antigas do catálogo.");
+        if (!v.Journaled) res.Log.Add("Volume sem journal: só sobram registros apagados que ficaram na sobra dos nós do catálogo — a varredura profunda acha o resto pelo conteúdo.");
+        if (lost > 0) res.Log.Add($"{lost} apagado(s) sem lista de pedaços.");
+        return res;
+    }
+
+    // ───────────────────────────── APFS ─────────────────────────────
+
+    public static ScanResult ScanApfs(ApfsContainer c, ScanOptions opt, IProgress<ScanProgress>? progress, CancellationToken ct)
+    {
+        var usable = c.Volumes.Where(v => !v.Sealed && !v.Encrypted).ToList();
+        bool many = c.Volumes.Count > 1;
+        string label = string.Join(" + ", c.Volumes.Where(v => v.Role is 0 or 0x2 or 0x40).Select(v => v.Name).DefaultIfEmpty(c.Volumes[0].Name));
+        var res = new ScanResult
+        {
+            Root = new RecoveredItem { Id = 2, Name = many ? "Contêiner APFS" : (c.Volumes[0].Name.Length > 0 ? c.Volumes[0].Name : "Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            FileSystem = "APFS", Label = label, ClusterSize = c.BlockSize,
+        };
+        if (c.UsedOlderSuperblock) res.Log.Add("O ponto de verificação mais novo estava incompleto — usado o anterior.");
+        foreach (var v in c.Volumes.Where(v => v.Encrypted))
+            res.Log.Add($"Volume \"{v.Name}\" é criptografado (FileVault / APFS criptografado): sem a senha os arquivos não podem ser lidos.");
+        foreach (var v in c.Volumes.Where(v => v.Sealed && !v.Encrypted))
+            res.Log.Add($"Volume \"{v.Name}\" é o sistema do macOS (selado, só arquivos do sistema) — pulado.");
+
+        // mapa dos blocos ocupados por arquivos vivos: base da condição dos apagados e da escavação
+        var used = new byte[(c.BlockCount + 7) / 8];
+        static void Mark(byte[] bmp, ulong start, ulong n) { for (ulong i = start; i < start + n && i / 8 < (ulong)bmp.Length; i++) bmp[i / 8] |= (byte)(1 << (int)(i & 7)); }
+        res.Allocation = new AllocationMap(0, c.BlockSize, (long)c.BlockCount, b => NtfsVolume.IsSet(used, b));
+
+        int vi = 0;
+        foreach (var vol in usable)
+        {
+            ct.ThrowIfCancellationRequested();
+            var top = many ? new RecoveredItem { Id = res.NewId(), Name = vol.Name + (vol.RoleName.Length > 0 ? $" ({vol.RoleName})" : ""), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent } : res.Root;
+            if (many) res.Attach(res.Root, top);
+            double baseF = (double)vi / usable.Count, span = 1.0 / usable.Count;
+            vi++;
+            progress?.Report(new($"Lendo a árvore de {vol.Name}", baseF, res.Items.Count, 0, 1));
+            ApfsRecords live;
+            try { live = c.ReadLive(vol, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { res.Log.Add($"Volume \"{vol.Name}\": árvore de arquivos ilegível ({ex.Message}) — tente a varredura profunda."); continue; }
+            foreach (var m in live.Extents.Values) foreach (var (phys, len, _) in m.Values) if (phys != 0) Mark(used, phys, (len + c.BlockSize - 1) / c.BlockSize);
+
+            IDataSource? Source(ApfsRecords recs, ApfsInode ino, out string? note, out long size)
+            {
+                note = null; size = ino.Size;
+                if (ino.Compressed && recs.Xattrs.TryGetValue((ino.Id, "com.apple.decmpfs"), out var dx))
+                {
+                    IDataSource? rsrc = null;
+                    if (recs.Xattrs.TryGetValue((ino.Id, "com.apple.ResourceFork"), out var rx))
+                    {
+                        if ((rx.flags & 1) != 0 && rx.data.Length >= 16)
+                            rsrc = c.DataSource(recs.Extents.GetValueOrDefault(U64(rx.data, 0)) ?? live.Extents.GetValueOrDefault(U64(rx.data, 0)), (long)U64(rx.data, 8));
+                        else rsrc = new ResidentSource(rx.data);
+                    }
+                    var src = Decmpfs.Open(dx.data, rsrc, out note);
+                    size = src?.Length ?? (dx.data.Length >= 16 ? (long)U64(dx.data, 8) : 0);
+                    return src;
+                }
+                var ext = recs.Extents.GetValueOrDefault(ino.PrivateId) ?? live.Extents.GetValueOrDefault(ino.PrivateId);
+                if (ext == null && size > 0) return null;
+                return c.DataSource(ext, size);
+            }
+
+            // 1) árvore viva, da raiz (inode 2) pelas entradas de pasta
+            var folders = new Dictionary<ulong, RecoveredItem> { [2] = top };
+            var queue = new Queue<ulong>();
+            queue.Enqueue(2);
+            while (queue.Count > 0)
+            {
+                ulong dirId = queue.Dequeue();
+                if (!live.Children.TryGetValue(dirId, out var kids)) continue;
+                foreach (var (name, id, dt) in kids)
+                {
+                    if (!live.Inodes.TryGetValue(id, out var ino)) continue;
+                    if (ino.IsDir || dt == 4)
+                    {
+                        if (folders.ContainsKey(id)) continue;
+                        var f = new RecoveredItem { Id = res.NewId(), Name = name, IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent,
+                                                    Created = ApfsContainer.Time(ino.Created), Modified = ApfsContainer.Time(ino.Modified) };
+                        folders[id] = f;
+                        res.Attach(folders[dirId], f);
+                        queue.Enqueue(id);
+                    }
+                    else if (ino.IsFile && opt.IncludeLive)
+                    {
+                        var item = new RecoveredItem { Id = res.NewId(), Name = name, Origin = ItemOrigin.Live, Condition = Condition.Excellent,
+                                                       Created = ApfsContainer.Time(ino.Created), Modified = ApfsContainer.Time(ino.Modified) };
+                        item.Data = Source(live, ino, out var note, out var size);
+                        item.Size = size; item.Note = note;
+                        if (item.Data == null) item.Condition = Condition.Unknown;
+                        res.Attach(folders[dirId], item);
+                    }
+                }
+            }
+
+            // 2) apagados: as árvores dos pontos de verificação anteriores e, na profunda, nós soltos
+            progress?.Report(new($"Procurando apagados em {vol.Name}", baseF + span * 0.3, res.Items.Count, 0, 1));
+            var hist = c.ReadHistory(vol, ct, out int cps);
+            if (opt.DeepScan) c.ScanOrphanNodes(vol, hist, progress, ct);
+            var deleted = hist.Inodes.Values.Where(i => i.Id > 15 && !live.Inodes.ContainsKey(i.Id) && (i.IsDir || i.IsFile)).ToDictionary(i => i.Id);
+            string? NameOf(ApfsInode i)
+            {
+                if (i.Name != null) return i.Name;
+                if (hist.Children.TryGetValue(i.ParentId, out var l)) foreach (var e in l) if (e.id == i.Id) return e.name;
+                return null;
+            }
+            var delFolders = new Dictionary<ulong, RecoveredItem>();
+            RecoveredItem? lostBucket = null;
+            RecoveredItem Folder(ulong id, int depth = 0)
+            {
+                if (folders.TryGetValue(id, out var f) || delFolders.TryGetValue(id, out f)) return f;
+                if (depth < 256 && deleted.TryGetValue(id, out var di) && di.IsDir)
+                {
+                    var p = Folder(di.ParentId, depth + 1);
+                    f = new RecoveredItem { Id = res.NewId(), Name = NameOf(di) ?? $"Pasta {id}", IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good,
+                                            Created = ApfsContainer.Time(di.Created), Modified = ApfsContainer.Time(di.Modified) };
+                    delFolders[id] = f;
+                    res.Attach(p, f);
+                    return f;
+                }
+                lostBucket ??= res.GetOrAddFolder(top, "Pastas perdidas", "a pasta original não aparece em nenhuma versão encontrada");
+                f = new RecoveredItem { Id = res.NewId(), Name = $"Pasta {id}", IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good, Note = "nome original perdido" };
+                delFolders[id] = f;
+                res.Attach(lostBucket, f);
+                return f;
+            }
+            int found = 0, lost = 0;
+            foreach (var ino in deleted.Values.Where(i => i.IsDir)) Folder(ino.Id);
+            foreach (var ino in deleted.Values.Where(i => i.IsFile))
+            {
+                ct.ThrowIfCancellationRequested();
+                var item = new RecoveredItem { Id = res.NewId(), Name = NameOf(ino) ?? $"arquivo {ino.Id}", Origin = ItemOrigin.Deleted,
+                                               Created = ApfsContainer.Time(ino.Created), Modified = ApfsContainer.Time(ino.Modified) };
+                var ext = hist.Extents.GetValueOrDefault(ino.PrivateId);
+                item.Data = Source(hist, ino, out var note, out var size);
+                item.Size = size; item.Note = note;
+                if (item.Data == null)
+                {
+                    item.Condition = Condition.Overwritten;
+                    item.Note ??= "a lista de pedaços não sobrou — tente a varredura profunda";
+                    lost++;
+                }
+                else
+                {
+                    // conflito com arquivo vivo = sobrescrito; bloco que virou metadado do APFS também
+                    long total = 0, hit = 0;
+                    bool meta = false;
+                    if (ext != null)
+                        foreach (var (phys, len, _) in ext.Values)
+                        {
+                            if (phys == 0) continue;
+                            ulong n = (len + c.BlockSize - 1) / c.BlockSize, step = Math.Max(1, n / 512);
+                            for (ulong b = 0; b < n; b += step) { total++; if (NtfsVolume.IsSet(used, (long)(phys + b))) hit++; }
+                            if (!meta)
+                                try { var first = c.ReadBlock(phys); meta = ApfsContainer.ChecksumOk(first) && (U32(first, 24) & 0xFFFF) is > 0 and < 0x30; }
+                                catch (MediaReadException) { }
+                        }
+                    item.Condition = meta && hit == 0 ? Condition.Partial : Evaluate(hit, total);
+                    if (meta) item.Note ??= "parte dos blocos já virou metadado do APFS";
+                    found++;
+                }
+                res.Attach(Folder(ino.ParentId), item);
+            }
+            res.Log.Add($"{vol.Name}: {live.Inodes.Count:N0} objetos na árvore atual; {cps} ponto(s) de verificação anterior(es) legível(is); {found} apagado(s) com conteúdo" + (lost > 0 ? $", {lost} sem pedaços" : "") + ".");
+        }
+        if (usable.Count == 0 && c.Volumes.Count > 0) res.Log.Add("Nenhum volume legível sem senha — a varredura profunda ainda acha arquivos pelo conteúdo se o volume não for criptografado.");
+        if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
         return res;
     }
 

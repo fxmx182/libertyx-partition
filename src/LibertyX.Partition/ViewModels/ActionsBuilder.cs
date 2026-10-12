@@ -93,7 +93,7 @@ public static partial class ActionsBuilder
             ActionItem.Of("Definir rótulo", "Label", () => SetLabel(pv), NeedsVolume(p)),
             ActionItem.Of("Alterar letra", "Letter", () => SetLetter(pv), !Win ? OnlyWindows : p.IsSystemCritical ? "Partição do sistema em uso." : p.VolumePath == null ? "Sem volume montável." : null),
             ActionItem.Of("Alterar ID de tipo", "TypeId", () => ChangeType(pv), lockR),
-            ActionItem.Of("Alterar número de série", "Serial", () => ChangeSerial(pv), lockR ?? (!FsDetect.CanRead(p.FileSystem) ? "Só NTFS, FAT e exFAT." : null)),
+            ActionItem.Of("Alterar número de série", "Serial", () => ChangeSerial(pv), lockR ?? (p.FileSystem is not (FsKind.Ntfs or FsKind.ExFat) && !FsDetect.IsFat(p.FileSystem) ? "Só NTFS, FAT e exFAT." : null)),
             .. (p.Disk.Table.Style == TableStyle.Mbr && !p.Entry!.IsLogical
                 ? new[] { ActionItem.Of(p.Entry.Active ? "Desmarcar como ativa" : "Definir como ativa", "Active", () => SetActive(pv), lockR) } : []),
         ]);

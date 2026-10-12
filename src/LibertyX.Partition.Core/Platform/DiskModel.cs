@@ -139,6 +139,13 @@ public static class LayoutBuilder
                         if (x != null) { p.FsVariant = x.Variant; p.Label = x.Label.Length > 0 ? x.Label : null; p.Used = (x.Blocks - x.FreeBlocks) * x.BlockSize; p.Free = x.FreeBlocks * x.BlockSize; }
                     }
                     catch { }
+                if (p.FileSystem is FsKind.HfsPlus or FsKind.Apfs)
+                    try
+                    {
+                        var u = UsageCalculator.Compute(dev.Slice(p.Offset, p.Length), p.FileSystem, out var variant);
+                        if (u != null) { p.FsVariant = variant; p.Label = u.Value.label; p.Used = u.Value.used; p.Free = u.Value.free; }
+                    }
+                    catch { }
             }
             d.Partitions.Add(p);
             cur = Math.Max(cur, e.EndLba + 1);
@@ -155,8 +162,11 @@ public static class LayoutBuilder
 /// <summary>Uso de espaço de uma partição não montada, lido do próprio sistema de arquivos.</summary>
 public static class UsageCalculator
 {
-    public static (long used, long free, string? label)? Compute(IBlockDevice vol, FsKind fs)
+    public static (long used, long free, string? label)? Compute(IBlockDevice vol, FsKind fs) => Compute(vol, fs, out _);
+
+    public static (long used, long free, string? label)? Compute(IBlockDevice vol, FsKind fs, out string? variant)
     {
+        variant = null;
         try
         {
             switch (fs)
@@ -183,6 +193,25 @@ public static class UsageCalculator
                     {
                         var x = FsDetect.ParseExt(vol.ReadBytes(1024, 1024));
                         return x == null ? null : ((x.Blocks - x.FreeBlocks) * x.BlockSize, x.FreeBlocks * x.BlockSize, x.Label);
+                    }
+                case FsKind.Apfs:
+                    {
+                        var c = ApfsContainer.Open(vol, out _);
+                        if (c == null) return null;
+                        variant = c.Volumes.Any(x => x.Encrypted) ? "APFS (criptografado)" : "APFS";
+                        long total = (long)c.BlockCount * c.BlockSize, used = Math.Min(total, c.UsedBytes);
+                        var names = c.Volumes.Where(x => x.Role is 0 or 0x2 or 0x40).Select(x => x.Name).Where(n => n.Length > 0).ToList();
+                        if (names.Count == 0) names = c.Volumes.Select(x => x.Name).Take(1).ToList();
+                        return (used, total - used, names.Count > 0 ? string.Join(" + ", names) : null);
+                    }
+                case FsKind.HfsPlus:
+                    {
+                        // o cabeçalho já traz o total e o livre; o nome é o da pasta raiz no catálogo
+                        var v = HfsVolume.Open(vol, out _);
+                        if (v == null) return null;
+                        variant = v.Variant;
+                        long bs = v.BlockSize;
+                        return ((long)(v.TotalBlocks - v.FreeBlocks) * bs, (long)v.FreeBlocks * bs, v.Label.Length > 0 ? v.Label : null);
                     }
                 case FsKind.ExFat:
                     {
