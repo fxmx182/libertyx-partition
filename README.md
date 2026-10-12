@@ -54,4 +54,14 @@ FAT32 UEFI+BIOS com install.wim dividido, ou gravação DD).
 O CI (`.github/workflows/partition-windows.yml`) compila num runner Windows, roda o autoteste
 num disco virtual (inicializa, cria NTFS, apaga e recupera, reduz, move, alinha, converte,
 troca série, formata FAT32, faz imagem, exclui tudo, acha e restaura, limpa) e publica o
-.exe em `releases/download/partition-latest/LibertyXPartition.exe`.
+.exe em [`releases/download/latest/LibertyXPartition.exe`](https://github.com/fxmx182/libertyx-partition/releases/download/latest/LibertyXPartition.exe).
+
+## Família LibertyX
+
+| App | Repositório |
+|---|---|
+| LibertyX Player — iPhone | [libertyx-player-ios](https://github.com/fxmx182/libertyx-player-ios) |
+| LibertyX Player — Android e TV | [libertyx-player-android](https://github.com/fxmx182/libertyx-player-android) |
+| LibertyX Folder — iPhone | [libertyx-folder-ios](https://github.com/fxmx182/libertyx-folder-ios) |
+| LibertyX Folder — Android e TV | [libertyx-folder-android](https://github.com/fxmx182/libertyx-folder-android) |
+| LibertyX Partition — Windows | [libertyx-partition](https://github.com/fxmx182/libertyx-partition) |
