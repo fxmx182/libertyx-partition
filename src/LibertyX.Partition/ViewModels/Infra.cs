@@ -36,25 +36,27 @@ public static class Ui
         else Dispatcher.UIThread.Post(a);
     }
 
-    /// <summary>O acento da casa (ouro suave) e a família de tons dessaturados das partições:
-    /// todos com o mesmo brilho, para nenhum gritar mais que o outro.</summary>
-    public static readonly Color Accent = Color.Parse("#E7C064");
+    /// <summary>O ouro da casa.</summary>
+    public static readonly Color Accent = Color.Parse("#FBC501");
 
+    /// <summary>Os sistemas de arquivos são tons de um mesmo metal — ouro, marfim, âmbar, cobre,
+    /// bronze, pérola — em vez de um arco-íris: o disco se lê pela família LibertyX e as partições
+    /// ainda se distinguem pela temperatura do tom.</summary>
     public static Color FsColor(FsKind fs) => fs switch
     {
-        FsKind.Ntfs => Color.Parse("#D2B67A"),
-        FsKind.Fat32 or FsKind.Fat16 or FsKind.Fat12 => Color.Parse("#8DB8A8"),
-        FsKind.ExFat => Color.Parse("#A3A1CC"),
-        FsKind.Ext => Color.Parse("#C99D88"),
-        FsKind.BitLocker => Color.Parse("#C4929F"),
-        FsKind.ReFS => Color.Parse("#92A9C6"),
-        FsKind.HfsPlus or FsKind.Apfs => Color.Parse("#B4B4BC"),
-        FsKind.LinuxSwap => Color.Parse("#AC9AC4"),
-        _ => Color.Parse("#7A7980"),
+        FsKind.Ntfs => Color.Parse("#FBC501"),
+        FsKind.Fat32 or FsKind.Fat16 or FsKind.Fat12 => Color.Parse("#EFE0B9"),
+        FsKind.ExFat => Color.Parse("#E3A23A"),
+        FsKind.Ext => Color.Parse("#D2783F"),
+        FsKind.BitLocker => Color.Parse("#B08A62"),
+        FsKind.ReFS => Color.Parse("#F7D774"),
+        FsKind.HfsPlus or FsKind.Apfs => Color.Parse("#D3CABA"),
+        FsKind.LinuxSwap => Color.Parse("#94704A"),
+        _ => Color.Parse("#756C60"),
     };
 
     public static Color PartitionColor(PartitionInfo p) =>
-        p.IsUnallocated ? Color.Parse("#3A3940") : p.IsEsp ? Color.Parse("#BDB39A") : p.IsMsr ? Color.Parse("#5C5B63") : p.IsRecovery ? Color.Parse("#A99683") : FsColor(p.FileSystem);
+        p.IsUnallocated ? Color.Parse("#3A3630") : p.IsEsp ? Color.Parse("#C9B48A") : p.IsMsr ? Color.Parse("#4E4840") : p.IsRecovery ? Color.Parse("#9E7A52") : FsColor(p.FileSystem);
 
     public static IBrush Brush(Color c) => new SolidColorBrush(c);
 

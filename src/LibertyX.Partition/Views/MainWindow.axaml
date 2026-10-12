@@ -8,31 +8,39 @@
         Width="1440" Height="900" MinWidth="1140" MinHeight="720"
         WindowStartupLocation="CenterScreen"
         Icon="/Assets/app.ico"
-        Background="#111113"
+        Background="#0C0B0A"
         Foreground="{StaticResource Texto}"
         FontFamily="{StaticResource Manrope}"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="40">
   <Panel>
-    <!-- só uma luz branca bem fraca vinda de cima: dá profundidade sem tingir a tela -->
+    <!-- a luz de cima: ouro fraco no alto à esquerda, violeta frio no rodapé -->
     <Border IsHitTestVisible="False">
       <Border.Background>
-        <RadialGradientBrush Center="55%,-20%" GradientOrigin="55%,-20%" RadiusX="80%" RadiusY="70%">
-          <GradientStop Offset="0" Color="#0BFFFFFF" />
-          <GradientStop Offset="1" Color="#00FFFFFF" />
+        <RadialGradientBrush Center="10%,-6%" GradientOrigin="10%,-6%" RadiusX="95%" RadiusY="95%">
+          <GradientStop Offset="0" Color="#26FBC501" />
+          <GradientStop Offset="1" Color="#00FBC501" />
+        </RadialGradientBrush>
+      </Border.Background>
+    </Border>
+    <Border IsHitTestVisible="False">
+      <Border.Background>
+        <RadialGradientBrush Center="100%,105%" GradientOrigin="100%,105%" RadiusX="80%" RadiusY="80%">
+          <GradientStop Offset="0" Color="#283A2E6E" />
+          <GradientStop Offset="1" Color="#003A2E6E" />
         </RadialGradientBrush>
       </Border.Background>
     </Border>
 
     <Grid ColumnDefinitions="256,*">
       <!-- barra lateral -->
-      <Border Background="#0D0D0F" BorderBrush="#0CFFFFFF" BorderThickness="0,0,1,0">
+      <Border Background="#59000000" BorderBrush="#10FFFFFF" BorderThickness="0,0,1,0">
         <DockPanel Margin="14,18,14,14">
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8,10,0,18">
-            <Path Data="{StaticResource LogoMark}" Fill="{StaticResource OuroGradiente}" Width="34" Height="34" Stretch="Uniform" />
+            <Path Data="{StaticResource LogoMark}" Fill="{StaticResource OuroGradiente}" Width="40" Height="40" Stretch="Uniform" />
             <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="LIBERTYX" FontSize="9.5" FontWeight="Bold" LetterSpacing="2.8" Foreground="{StaticResource Tenue}" />
-              <TextBlock Text="Partition" FontSize="19" FontWeight="Bold" LetterSpacing="-0.5" Margin="0,-3,0,0" />
+              <TextBlock Text="LIBERTYX" FontSize="10.5" FontWeight="Bold" LetterSpacing="2.6" Foreground="{StaticResource Ouro}" />
+              <TextBlock Text="Partition" FontSize="21" FontWeight="ExtraBold" LetterSpacing="-0.6" Margin="0,-4,0,0" />
             </StackPanel>
           </StackPanel>
 
@@ -69,7 +77,7 @@
               </StackPanel>
             </Border>
             <StackPanel Orientation="Horizontal" Spacing="7" Margin="6,0,0,0">
-              <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Tenue}" IsVisible="{Binding IsAdmin}" />
+              <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Verde}" IsVisible="{Binding IsAdmin}" />
               <PathIcon Data="{StaticResource IcAlert}" Classes="small" Foreground="{StaticResource Laranja}" IsVisible="{Binding !IsAdmin}" />
               <TextBlock FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="196">
                 <Run Text="{Binding AdminText}" /><Run Text=" · " /><Run Text="{Binding Version}" />
@@ -89,7 +97,7 @@
                           <Panel>
                             <Button Classes="nav" Classes.active="{Binding IsActive}" Command="{Binding Go}">
                               <StackPanel Orientation="Horizontal" Spacing="11">
-                                <PathIcon Data="{Binding Icon}" Width="16" Height="16" />
+                                <PathIcon Data="{Binding Icon}" Width="17" Height="17" />
                                 <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
                               </StackPanel>
                             </Button>
@@ -118,20 +126,20 @@
 
     <!-- diálogo -->
     <Panel IsVisible="{Binding Dialog, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <Border Background="#B8060608" />
+      <Border Background="#C4050403" />
       <ContentControl Content="{Binding Dialog}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40" />
     </Panel>
 
     <!-- operação em andamento -->
     <Panel IsVisible="{Binding Operation, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <Border Background="#C8060608" />
+      <Border Background="#D2050403" />
       <ContentControl Content="{Binding Operation}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40" />
     </Panel>
 
     <!-- aviso rápido -->
     <Border IsVisible="{Binding Toast, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
             HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28"
-            Background="#F51C1C20" BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="12" Padding="18,11">
+            Background="#F21E1D22" BorderBrush="#55FBC501" BorderThickness="1" CornerRadius="14" Padding="18,11">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <PathIcon Data="{StaticResource IcInfo}" Classes="small gold" />
         <TextBlock Text="{Binding Toast}" FontWeight="SemiBold" FontSize="13" />

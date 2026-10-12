@@ -3,10 +3,10 @@
              xmlns:vm="using:LibertyX.Partition.ViewModels"
              x:Class="LibertyX.Partition.Views.FormDialogView"
              x:DataType="vm:FormDialogViewModel">
-  <Border Width="560" Background="#F7161619" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="20" Padding="28,26" BoxShadow="0 24 60 0 #A0000000">
+  <Border Width="560" Background="#F2141318" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="24" Padding="28,26" BoxShadow="0 24 60 0 #A0000000">
     <StackPanel Spacing="18">
       <Grid ColumnDefinitions="Auto,*">
-        <Border Width="44" Height="44" CornerRadius="14" Background="#0EE7C064" BorderBrush="#2EE7C064" BorderThickness="1" Classes.dangerbox="{Binding Danger}">
+        <Border Width="44" Height="44" CornerRadius="14" Background="#1FFBC501" BorderBrush="#40FBC501" BorderThickness="1" Classes.dangerbox="{Binding Danger}">
           <PathIcon Data="{Binding Icon}" Width="22" Height="22" Foreground="{StaticResource Ouro}" />
         </Border>
         <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">

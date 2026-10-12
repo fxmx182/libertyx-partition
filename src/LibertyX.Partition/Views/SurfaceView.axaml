@@ -45,10 +45,10 @@
             <TextBlock Text="{Binding Verdict}" TextWrapping="Wrap" />
           </Border>
           <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="16" Margin="0,12,0,0">
-            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#967CC4AA" /><TextBlock Text="bom" Classes="faint" /></StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#E7C064" /><TextBlock Text="lento (&gt;150 ms/MB)" Classes="faint" /></StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#D9A56C" /><TextBlock Text="muito lento (&gt;500 ms/MB)" Classes="faint" /></StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#E07C7C" /><TextBlock Text="ilegível" Classes="faint" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#C835D0BE" /><TextBlock Text="bom" Classes="faint" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#FBC501" /><TextBlock Text="lento (&gt;150 ms/MB)" Classes="faint" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#FFA24D" /><TextBlock Text="muito lento (&gt;500 ms/MB)" Classes="faint" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#FF5A5A" /><TextBlock Text="ilegível" Classes="faint" /></StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="6"><Border Width="12" Height="12" CornerRadius="3" Background="#14FFFFFF" /><TextBlock Text="não lido" Classes="faint" /></StackPanel>
           </StackPanel>
           <c:SectorMap Cells="{Binding Cells}" Version="{Binding Version}" />

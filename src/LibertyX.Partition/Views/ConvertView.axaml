@@ -13,7 +13,7 @@
           <Grid ColumnDefinitions="*,Auto,*">
             <Border Classes="inset" Padding="10,16"><TextBlock Text="{Binding From}" Classes="h1" HorizontalAlignment="Center" /></Border>
             <PathIcon Grid.Column="1" Data="{StaticResource IcChevronRight}" Classes="large gold" Margin="10,0" />
-            <Border Grid.Column="2" Classes="inset" Padding="10,16" BorderBrush="#55E7C064"><TextBlock Text="{Binding To}" Classes="h1" HorizontalAlignment="Center" Foreground="{StaticResource Ouro}" /></Border>
+            <Border Grid.Column="2" Classes="inset" Padding="10,16" BorderBrush="#66FBC501"><TextBlock Text="{Binding To}" Classes="h1" HorizontalAlignment="Center" Foreground="{StaticResource Ouro}" /></Border>
           </Grid>
           <ItemsControl ItemsSource="{Binding Notes}">
             <ItemsControl.ItemTemplate>

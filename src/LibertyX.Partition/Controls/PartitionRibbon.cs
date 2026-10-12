@@ -10,9 +10,9 @@ using LibertyX.Partition.ViewModels;
 namespace LibertyX.Partition.Controls;
 
 /// <summary>
-/// O mapa do disco: cada partição é uma placa de vidro proporcional ao tamanho (com largura
-/// mínima para as pequenas não sumirem). A cor do sistema de arquivos aparece só num ponto ao
-/// lado do nome e num trilho fino de uso no rodapé, para o disco ler-se de longe sem gritar.
+/// O mapa do disco: cada partição é uma placa proporcional ao tamanho (com largura mínima para
+/// as pequenas não sumirem). O usado é metal escovado no tom do sistema de arquivos — todos tons
+/// de ouro, marfim, âmbar e cobre —, o livre é riscado fino. Clique seleciona.
 /// </summary>
 public sealed class PartitionRibbon : Control
 {
@@ -54,7 +54,7 @@ public sealed class PartitionRibbon : Control
 
     private void OnVm(object? s, System.ComponentModel.PropertyChangedEventArgs e) => InvalidateVisual();
 
-    protected override Size MeasureOverride(Size availableSize) => new(0, Compact ? 30 : 68);
+    protected override Size MeasureOverride(Size availableSize) => new(0, Compact ? 32 : 70);
 
     public override void Render(DrawingContext ctx)
     {
@@ -74,7 +74,7 @@ public sealed class PartitionRibbon : Control
             for (int i = 0; i < w.Count; i++) if (w[i] > minW) w[i] -= over * w[i] / big;
         }
         double x = 0, h = b.Height;
-        double r = Compact ? 6 : 10;
+        double r = Compact ? 7 : 12;
         for (int i = 0; i < items.Count; i++)
         {
             var vm = items[i];
@@ -82,49 +82,81 @@ public sealed class PartitionRibbon : Control
             _hit.Add((vm, rect));
             var c = vm.Color;
             bool sel = vm.IsSelected, hov = vm == _hover;
-            byte bg = (byte)(sel ? 20 : hov ? 15 : 9);
+            var shape = new RoundedRect(rect, r);
+
+            // a seleção acende: um halo de ouro em camadas por fora da placa
+            if (sel)
+                for (int k = 3; k >= 1; k--)
+                    ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(16 * (4 - k)), 0xFB, 0xC5, 0x01)), k * 2.2), rect.Inflate(k * 0.9), r + k, r + k);
+
             if (vm.IsUnallocated)
-                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(bg / 2), 255, 255, 255)), new Pen(new SolidColorBrush(Color.FromArgb(34, 255, 255, 255)), 1, new DashStyle([2, 3], 0)), rect.Deflate(0.5), r, r);
+            {
+                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(10, 255, 255, 255)), null, rect, r, r);
+                using (ctx.PushClip(shape)) Hatch(ctx, rect, Color.FromArgb(16, 255, 255, 255), 7);
+                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb(46, 255, 255, 255)), 1, new DashStyle([3, 3], 0)), rect.Deflate(0.5), r, r);
+            }
             else
             {
-                // vidro com um leve tom da cor do sistema de arquivos, quase imperceptível
-                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(bg, 255, 255, 255)), null, rect, r, r);
-                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(10, c.R, c.G, c.B)), new Pen(new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)), 1), rect.Deflate(0.5), r, r);
-                // trilho de uso no rodapé
-                double th = Compact ? 3 : 4, pad = Compact ? 5 : 10;
-                if (rect.Width > pad * 2 + 6)
+                // a placa: vidro morno com o tom do sistema de arquivos
+                ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(16, c.R, c.G, c.B)), null, rect, r, r);
+                double used = vm.HasUsage ? vm.UsedFraction : 0;
+                using (ctx.PushClip(shape))
                 {
-                    var track = new Rect(rect.X + pad, rect.Bottom - pad - th + (Compact ? 1 : 0), rect.Width - pad * 2, th);
-                    ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(22, 255, 255, 255)), null, track, th / 2, th / 2);
-                    double used = vm.HasUsage ? vm.UsedFraction : 0;
-                    double fw = used > 0 ? Math.Max(th, track.Width * used) : th;
-                    ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(vm.HasUsage ? 230 : 120), c.R, c.G, c.B)), null, new Rect(track.X, track.Y, fw, th), th / 2, th / 2);
+                    // o espaço livre é riscado de leve, como planta de engenharia
+                    var free = new Rect(rect.X + rect.Width * used, rect.Y, rect.Width * (1 - used), rect.Height);
+                    using (ctx.PushClip(free)) Hatch(ctx, rect, Color.FromArgb(14, c.R, c.G, c.B), 6);
+                    // o usado é metal escovado: degradê do tom e um reflexo horizontal
+                    if (used > 0)
+                    {
+                        var fill = new Rect(rect.X, rect.Y, Math.Max(3, rect.Width * used), rect.Height);
+                        ctx.DrawRectangle(new LinearGradientBrush
+                        {
+                            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                            GradientStops =
+                            {
+                                new GradientStop(Color.FromArgb(120, c.R, c.G, c.B), 0),
+                                new GradientStop(Color.FromArgb(70, c.R, c.G, c.B), 0.45),
+                                new GradientStop(Color.FromArgb(38, c.R, c.G, c.B), 1),
+                            },
+                        }, null, fill);
+                        ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(160, c.R, c.G, c.B)), null, new Rect(fill.Right - 1.5, fill.Y, 1.5, fill.Height));
+                    }
+                    // o fio do tom no topo: identifica a partição mesmo vazia
+                    ctx.DrawRectangle(new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                        GradientStops = { new GradientStop(c, 0), new GradientStop(Color.FromArgb(90, c.R, c.G, c.B), 1) },
+                    }, null, new Rect(rect.X, rect.Y, rect.Width, Compact ? 2 : 2.5));
                 }
+                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(hov ? 110 : 52), c.R, c.G, c.B)), 1), rect.Deflate(0.5), r, r);
             }
             if (sel)
-                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb(170, 255, 255, 255)), 1.3), rect.Deflate(0.65), r, r);
-            else if (hov)
-                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)), 1), rect.Deflate(0.5), r, r);
+                ctx.DrawRectangle(null, new Pen(new SolidColorBrush(Color.Parse("#FBC501")), 1.6), rect.Deflate(0.8), r, r);
 
             if (!Compact && rect.Width > 54)
             {
-                bool dot = !vm.IsUnallocated && rect.Width > 70;
-                double tx = rect.X + (dot ? 24 : 12);
-                var title = new FormattedText(vm.Short, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Bold, 12.5, new SolidColorBrush(Color.FromArgb((byte)(vm.IsUnallocated ? 150 : 235), 237, 237, 240)));
-                var sub = new FormattedText(vm.SizeText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Regular, 11.5, new SolidColorBrush(Color.FromArgb(130, 237, 237, 240)));
-                title.MaxTextWidth = Math.Max(1, rect.Right - tx - 10); title.MaxLineCount = 1; title.Trimming = TextTrimming.CharacterEllipsis;
-                sub.MaxTextWidth = Math.Max(1, rect.Right - rect.X - 22); sub.MaxLineCount = 1; sub.Trimming = TextTrimming.CharacterEllipsis;
-                if (dot) ctx.DrawEllipse(new SolidColorBrush(c), null, new Point(rect.X + 15, rect.Y + 20.5), 3.5, 3.5);
-                ctx.DrawText(title, new Point(tx, rect.Y + 12));
-                ctx.DrawText(sub, new Point(rect.X + 12, rect.Y + 32));
-                if (vm.HasUsage && rect.Width > 120)
+                var title = new FormattedText(vm.Short, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Bold, 13, new SolidColorBrush(Color.FromArgb((byte)(vm.IsUnallocated ? 160 : 245), 255, 250, 238)));
+                var sub = new FormattedText(vm.SizeText, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Regular, 11.5, new SolidColorBrush(Color.FromArgb(160, 235, 230, 220)));
+                title.MaxTextWidth = rect.Width - 20; title.MaxLineCount = 1; title.Trimming = TextTrimming.CharacterEllipsis;
+                sub.MaxTextWidth = rect.Width - 20; sub.MaxLineCount = 1; sub.Trimming = TextTrimming.CharacterEllipsis;
+                ctx.DrawText(title, new Point(rect.X + 12, rect.Y + 15));
+                ctx.DrawText(sub, new Point(rect.X + 12, rect.Y + 35));
+                if (vm.HasUsage && rect.Width > 110)
                 {
-                    var pct = new FormattedText(vm.UsagePercent, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Regular, 11, new SolidColorBrush(Color.FromArgb(120, 237, 237, 240)));
-                    ctx.DrawText(pct, new Point(rect.Right - pct.Width - 12, rect.Y + 12));
+                    var pct = new FormattedText(vm.UsagePercent, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Bold, 11, new SolidColorBrush(Color.FromArgb(200, c.R, c.G, c.B)));
+                    ctx.DrawText(pct, new Point(rect.Right - pct.Width - 12, rect.Y + 15));
                 }
             }
             x += w[i] + gap;
         }
+    }
+
+    /// <summary>Riscado diagonal fino, a 45°, cobrindo o retângulo.</summary>
+    private static void Hatch(DrawingContext ctx, Rect rect, Color color, double step)
+    {
+        var pen = new Pen(new SolidColorBrush(color), 1);
+        for (double d = -rect.Height; d < rect.Width; d += step)
+            ctx.DrawLine(pen, new Point(rect.X + d, rect.Bottom), new Point(rect.X + d + rect.Height, rect.Y));
     }
 
     public PartitionVM? HitTest(Point p) => _hit.FirstOrDefault(t => t.rect.Contains(p)).vm;
@@ -153,20 +185,23 @@ public sealed class PartitionRibbon : Control
     }
 }
 
-/// <summary>Anel de uso: um traço fino e liso sobre um trilho discreto, na cor do sistema de arquivos.</summary>
+/// <summary>Anel de uso, desenhado como um mostrador: o arco em degradê do tom e, com
+/// <see cref="Ticks"/>, uma coroa de marcações que acendem até o quanto está usado.</summary>
 public sealed class UsageRing : Control
 {
     public static readonly StyledProperty<double> ValueProperty = AvaloniaProperty.Register<UsageRing, double>(nameof(Value));
-    public static readonly StyledProperty<Color> ColorProperty = AvaloniaProperty.Register<UsageRing, Color>(nameof(Color), Color.Parse("#E7C064"));
+    public static readonly StyledProperty<Color> ColorProperty = AvaloniaProperty.Register<UsageRing, Color>(nameof(Color), Color.Parse("#FBC501"));
     public static readonly StyledProperty<double> ThicknessProperty = AvaloniaProperty.Register<UsageRing, double>(nameof(Thickness), 10);
     public static readonly StyledProperty<bool> IndeterminateProperty = AvaloniaProperty.Register<UsageRing, bool>(nameof(Indeterminate));
+    public static readonly StyledProperty<bool> TicksProperty = AvaloniaProperty.Register<UsageRing, bool>(nameof(Ticks));
 
     public double Value { get => GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
     public Color Color { get => GetValue(ColorProperty); set => SetValue(ColorProperty, value); }
     public double Thickness { get => GetValue(ThicknessProperty); set => SetValue(ThicknessProperty, value); }
     public bool Indeterminate { get => GetValue(IndeterminateProperty); set => SetValue(IndeterminateProperty, value); }
+    public bool Ticks { get => GetValue(TicksProperty); set => SetValue(TicksProperty, value); }
 
-    static UsageRing() => AffectsRender<UsageRing>(ValueProperty, ColorProperty, ThicknessProperty, IndeterminateProperty);
+    static UsageRing() => AffectsRender<UsageRing>(ValueProperty, ColorProperty, ThicknessProperty, IndeterminateProperty, TicksProperty);
 
     private double _spin;
     private Avalonia.Threading.DispatcherTimer? _timer;
@@ -196,10 +231,32 @@ public sealed class UsageRing : Control
         if (s <= 0) return;
         double t = Thickness, rad = (s - t) / 2;
         var c = new Point(Bounds.Width / 2, Bounds.Height / 2);
-        ctx.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)), t), c, rad, rad);
-        double start = Indeterminate ? _spin : -90, sweep = Indeterminate ? 90 : Math.Clamp(Value, 0, 1) * 360;
+        var col = Color;
+        double v = Math.Clamp(Value, 0, 1);
+        if (Ticks && !Indeterminate)
+        {
+            // a coroa: 48 marcações por fora, as do usado acesas no tom
+            double outer = s / 2, inner = outer - 5;
+            rad = inner - 4 - t / 2;
+            const int n = 48;
+            for (int i = 0; i < n; i++)
+            {
+                double a = (-90 + i * 360.0 / n) * Math.PI / 180;
+                bool lit = (i + 0.5) / n <= v;
+                bool major = i % 6 == 0;
+                double ri = major ? inner - 2 : inner;
+                var pen0 = new Pen(new SolidColorBrush(lit ? Color.FromArgb(230, col.R, col.G, col.B) : Color.FromArgb((byte)(major ? 60 : 30), 255, 255, 255)), major ? 1.6 : 1.1, lineCap: PenLineCap.Round);
+                ctx.DrawLine(pen0, new Point(c.X + ri * Math.Cos(a), c.Y + ri * Math.Sin(a)), new Point(c.X + outer * Math.Cos(a), c.Y + outer * Math.Sin(a)));
+            }
+        }
+        ctx.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb(22, 255, 255, 255)), t), c, rad, rad);
+        double start = Indeterminate ? _spin : -90, sweep = Indeterminate ? 90 : v * 360;
         if (sweep <= 0.2) return;
-        var pen = new Pen(new SolidColorBrush(Color), t, lineCap: PenLineCap.Round);
+        var pen = new Pen(new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+            GradientStops = { new GradientStop(Lighten(col), 0), new GradientStop(col, 0.5), new GradientStop(Darken(col), 1) },
+        }, t, lineCap: PenLineCap.Round);
         if (sweep >= 359.9) { ctx.DrawEllipse(null, pen, c, rad, rad); return; }
         ctx.DrawGeometry(null, pen, Arc(c, rad, start, sweep));
     }
@@ -217,4 +274,6 @@ public sealed class UsageRing : Control
         return g;
     }
 
+    private static Color Lighten(Color c) => Color.FromRgb((byte)Math.Min(255, c.R + 50), (byte)Math.Min(255, c.G + 50), (byte)Math.Min(255, c.B + 50));
+    private static Color Darken(Color c) => Color.FromRgb((byte)(c.R * 0.72), (byte)(c.G * 0.72), (byte)(c.B * 0.72));
 }
