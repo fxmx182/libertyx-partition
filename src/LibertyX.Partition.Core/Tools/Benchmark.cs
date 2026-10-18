@@ -59,7 +59,9 @@ public static class DiskBenchmark
         try
         {
             progress?.Report(new("Preparando arquivo de teste", 0, null));
-            using (var h = File.OpenHandle(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, opts, fileSize))
+            // sem pré-alocar: no FAT32/exFAT de cartões o Windows zeraria o arquivo inteiro antes de
+            // devolver o controle (um minuto ou mais parado); gravar em sequência já estende o arquivo
+            using (var h = File.OpenHandle(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, opts))
             using (var b = new AlignedBuffer(8 << 20))
             {
                 // dados aleatórios: SSD com compressão não pode trapacear com zeros

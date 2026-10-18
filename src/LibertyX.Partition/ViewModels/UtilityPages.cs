@@ -159,7 +159,7 @@ public sealed partial class BenchmarkViewModel : PageViewModel
             Rows.Add(new BenchRow { Label = l });
     }
 
-    public override void OnShown(object? arg) { LoadDrives(); OnDisksChanged(); }
+    public override void OnShown(object? arg) { _ = LoadDrives(); OnDisksChanged(); }
 
     public override void OnDisksChanged()
     {
@@ -168,21 +168,32 @@ public sealed partial class BenchmarkViewModel : PageViewModel
         foreach (var d in _disks) Disks.Add($"{d.Title} · {d.Model} · {Fmt.Size(d.Size)}");
     }
 
-    private void LoadDrives()
+    private List<Bounded.DriveEntry> _drives = [];
+
+    // fora da tela e com limite por unidade: um cartão com defeito travava a consulta e o app junto
+    private async Task LoadDrives()
     {
+        var list = await Task.Run(() => Bounded.ReadyDrives(TimeSpan.FromSeconds(4), DriveType.Fixed, DriveType.Removable));
+        _drives = list;
         Drives.Clear();
-        foreach (var d in DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType is DriveType.Fixed or DriveType.Removable))
-            Drives.Add(OperatingSystem.IsWindows() ? $"{d.Name.TrimEnd('\\')} {d.VolumeLabel} · {Fmt.Size(d.AvailableFreeSpace)} livres" : d.Name);
+        foreach (var d in list)
+            Drives.Add(OperatingSystem.IsWindows() ? $"{d.Root.TrimEnd('\\')} {d.Label} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? " · removível" : "")}" : d.Root);
         DriveIndex = Drives.Count > 0 ? 0 : -1;
+    }
+
+    // cartão e pendrive: 256 MB (1 GB num cartão lento só prepara o arquivo por minutos)
+    partial void OnDriveIndexChanged(int value)
+    {
+        if (value >= 0 && value < _drives.Count && _drives[value].Type == DriveType.Removable && !Running) SizeIndex = 0;
     }
 
     [RelayCommand]
     private async Task Run()
     {
-        if (Drives.Count == 0) return;
-        var drive = DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType is DriveType.Fixed or DriveType.Removable).ElementAt(DriveIndex);
+        if (DriveIndex < 0 || DriveIndex >= _drives.Count) return;
+        var drive = _drives[DriveIndex];
         long size = SizeIndex switch { 0 => 256L << 20, 2 => 4L << 30, _ => 1L << 30 };
-        if (drive.AvailableFreeSpace < size + (256L << 20)) { await Main.Alert("Pouco espaço", $"O teste precisa de {Fmt.Size(size)} livres em {drive.Name}."); return; }
+        if (drive.Free < size + (256L << 20)) { await Main.Alert("Pouco espaço", $"O teste precisa de {Fmt.Size(size)} livres em {drive.Root}."); return; }
         var dur = TimeSpan.FromSeconds(DurationIndex switch { 0 => 3, 2 => 10, _ => 5 });
         foreach (var r in Rows) { r.Read = r.Write = "—"; r.ReadBar = r.WriteBar = 0; r.ReadDetail = r.WriteDetail = ""; }
         _cts = new CancellationTokenSource();
@@ -206,7 +217,11 @@ public sealed partial class BenchmarkViewModel : PageViewModel
                 }
             }
         });
-        try { await DiskBenchmark.RunAsync(drive.RootDirectory.FullName, size, dur, IncludeWrite, prog, _cts.Token); Phase = "Concluído"; }
+        // em segundo plano: as conclusões de E/S (dezenas de milhares por segundo na fila 32)
+        // não passam mais pela linha da tela — que travava e ainda inflava a latência medida
+        var token = _cts.Token;
+        bool write = IncludeWrite;
+        try { await Task.Run(() => DiskBenchmark.RunAsync(drive.Root, size, dur, write, prog, token)); Phase = "Concluído"; }
         catch (OperationCanceledException) { Phase = "Cancelado"; }
         catch (Exception ex) { Phase = "Erro: " + ex.Message; }
         finally { Running = false; Fraction = 1; }
@@ -260,11 +275,14 @@ public sealed partial class SpaceViewModel : PageViewModel
     private CancellationTokenSource? _cts;
     private SpaceNode? _root;
 
-    public override void OnShown(object? arg)
+    public override void OnShown(object? arg) => _ = LoadRoots();
+
+    // fora da tela e com limite por unidade (unidade de rede caída ou cartão travado congelavam o app)
+    private async Task LoadRoots()
     {
+        var list = await Task.Run(() => Bounded.ReadyDrives(TimeSpan.FromSeconds(4), DriveType.Fixed, DriveType.Removable, DriveType.Network));
         Roots.Clear();
-        foreach (var d in DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType is DriveType.Fixed or DriveType.Removable or DriveType.Network))
-            Roots.Add(d.RootDirectory.FullName);
+        foreach (var d in list) Roots.Add(d.Root);
         if (Path.Length == 0 && Roots.Count > 0) Path = Roots[0];
     }
 
