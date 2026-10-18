@@ -90,7 +90,7 @@
       </Border>
 
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
-        <Button Classes="ghost" Content="Cancelar" Command="{Binding CancelCommand}" />
+        <Button Classes="ghost" Content="{Binding CancelText}" Command="{Binding CancelCommand}" />
         <Button Classes.primary="{Binding !Danger}" Classes.danger="{Binding Danger}" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" IsEnabled="{Binding CanConfirm}" MinWidth="120" HorizontalContentAlignment="Center" />
       </StackPanel>
     </StackPanel>

@@ -85,13 +85,31 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty] private string _updateText = "";
     private Updater.Info? _update;
 
-    private async Task CheckUpdate()
+    private bool _askedUpdate;
+
+    /// <summary>Confere o release publicado. Na abertura do app, se houver versão nova, pergunta na hora.</summary>
+    private async Task CheckUpdate(bool ask)
     {
         var i = await Updater.Check();
         if (i == null || !Updater.IsNewer(i)) return;
         _update = i;
         UpdateText = $"Versão {i.Version} disponível";
         UpdateAvailable = true;
+        if (!ask || _askedUpdate) return;
+        _askedUpdate = true;
+        // espera a tela assentar e não atropela um diálogo ou uma operação em andamento
+        for (int k = 0; k < 60 && (Dialog != null || Operation != null || Loading); k++) await Task.Delay(1000);
+        if (Dialog != null || Operation != null) return;
+        var f = new FormDialogViewModel
+        {
+            Title = "Atualização disponível", IconKey = "Download", ConfirmText = "Atualizar agora", CancelText = "Depois",
+            Subtitle = $"Versão {i.Version} · você está na 1.0.{Updater.CurrentBuild}",
+        };
+        if (i.Notes.Length > 0) f.Note("O que mudou: " + i.Notes, "gold");
+        f.Note(Updater.IsInstalled
+            ? "O app baixa a versão nova, atualiza por cima e abre de novo sozinho. Licença, backups e configurações continuam."
+            : "Esta é a versão portátil: o navegador baixa o .exe novo para você substituir este.", "");
+        if (await ShowDialog(f)) await UpdateNow();
     }
 
     [RelayCommand]
@@ -184,9 +202,9 @@ public sealed partial class MainViewModel : ViewModelBase
         foreach (var a in args.Where(File.Exists)) DiskSystem.AttachedImages.Add(Path.GetFullPath(a));
         Navigate("discos");
         _ = Refresh();
-        _ = CheckUpdate();
+        _ = CheckUpdate(ask: true);
         var ut = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
-        ut.Tick += async (_, _) => await CheckUpdate();
+        ut.Tick += async (_, _) => await CheckUpdate(ask: false);
         ut.Start();
         // chave da loja: reconfere de vez em quando, sem atrapalhar (sem internet, nada muda)
         _ = Task.Run(async () => { try { if (await License.RevalidateIfDue()) Ui.Post(() => { LicenseChanged(); ShowToast("A licença da loja não vale mais (reembolso ou cancelamento) — voltou ao Básico."); }); } catch { } });

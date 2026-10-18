@@ -109,5 +109,8 @@ jobs:
           gh release delete latest --yes --cleanup-tag 2>$null
           $sha = "${{ github.sha }}".Substring(0,7)
           $base = "https://github.com/${{ github.repository }}/releases/download/latest"
-          $notes = "Versão 1.0.${{ github.run_number }}, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"
+          # a primeira linha do commit vira o "O que mudou" que o app mostra ao oferecer a atualização
+          $novidade = (git log -1 --pretty=%s).Trim()
+          if ($novidade.Length -gt 400) { $novidade = $novidade.Substring(0, 400) + "…" }
+          $notes = "Versão 1.0.${{ github.run_number }}, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nNovidades: $novidade`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"
           gh release create latest dist/LibertyXPartition-Setup.exe dist/LibertyXPartition.exe --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease

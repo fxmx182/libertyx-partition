@@ -12,7 +12,7 @@ namespace LibertyX.Partition.Core.Platform;
 public static partial class Updater
 {
     public const string Repo = "fxmx182/libertyx-partition";
-    public sealed record Info(int Build, string Version, string SetupUrl, long SetupSize, string PortableUrl);
+    public sealed record Info(int Build, string Version, string SetupUrl, long SetupSize, string PortableUrl, string Notes);
 
     /// <summary>O CI carimba 1.0.N; o N é o número do build. Zero = build local, sem atualização.</summary>
     public static int CurrentBuild => System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version?.Build ?? 0;
@@ -34,6 +34,7 @@ public static partial class Updater
     }
 
     [GeneratedRegex(@"Versão 1\.0\.(\d+)")] private static partial Regex VersionRx();
+    [GeneratedRegex(@"Novidades: (.+)")] private static partial Regex NotesRx();
 
     public static async Task<Info?> Check(CancellationToken ct = default)
     {
@@ -43,7 +44,9 @@ public static partial class Updater
             http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             var json = await http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/tags/latest", ct);
             using var doc = JsonDocument.Parse(json);
-            var m = VersionRx().Match(doc.RootElement.GetProperty("body").GetString() ?? "");
+            string body = doc.RootElement.GetProperty("body").GetString() ?? "";
+            var m = VersionRx().Match(body);
+            var nm = NotesRx().Match(body);
             if (!m.Success) return null;
             int build = int.Parse(m.Groups[1].Value);
             string setup = "", portable = ""; long size = 0;
@@ -53,7 +56,7 @@ public static partial class Updater
                 if (name == "LibertyXPartition-Setup.exe") { setup = a.GetProperty("browser_download_url").GetString() ?? ""; size = a.GetProperty("size").GetInt64(); }
                 if (name == "LibertyXPartition.exe") portable = a.GetProperty("browser_download_url").GetString() ?? "";
             }
-            return setup.Length == 0 ? null : new Info(build, "1.0." + build, setup, size, portable);
+            return setup.Length == 0 ? null : new Info(build, "1.0." + build, setup, size, portable, nm.Success ? nm.Groups[1].Value.Trim() : "");
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException or InvalidOperationException) { return null; }
     }

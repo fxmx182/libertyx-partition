@@ -85,6 +85,7 @@ public sealed partial class FormDialogViewModel : DialogViewModel
 {
     public ObservableCollection<FormField> Fields { get; } = [];
     [ObservableProperty] private string _confirmText = "Aplicar";
+    [ObservableProperty] private string _cancelText = "Cancelar";
     [ObservableProperty] private bool _danger;
     /// <summary>Se definido, o botão só libera depois de digitar esta palavra.</summary>
     [ObservableProperty] private string? _confirmPhrase;
