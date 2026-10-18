@@ -194,6 +194,9 @@ public sealed partial class CloneViewModel : PageViewModel
     private async Task Run()
     {
         var plan = _plan; if (plan == null) return;
+        if (!await Main.RequirePremium(_migrate ? "Migrar sistema" : "Copiar disco",
+            _migrate ? "Levar o Windows inteiro para outro SSD ou HD, pronto para dar boot, é do Premium."
+                     : "Clonar um disco inteiro para outro é do Premium. Copiar uma partição continua grátis.")) return;
         bool used = UsedOnly, vss = UseVss, boot = MakeBootable, sysOnly = SystemOnly, fit = FitToTarget;
         var src = plan.Source; var dst = plan.Target;
         Main.Queue(_migrate ? "Migrar sistema" : "Copiar disco", $"{src.Title} ({src.Model}) → {dst.Title} ({dst.Model}) — apaga o conteúdo atual do destino", IconKey, async s =>
@@ -302,6 +305,7 @@ public sealed partial class BackupViewModel : PageViewModel
     private async Task Restore()
     {
         var t = RestoreTarget.Selected; if (t == null) return;
+        if (!await Main.RequirePremium("Restaurar imagem", "Criar imagens de disco é grátis; gravar uma imagem de volta num disco ou partição é do Premium.")) return;
         string what = t.Partition == null ? $"o disco {t.Disk.Title} ({t.Disk.Model}) inteiro" : $"a partição {t.Title}";
         string file = RestoreFile;
         var td = t.Disk; var tp = t.Partition;

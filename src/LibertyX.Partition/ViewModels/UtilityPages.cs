@@ -475,6 +475,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
     private async Task Write()
     {
         var d = Target.Selected?.Disk; if (d == null) return;
+        if (!await Main.RequirePremium("Mídia inicializável", "Criar pendrive de instalação do Windows ou gravar ISO é do Premium.")) return;
         bool hybrid = false;
         try { hybrid = BootMedia.IsHybrid(Iso); } catch { }
         int mode = Mode == 0 ? (hybrid ? 2 : 1) : Mode;

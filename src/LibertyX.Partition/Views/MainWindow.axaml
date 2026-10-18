@@ -39,7 +39,12 @@
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8,10,0,18">
             <Path Data="{StaticResource LogoMark}" Fill="{StaticResource OuroGradiente}" Width="40" Height="40" Stretch="Uniform" />
             <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="LIBERTYX" FontSize="10.5" FontWeight="Bold" LetterSpacing="2.6" Foreground="{StaticResource Ouro}" />
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <TextBlock Text="LIBERTYX" FontSize="10.5" FontWeight="Bold" LetterSpacing="2.6" Foreground="{StaticResource Ouro}" VerticalAlignment="Center" />
+                <Border CornerRadius="999" Padding="6,1" VerticalAlignment="Center" Background="#14FFFFFF" Classes.premiumchip="{Binding IsPremium}">
+                  <TextBlock Text="{Binding EditionText}" FontSize="8.5" FontWeight="Bold" LetterSpacing="1.2" Foreground="{StaticResource Apagado}" />
+                </Border>
+              </StackPanel>
               <TextBlock Text="Partition" FontSize="21" FontWeight="ExtraBold" LetterSpacing="-0.6" Margin="0,-4,0,0" />
             </StackPanel>
           </StackPanel>
@@ -102,6 +107,9 @@
                               </StackPanel>
                             </Button>
                             <Border Classes="navmark" Classes.on="{Binding IsActive}" />
+                            <!-- a coroa marca as telas cuja ação principal é do Premium -->
+                            <PathIcon Data="{StaticResource IcCrown}" Width="12" Height="12" Foreground="#A6FBC501" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                      Margin="0,0,12,0" IsHitTestVisible="False" IsVisible="{Binding Locked}" />
                           </Panel>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>

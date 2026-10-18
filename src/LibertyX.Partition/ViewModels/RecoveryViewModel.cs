@@ -437,6 +437,16 @@ public sealed partial class RecoveryViewModel : PageViewModel
     {
         var files = _checked.ToList();
         if (files.Count == 0) return;
+        var lic = Main.License;
+        long want = files.Sum(f => f.Size);
+        if (!lic.IsPremium && want > lic.FreeRemaining)
+        {
+            if (await Main.Confirm("Limite do Básico",
+                $"O Básico recupera até {Fmt.Size(LibertyX.Partition.Core.Licensing.LicenseManager.FreeLimit)} no total, somando todas as recuperações. Você marcou {Fmt.Size(want)} e restam {Fmt.Size(lic.FreeRemaining)}.\n\nDesmarque alguns arquivos, ou ative o Premium para recuperar sem limite: os arquivos que você está vendo continuam aqui.",
+                "Conhecer o Premium", icon: "Crown"))
+                Main.Navigate("premium");
+            return;
+        }
         var dest = await MainViewModel.PickFolder("Onde salvar os arquivos recuperados");
         if (dest == null) return;
         var src = Picker.Selected;
@@ -453,17 +463,20 @@ public sealed partial class RecoveryViewModel : PageViewModel
         }
         long total = files.Sum(f => f.Size);
         string? report = null;
+        long saved = 0;
         bool ok = await Main.Run("Recuperando arquivos", s =>
         {
             var rep = RecoveryExporter.Export(files, dest, true, new Progress<ExportProgress>(p =>
                 s.Progress(p.BytesTotal == 0 ? (double)p.FilesDone / Math.Max(1, p.FilesTotal) : (double)p.BytesDone / p.BytesTotal,
                     $"{Fmt.Num(p.FilesDone)} de {Fmt.Num(p.FilesTotal)} arquivos", p.Current)), s.Token);
             s.Log($"{rep.Saved} arquivo(s) salvos ({Fmt.Size(rep.Bytes)}).");
+            saved = rep.Bytes;
             if (rep.WithBadSectors > 0) s.Log($"{rep.WithBadSectors} arquivo(s) tinham setores ilegíveis (preenchidos com zeros).");
             if (rep.Failed > 0) s.Log($"{rep.Failed} arquivo(s) não puderam ser gravados — veja o relatório.");
             s.Log($"Relatório: {rep.ReportPath}");
             report = rep.ReportPath;
         }, refresh: false, success: $"Arquivos salvos em {dest}");
+        if (saved > 0 && !lic.IsPremium) { lic.AddFreeRecovered(saved); Main.LicenseChanged(); }
         if (ok && Main.Operation != null) Main.Operation.AfterClose = () => { MainViewModel.OpenInExplorer(dest); return Task.CompletedTask; };
     }
 

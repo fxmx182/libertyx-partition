@@ -10,6 +10,26 @@ public static class Scenes
         PartitionVM Part(FsKind fs) => disks.Disks.SelectMany(d => d.Partitions).First(p => p.P.FileSystem == fs);
         switch (scene)
         {
+            case "premium":
+                vm.Navigate("premium");
+                snap("20-premium");
+                break;
+            case "premium-trava":
+                vm.Navigate("migrar");
+                _ = vm.RequirePremium("Migrar sistema", "Levar o Windows inteiro para outro SSD ou HD, pronto para dar boot, é do Premium.");
+                snap("21-premium-trava");
+                vm.Dialog = null;
+                break;
+            case "premium-ativo":
+                var chave = Environment.GetEnvironmentVariable("LXP_CHAVE_REAL");
+                if (chave == null) break;
+                var err = await vm.License.Activate(chave);
+                vm.LicenseChanged();
+                vm.Navigate("premium");
+                snap("22-premium-ativo" + (err == null ? "" : "-erro"));
+                await vm.License.Deactivate();
+                vm.LicenseChanged();
+                break;
             case "discos":
                 vm.Navigate("discos");
                 snap("01-discos");

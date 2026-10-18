@@ -150,6 +150,8 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
     private async Task Restore()
     {
         if (_disk == null) return;
+        if (!await Main.RequirePremium("Restaurar partições",
+            "No Básico você acha as partições perdidas e explora os arquivos delas. Gravar as partições de volta na tabela, com tudo como estava, é do Premium.")) return;
         var chosen = Found.Where(f => f.IsChecked).Select(f => f.F).ToList();
         var style = StyleIndex == 0 ? TableStyle.Gpt : TableStyle.Mbr;
         var d = _disk;

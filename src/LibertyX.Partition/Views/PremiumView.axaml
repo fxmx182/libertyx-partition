@@ -1,0 +1,112 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.PremiumView" x:DataType="vm:PremiumViewModel">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+    <StackPanel Spacing="18" Margin="0,4,0,8">
+      <!-- a capa: coroa num prato de ouro, nome e a situação atual -->
+      <Border Classes="glass" Padding="28,24" ClipToBounds="True">
+        <Border.Background>
+          <RadialGradientBrush Center="8%,0%" GradientOrigin="8%,0%" RadiusX="80%" RadiusY="140%">
+            <GradientStop Offset="0" Color="#33FBC501" />
+            <GradientStop Offset="0.6" Color="#08FBC501" />
+            <GradientStop Offset="1" Color="#04FFFFFF" />
+          </RadialGradientBrush>
+        </Border.Background>
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Panel Width="92" Height="92" VerticalAlignment="Center">
+            <Ellipse Stroke="#33FBC501" StrokeThickness="1" />
+            <Ellipse Stroke="#22FBC501" StrokeThickness="1" Margin="9" />
+            <Ellipse Fill="{StaticResource OuroGradiente}" Margin="18" />
+            <PathIcon Data="{StaticResource IcCrown}" Width="30" Height="30" Foreground="{StaticResource SobreOuro}" />
+          </Panel>
+          <StackPanel Grid.Column="1" Margin="22,0,0,0" VerticalAlignment="Center" Spacing="4">
+            <TextBlock Classes="eyebrow" Text="LIBERTYX" />
+            <TextBlock Text="Premium" FontSize="34" FontWeight="ExtraBold" LetterSpacing="-1" Margin="0,-6,0,0" />
+            <TextBlock Classes="muted" Text="Recuperação sem limite e o resgate completo. Vitalício: paga uma vez, usa para sempre, com as atualizações." TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+            <Border Classes="chip gold" IsVisible="{Binding IsPremium}" Padding="14,6"><TextBlock Text="PREMIUM ATIVO" FontSize="12" LetterSpacing="1.4" /></Border>
+            <Border Classes="chip" IsVisible="{Binding !IsPremium}" Padding="14,6"><TextBlock Text="BÁSICO" FontSize="12" LetterSpacing="1.4" /></Border>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Grid ColumnDefinitions="*,24,400">
+        <!-- comparação -->
+        <Border Classes="card" Padding="22,18">
+          <StackPanel>
+            <Grid ColumnDefinitions="*,120,120" Margin="4,0,4,10">
+              <TextBlock Classes="section" Text="O QUE CADA UM FAZ" />
+              <TextBlock Grid.Column="1" Classes="section" Text="BÁSICO" HorizontalAlignment="Center" />
+              <TextBlock Grid.Column="2" Classes="section" Text="PREMIUM" HorizontalAlignment="Center" Foreground="{StaticResource Ouro}" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Rows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:FeatureRow">
+                  <Border BorderBrush="#0FFFFFFF" BorderThickness="0,1,0,0" Padding="4,10">
+                    <Grid ColumnDefinitions="*,120,120">
+                      <TextBlock Text="{Binding Name}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                      <Panel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <PathIcon Data="{StaticResource IcCheck}" Classes="small" Foreground="{StaticResource Apagado}" IsVisible="{Binding BasicFull}" />
+                        <TextBlock Text="—" Foreground="{StaticResource Tenue}" IsVisible="{Binding BasicNone}" />
+                        <TextBlock Text="{Binding Basic}" Foreground="{StaticResource Apagado}" FontSize="12.5" IsVisible="{Binding BasicPartial}" />
+                      </Panel>
+                      <Panel Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <PathIcon Data="{StaticResource IcCheck}" Classes="small gold" IsVisible="{Binding !BasicPartial}" />
+                        <TextBlock Text="{Binding Premium}" Foreground="{StaticResource Ouro}" FontWeight="Bold" FontSize="12.5" IsVisible="{Binding BasicPartial}" />
+                      </Panel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- situação, ativação e compra -->
+        <StackPanel Grid.Column="2" Spacing="14">
+          <Border Classes="card" Padding="20,18">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="h3" Text="{Binding StatusTitle}" />
+              <TextBlock Classes="muted" Text="{Binding StatusText}" TextWrapping="Wrap" />
+              <StackPanel Spacing="6" IsVisible="{Binding !IsPremium}" Margin="0,4,0,0">
+                <ProgressBar Value="{Binding QuotaUsed}" Maximum="1" />
+                <TextBlock Classes="faint" Text="{Binding QuotaText}" />
+              </StackPanel>
+              <Button Classes="ghost" IsVisible="{Binding IsPremium}" Command="{Binding DeactivateCommand}" HorizontalAlignment="Left" Padding="0,6">
+                <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcKey}" Classes="small" /><TextBlock Text="Desativar neste computador" /></StackPanel>
+              </Button>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" Padding="20,18" IsVisible="{Binding !IsPremium}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="section" Text="JÁ TENHO UMA CHAVE" />
+              <TextBox Text="{Binding KeyText}" Watermark="LXP1-… ou a chave da loja" TextWrapping="Wrap" AcceptsReturn="False" MinHeight="64" FontFamily="{StaticResource Mono}" FontSize="12.5" />
+              <TextBlock Text="{Binding Error}" Classes="failed" FontSize="12.5" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Classes="ghost" Command="{Binding PasteCommand}" Padding="10,8">
+                  <StackPanel Orientation="Horizontal" Spacing="7"><PathIcon Data="{StaticResource IcEdit}" Classes="small" /><TextBlock Text="Colar" /></StackPanel>
+                </Button>
+                <Button Grid.Column="2" Classes="primary" Command="{Binding ActivateCommand}" IsEnabled="{Binding !Busy}" Padding="20,10">
+                  <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcCrown}" Classes="small" /><TextBlock Text="Ativar Premium" /></StackPanel>
+                </Button>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" Padding="20,18" IsVisible="{Binding !IsPremium}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="section" Text="COMPRAR" />
+              <Button Command="{Binding BuyCardCommand}" IsEnabled="{Binding CanBuyCard}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="14,11">
+                <StackPanel Orientation="Horizontal" Spacing="10"><PathIcon Data="{StaticResource IcCard}" Classes="small gold" /><TextBlock Text="{Binding CardLabel}" /></StackPanel>
+              </Button>
+              <Button Command="{Binding BuyCryptoCommand}" IsEnabled="{Binding CanBuyCrypto}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="14,11">
+                <StackPanel Orientation="Horizontal" Spacing="10"><PathIcon Data="{StaticResource IcBitcoin}" Classes="small gold" /><TextBlock Text="{Binding CryptoLabel}" /></StackPanel>
+              </Button>
+              <TextBlock Classes="faint" TextWrapping="Wrap" Text="A chave chega na hora e vale para sempre. Para trocar de computador, desative aqui e ative no outro." />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

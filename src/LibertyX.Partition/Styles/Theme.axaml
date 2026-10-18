@@ -382,6 +382,8 @@
   </Style>
   <Style Selector="PathIcon.tree"><Setter Property="Foreground" Value="{StaticResource Ouro}" /></Style>
   <Style Selector="PathIcon.del"><Setter Property="Foreground" Value="{StaticResource Laranja}" /></Style>
+  <Style Selector="Border.premiumchip"><Setter Property="Background" Value="{StaticResource OuroGradiente}" /></Style>
+  <Style Selector="Border.premiumchip > TextBlock"><Setter Property="Foreground" Value="{StaticResource SobreOuro}" /></Style>
   <Style Selector="TextBlock.eyebrow">
     <Setter Property="FontSize" Value="10.5" />
     <Setter Property="FontWeight" Value="Bold" />

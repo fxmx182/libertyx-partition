@@ -9,12 +9,15 @@ using LibertyX.Partition.Core.Platform;
 
 namespace LibertyX.Partition.ViewModels;
 
-public sealed partial class NavItem(string key, string title, string icon) : ObservableObject
+public sealed partial class NavItem(string key, string title, string icon, bool premium = false) : ObservableObject
 {
     public string Key { get; } = key;
     public string Title { get; } = title;
     public Avalonia.Media.Geometry? Icon { get; } = Ui.Icon(icon);
+    /// <summary>A ação principal da tela é do Premium (a tela abre no Básico, para a pessoa ver o que faz).</summary>
+    public bool Premium { get; } = premium;
     [ObservableProperty] private bool _isActive;
+    [ObservableProperty] private bool _locked;
     public IRelayCommand Go => new RelayCommand(() => MainViewModel.Instance.Navigate(Key));
 }
 
@@ -55,13 +58,43 @@ public sealed partial class MainViewModel : ViewModelBase
     }
     public string AdminText => IsAdmin ? "Administrador" : "Sem privilégio de administrador";
 
+    // ───────── licença ─────────
+
+    public LibertyX.Partition.Core.Licensing.LicenseManager License { get; } = OpenLicense();
+    [ObservableProperty] private bool _isPremium;
+    public string EditionText => IsPremium ? "PREMIUM" : "BÁSICO";
+
+    private static LibertyX.Partition.Core.Licensing.LicenseManager OpenLicense()
+    {
+        try { return new(); }
+        catch { return new(Path.Combine(Path.GetTempPath(), "libertyx-partition")); }
+    }
+
+    /// <summary>A licença mudou (ativou, desativou, gastou cota): atualiza selo, cadeados e a tela do Premium.</summary>
+    public void LicenseChanged()
+    {
+        IsPremium = License.IsPremium;
+        OnPropertyChanged(nameof(EditionText));
+        foreach (var g in Nav) foreach (var i in g.Items) i.Locked = i.Premium && !IsPremium;
+        if (_pages.TryGetValue("premium", out var p) && p is PremiumViewModel pv) pv.Refresh();
+    }
+
+    /// <summary>Barra a ação no Básico com uma explicação e o caminho para o Premium.</summary>
+    public async Task<bool> RequirePremium(string feature, string why)
+    {
+        if (License.IsPremium) return true;
+        if (await Confirm($"{feature} é Premium", why + "\n\nO Premium é vitalício: paga uma vez, usa para sempre, com as atualizações.", "Conhecer o Premium", icon: "Crown"))
+            Navigate("premium");
+        return false;
+    }
+
     public MainViewModel()
     {
         Instance = this;
         HookPending();
         Nav =
         [
-            new("Painel", new NavItem("discos", "Discos e partições", "Dashboard")),
+            new("Painel", new NavItem("discos", "Discos e partições", "Dashboard"), new NavItem("premium", "LibertyX Premium", "Crown")),
             new("Resgate",
                 new NavItem("recuperar", "Recuperar dados", "RecoverFiles"),
                 new NavItem("particoes", "Recuperar partição", "RecoverPartition"),
@@ -69,8 +102,8 @@ public sealed partial class MainViewModel : ViewModelBase
                 new NavItem("superficie", "Teste de superfície", "Surface"),
                 new NavItem("saude", "Saúde e propriedades", "Health")),
             new("Disco",
-                new NavItem("migrar", "Migrar sistema para SSD", "Migrate"),
-                new NavItem("copiar-disco", "Copiar disco", "CopyDisk"),
+                new NavItem("migrar", "Migrar sistema para SSD", "Migrate", premium: true),
+                new NavItem("copiar-disco", "Copiar disco", "CopyDisk", premium: true),
                 new NavItem("copiar-particao", "Copiar partição", "CopyPartition"),
                 new NavItem("converter", "Converter GPT ⇄ MBR", "Convert"),
                 new NavItem("alinhar", "Alinhar partições", "Align"),
@@ -81,7 +114,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 new NavItem("benchmark", "Benchmark de disco", "Benchmark"),
                 new NavItem("espaco", "Analisador de espaço", "Space"),
                 new NavItem("duplicados", "Limpador de duplicados", "Duplicates"),
-                new NavItem("boot", "Mídia inicializável", "Boot")),
+                new NavItem("boot", "Mídia inicializável", "Boot", premium: true)),
         ];
         _factories = new()
         {
@@ -103,7 +136,9 @@ public sealed partial class MainViewModel : ViewModelBase
             ["espaco"] = () => new SpaceViewModel(),
             ["duplicados"] = () => new DuplicatesViewModel(),
             ["boot"] = () => new BootMediaViewModel(),
+            ["premium"] = () => new PremiumViewModel(),
         };
+        LicenseChanged();
     }
 
     public void Start(string[] args)
@@ -111,6 +146,8 @@ public sealed partial class MainViewModel : ViewModelBase
         foreach (var a in args.Where(File.Exists)) DiskSystem.AttachedImages.Add(Path.GetFullPath(a));
         Navigate("discos");
         _ = Refresh();
+        // chave da loja: reconfere de vez em quando, sem atrapalhar (sem internet, nada muda)
+        _ = Task.Run(async () => { try { if (await License.RevalidateIfDue()) Ui.Post(() => { LicenseChanged(); ShowToast("A licença da loja não vale mais (reembolso ou cancelamento) — voltou ao Básico."); }); } catch { } });
         StartHotplug();
     }
 

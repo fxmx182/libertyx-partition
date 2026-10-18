@@ -1,0 +1,118 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using LibertyX.Partition.Core.Licensing;
+
+namespace LibertyX.Partition.ViewModels;
+
+/// <summary>Uma linha da comparação: o que o Básico faz e o que o Premium faz.</summary>
+public sealed record FeatureRow(string Name, string Basic, string Premium, bool BasicFull, bool BasicNone)
+{
+    public bool BasicPartial => !BasicFull && !BasicNone;
+}
+
+/// <summary>A tela do Premium: comparação, ativação da chave e onde comprar.</summary>
+public sealed partial class PremiumViewModel : PageViewModel
+{
+    /// <summary>Onde se compra. Vazio = canal ainda não aberto (o botão aparece como "em breve").</summary>
+    public const string CardUrl = "";
+    public const string TelegramUrl = "";
+
+    public override string Title => "LibertyX Premium";
+    public override string IconKey => "Crown";
+
+    public List<FeatureRow> Rows { get; } =
+    [
+        new("Criar, formatar, redimensionar, mover e excluir partições", "✓", "✓", true, false),
+        new("Saúde, teste de superfície, benchmark, espaço e duplicados", "✓", "✓", true, false),
+        new("Procurar e pré-visualizar arquivos apagados", "✓", "✓", true, false),
+        new("Recuperar arquivos", "até 1 GB", "sem limite", false, false),
+        new("Achar partições perdidas e explorar os arquivos", "✓", "✓", true, false),
+        new("Restaurar partições perdidas", "—", "✓", false, true),
+        new("Converter MBR ⇄ GPT sem perder dados", "disco vazio", "com os dados", false, false),
+        new("Migrar o sistema para outro SSD/HD", "—", "✓", false, true),
+        new("Copiar disco inteiro", "—", "✓", false, true),
+        new("Criar imagem de disco", "✓", "✓", true, false),
+        new("Restaurar imagem de disco", "—", "✓", false, true),
+        new("Mídia inicializável (pendrive do Windows, ISO)", "—", "✓", false, true),
+    ];
+
+    [ObservableProperty] private string _keyText = "";
+    [ObservableProperty] private string? _error;
+    [ObservableProperty] private bool _busy;
+    [ObservableProperty] private bool _isPremium;
+    [ObservableProperty] private string _statusTitle = "";
+    [ObservableProperty] private string _statusText = "";
+    [ObservableProperty] private double _quotaUsed;
+    [ObservableProperty] private string _quotaText = "";
+
+    public bool CanBuyCard => CardUrl.Length > 0;
+    public bool CanBuyCrypto => TelegramUrl.Length > 0;
+    public string CardLabel => CanBuyCard ? "Comprar com cartão" : "Cartão — em breve";
+    public string CryptoLabel => CanBuyCrypto ? "Bitcoin ou USDT pelo Telegram" : "Bitcoin ou USDT — em breve";
+
+    public PremiumViewModel() => Refresh();
+    public override void OnShown(object? arg) => Refresh();
+
+    public void Refresh()
+    {
+        var lic = Main.License;
+        IsPremium = lic.IsPremium;
+        var st = lic.State;
+        if (IsPremium)
+        {
+            StatusTitle = "Premium ativo";
+            string how = st.Kind == "loja" ? "comprada na loja" : "chave LibertyX";
+            StatusText = $"Licença {lic.ShortKey} ({how})" + (st.Holder is { Length: > 0 } h ? $" · {h}" : "")
+                         + (st.ActivatedAt is { } a ? $" · ativada em {a.ToLocalTime():dd/MM/yyyy}" : "") + ". Obrigado por apoiar o LibertyX.";
+        }
+        else
+        {
+            StatusTitle = "Você está no Básico";
+            StatusText = "Tudo para cuidar dos discos, e a recuperação mostra tudo o que dá para salvar. O Premium leva sem limite e libera as ferramentas de resgate completas.";
+        }
+        QuotaUsed = Math.Min(1, (double)st.FreeRecoveredBytes / LicenseManager.FreeLimit);
+        QuotaText = $"{Fmt.Size(Math.Min(st.FreeRecoveredBytes, LicenseManager.FreeLimit))} de {Fmt.Size(LicenseManager.FreeLimit)} já recuperados no Básico";
+    }
+
+    [RelayCommand]
+    private async Task Activate()
+    {
+        Error = null;
+        Busy = true;
+        try
+        {
+            var err = await Main.License.Activate(KeyText);
+            if (err != null) { Error = err; return; }
+            KeyText = "";
+            Main.LicenseChanged();
+            Main.ShowToast("Premium ativado. Bom proveito!");
+        }
+        finally { Busy = false; Refresh(); }
+    }
+
+    [RelayCommand]
+    private async Task Paste()
+    {
+        var top = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime l ? l.MainWindow : null;
+        var clip = top?.Clipboard;
+        if (clip != null && await clip.GetTextAsync() is { } t) KeyText = t.Trim();
+    }
+
+    [RelayCommand]
+    private async Task Deactivate()
+    {
+        if (!await Main.Confirm("Desativar neste computador",
+            "O Premium sai deste computador e você pode ativar a mesma chave em outro. Guarde a chave antes de continuar.", "Desativar", icon: "Key")) return;
+        await Main.License.Deactivate();
+        Main.LicenseChanged();
+        Refresh();
+    }
+
+    [RelayCommand] private void BuyCard() { if (CanBuyCard) Open(CardUrl); }
+    [RelayCommand] private void BuyCrypto() { if (CanBuyCrypto) Open(TelegramUrl); }
+
+    private static void Open(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+    }
+}

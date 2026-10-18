@@ -211,6 +211,9 @@ public sealed partial class ConvertViewModel : PageViewModel
     private async Task Convert()
     {
         var d = _d; if (d == null) return;
+        // disco vazio converte de graça; levar as partições junto é do Premium
+        if (d.Table.Entries.Count > 0 && !await Main.RequirePremium("Converter sem perder dados",
+            "No Básico dá para converter um disco sem partições. Converter levando as partições e os dados junto é do Premium.")) return;
         var target = d.Table.Style == TableStyle.Gpt ? TableStyle.Mbr : TableStyle.Gpt;
         Main.Queue($"Converter para {To}", $"{d.Title} ({d.Model}): {From} → {To}, sem apagar partições", "Convert", s => DiskOperations.ConvertStyle(MainViewModel.Fresh(d), target, s), d);
         await Task.CompletedTask;
@@ -220,6 +223,7 @@ public sealed partial class ConvertViewModel : PageViewModel
     private async Task Mbr2Gpt()
     {
         var d = _d; if (d == null) return;
+        if (!await Main.RequirePremium("Converter o disco do Windows", "Converter o disco do sistema para GPT sem reinstalar o Windows é do Premium.")) return;
         if (!await Main.Confirm("Converter o disco do Windows com MBR2GPT",
             "O MBR2GPT é o conversor oficial da Microsoft: converte o disco do sistema sem perder dados e cria a partição EFI.\n\nDepois, é OBRIGATÓRIO entrar na configuração do firmware (BIOS) e trocar o modo de inicialização de Legado/CSM para UEFI, senão o Windows não inicia.", "Converter", true)) return;
         Main.Queue("Converter o disco do Windows (MBR2GPT)", $"{d.Title} ({d.Model}) → GPT; depois mude o firmware para UEFI", "Convert", async s =>
