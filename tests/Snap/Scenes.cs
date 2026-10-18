@@ -31,6 +31,17 @@ public static class Scenes
                     snap($"{k++}-{key}");
                 }
                 break;
+            case "gravar":
+                vm.Navigate("boot");
+                var bm = vm.Page<BootMediaViewModel>("boot");
+                string fl = Path.GetFullPath("tests/images/flash");
+                var tw = bm.SetImage(Path.Combine(fl, "windows.iso"));
+                wait(() => !tw.IsCompleted, 30000);
+                snap("25-gravar-windows");
+                var ti = bm.SetImage(Path.Combine(fl, "disco.img.xz"));
+                wait(() => !ti.IsCompleted, 30000);
+                snap("26-gravar-imagem");
+                break;
             case "premium":
                 vm.Navigate("premium");
                 snap("20-premium");

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using LibertyX.Partition.Core.FileSystems;
+using LibertyX.Partition.Core.IO;
 using LibertyX.Partition.Core.Operations;
 using LibertyX.Partition.Core.Partitioning;
 using LibertyX.Partition.Core.Platform;
@@ -404,6 +405,40 @@ public static class SelfTest
             int v = Bounded.Run(() => { Thread.Sleep(30000); return 1; }, TimeSpan.FromSeconds(1), -1, out bool slow);
             Check(slow && v == -1, "uma consulta presa é abandonada no limite, sem travar o app");
             await Task.CompletedTask;
+        });
+
+        // Gravação direta como o balenaEtcher, no disco virtual: imagem compactada (GZIP) com MBR +
+        // FAT32 do próprio LibertyX, gravada com verificação; o Windows tem de montar o FAT32.
+        await Step("VHD: gravar imagem compactada com verificação (balenaEtcher)", async () =>
+        {
+            string raw = Path.Combine(Path.GetTempPath(), "lx-flash.img"), gz = raw + ".gz";
+            using (var fsr = new FileStream(raw, FileMode.Create)) fsr.SetLength(64L << 20);
+            using (var img = new ImageFileDevice(raw, true))
+            {
+                var t = new PartitionTable { Style = TableStyle.Mbr, SectorSize = 512, DiskSectors = img.Length / 512 };
+                t.Entries.Add(new PartitionEntry { StartLba = 2048, SectorCount = img.Length / 512 - 2048, MbrType = 0x0C });
+                Fat32Formatter.Format(new SubDevice(img, 2048 * 512, img.Length - 2048 * 512), "ETCHER", 0, 2048, null);
+                PartitionCodec.Write(img, t);
+            }
+            using (var i = File.OpenRead(raw)) using (var o = new System.IO.Compression.GZipStream(File.Create(gz), System.IO.Compression.CompressionLevel.Fastest)) i.CopyTo(o);
+            d = DiskSystem.Enumerate().First(x => x.Number == n);
+            var lines = new List<string>();
+            sink.LogLine += lines.Add;
+            BootMedia.WriteImage(ImageSource.Inspect(gz), d, verify: true, sink);
+            sink.LogLine -= lines.Add;
+            Check(lines.Any(l => l.Contains("Verificado")), "imagem .gz gravada no disco e verificada (SHA-256 relido igual)");
+            d = await Settle(n, x => x.Table.Style == TableStyle.Mbr && x.Partitions.Any(p => p.FileSystem == FsKind.Fat32));
+            var fp = d.Partitions.FirstOrDefault(p => p.FileSystem == FsKind.Fat32);
+            Check(fp != null, "Windows relê a tabela gravada e acha o FAT32");
+            if (fp != null)
+            {
+                var lr = await WinCommands.AssignTemporaryLetter(n, fp.Offset);
+                string fl = lr.Output.Trim();
+                string fmt = "";
+                try { fmt = new DriveInfo(fl + ":\\").DriveFormat; } catch { }
+                Check(fmt == "FAT32", $"Windows monta a imagem gravada como {fmt} ({fl}:)");
+            }
+            File.Delete(raw); File.Delete(gz);
         });
 
         await Step("atualização: acha a versão publicada", async () =>

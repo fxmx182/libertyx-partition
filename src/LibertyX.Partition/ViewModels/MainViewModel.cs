@@ -170,7 +170,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 new NavItem("benchmark", "Benchmark de disco", "Benchmark"),
                 new NavItem("espaco", "Analisador de espaço", "Space"),
                 new NavItem("duplicados", "Limpador de duplicados", "Duplicates"),
-                new NavItem("boot", "Mídia inicializável", "Boot", premium: true)),
+                new NavItem("boot", "Pendrive de boot e imagens", "Boot", premium: true)),
         ];
         _factories = new()
         {

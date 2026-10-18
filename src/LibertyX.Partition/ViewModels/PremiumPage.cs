@@ -33,7 +33,7 @@ public sealed partial class PremiumViewModel : PageViewModel
         new("Copiar disco inteiro", "—", "✓", false, true),
         new("Criar imagem de disco", "✓", "✓", true, false),
         new("Restaurar imagem de disco", "—", "✓", false, true),
-        new("Mídia inicializável (pendrive do Windows, ISO)", "—", "✓", false, true),
+        new("Pendrive de boot e gravar imagens (como Rufus e balenaEtcher)", "—", "✓", false, true),
     ];
 
     [ObservableProperty] private string _keyText = "";

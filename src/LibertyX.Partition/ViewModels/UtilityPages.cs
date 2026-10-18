@@ -461,49 +461,138 @@ public sealed partial class DuplicatesViewModel : PageViewModel
 
 public sealed partial class BootMediaViewModel : PageViewModel
 {
-    public override string Title => "Mídia inicializável";
+    public override string Title => "Pendrive de boot e imagens";
     public override string IconKey => "Boot";
-    public PickerViewModel Target { get; } = new()
-    {
-        ShowPartitions = false,
-        DiskFilter = d => d.IsSystem ? "Disco do Windows." : d.IsImage ? "Escolha um pendrive." : !d.Removable && d.Bus is not ("USB" or "SD" or "MMC") ? "Por segurança, só pendrives e cartões. (Discos internos ficam de fora.)" : null,
-    };
-    [ObservableProperty] private string _iso = "";
-    [ObservableProperty] private int _mode;
-    [ObservableProperty] private string _isoInfo = "";
+    public PickerViewModel Target { get; }
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ImageName))] private string _imagePath = "";
+    public string ImageName => System.IO.Path.GetFileName(ImagePath);
+    [ObservableProperty] private string _imageInfo = "Arraste um arquivo para cá ou clique em Escolher. ISO, IMG, RAW, BIN, DD, WIC — também compactados em ZIP, GZ, XZ, BZ2 ou ZST.";
+    [ObservableProperty] private string _sha = "";
+    [ObservableProperty] private bool _hashing;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Effective), nameof(IsWindows), nameof(IsFiles), nameof(IsRaw), nameof(ModeNote))] private int _mode;
+    [ObservableProperty] private int _scheme;            // 0 MBR (BIOS + UEFI), 1 GPT (só UEFI)
     [ObservableProperty] private string _label = "INSTALAR";
-    public List<string> Modes { get; } = ["Automático (detecta pela ISO)", "Instalação do Windows (FAT32, UEFI + BIOS)", "Gravação direta — modo DD (Linux, ferramentas)"];
-    public bool CanWrite => Iso.Length > 0 && Target.Selected != null;
-    partial void OnIsoChanged(string value) => OnPropertyChanged(nameof(CanWrite));
-    public BootMediaViewModel() { Target.Changed += _ => OnPropertyChanged(nameof(CanWrite)); }
+    [ObservableProperty] private bool _verify = true;
+    [ObservableProperty] private bool _bypassRequirements = true;
+    [ObservableProperty] private bool _localAccount = true;
+    [ObservableProperty] private string _userName = "";
+    [ObservableProperty] private bool _skipPrivacy = true;
+    [ObservableProperty] private bool _noAutoEncryption;
+    [ObservableProperty] private bool _showAllDisks;
+    private ImageSource? _src;
+
+    public List<string> Modes { get; } = ["Automático (pelo conteúdo da imagem)", "Instalação do Windows", "Copiar os arquivos da ISO (FAT32)", "Gravação direta (como o balenaEtcher)"];
+    public List<string> Schemes { get; } = ["MBR — inicia em BIOS e UEFI", "GPT — só UEFI (PCs atuais)"];
+
+    /// <summary>O modo que vai valer: o escolhido, ou o que a imagem pede no automático.</summary>
+    public int Effective => Mode != 0 ? Mode : _src?.Kind switch
+    {
+        ImageKind.WindowsIso => 1,
+        ImageKind.PlainIso => 2,
+        _ => 3,
+    };
+    public bool IsWindows => Effective == 1;
+    public bool IsFiles => Effective is 1 or 2;
+    public bool IsRaw => Effective == 3;
+    public string ModeNote => Effective switch
+    {
+        1 => "Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo DISM. As opções abaixo valem para o Windows 11.",
+        2 => "Tabela e FAT32 novos e os arquivos da ISO copiados — para ISOs de ferramentas UEFI que não são híbridas.",
+        _ => "Setor a setor, como o balenaEtcher e o modo DD do Rufus: ISOs de Linux e imagens de disco (Raspberry Pi, Home Assistant…). Imagens compactadas são descompactadas durante a gravação.",
+    };
+    public bool CanWrite => _src != null && Target.Selected != null;
+
+    public BootMediaViewModel()
+    {
+        Target = new PickerViewModel
+        {
+            ShowPartitions = false,
+            DiskFilter = d => d.IsSystem ? "Disco do Windows." : d.IsImage ? "Escolha um pendrive, cartão ou disco." :
+                !ShowAllDisks && !d.Removable && d.Bus is not ("USB" or "SD" or "MMC") ? "Disco interno — marque “Mostrar todos os discos” se for mesmo este." : null,
+        };
+        Target.Changed += _ => OnPropertyChanged(nameof(CanWrite));
+    }
     public override void OnDisksChanged() => Target.Load(Main.Disks);
     public override void OnShown(object? arg) { if (Target.Groups.Count == 0) Target.Load(Main.Disks); }
+    partial void OnShowAllDisksChanged(bool value) => Target.Load(Main.Disks);
 
     [RelayCommand]
-    private async Task PickIso()
+    private async Task PickImage()
     {
-        var f = await MainViewModel.PickFile("Imagem ISO", ("Imagens ISO e IMG", ["*.iso", "*.img"]));
-        if (f == null) return;
-        Iso = f;
-        bool hybrid = false;
-        try { hybrid = BootMedia.IsHybrid(f); } catch { }
-        IsoInfo = $"{Fmt.Size(new FileInfo(f).Length)} · " + (hybrid ? "imagem híbrida (inicializável por gravação direta)" : "ISO tradicional (provavelmente de instalação do Windows)");
+        var f = await MainViewModel.PickFile("Imagem para gravar", ("Imagens e ISOs", ["*.iso", "*.img", "*.raw", "*.bin", "*.dd", "*.wic", "*.zip", "*.gz", "*.xz", "*.bz2", "*.zst"]));
+        if (f != null) await SetImage(f);
+    }
+
+    /// <summary>Escolhida pelo botão ou arrastada para a tela.</summary>
+    public async Task SetImage(string path)
+    {
+        Sha = "";
+        ImagePath = path;
+        ImageInfo = "Lendo a imagem…";
+        try
+        {
+            _src = await Task.Run(() => ImageSource.Inspect(path));
+            ImageInfo = _src.Describe();
+            if (_src.Kind == ImageKind.WindowsIso && _src.VolumeLabel is { Length: > 0 } v) Label = new string(v.Where(char.IsLetterOrDigit).Take(11).ToArray()).ToUpperInvariant();
+        }
+        catch (Exception ex)
+        {
+            _src = null;
+            ImageInfo = "Não consegui ler esta imagem: " + ex.Message;
+        }
+        OnPropertyChanged(nameof(Effective)); OnPropertyChanged(nameof(IsWindows)); OnPropertyChanged(nameof(IsFiles));
+        OnPropertyChanged(nameof(IsRaw)); OnPropertyChanged(nameof(ModeNote)); OnPropertyChanged(nameof(CanWrite));
+    }
+
+    /// <summary>SHA-256 do arquivo, para comparar com o publicado no site de onde veio.</summary>
+    [RelayCommand]
+    private async Task ComputeSha()
+    {
+        if (ImagePath.Length == 0 || Hashing) return;
+        Hashing = true;
+        Sha = "Calculando…";
+        try
+        {
+            string path = ImagePath;
+            var h = await Task.Run(() =>
+            {
+                using var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan);
+                return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(f));
+            });
+            Sha = h;
+        }
+        catch (Exception ex) { Sha = "Erro: " + ex.Message; }
+        finally { Hashing = false; }
     }
 
     [RelayCommand]
     private async Task Write()
     {
-        var d = Target.Selected?.Disk; if (d == null) return;
-        if (!await Main.RequirePremium("Mídia inicializável", "Criar pendrive de instalação do Windows ou gravar ISO é do Premium.")) return;
-        bool hybrid = false;
-        try { hybrid = BootMedia.IsHybrid(Iso); } catch { }
-        int mode = Mode == 0 ? (hybrid ? 2 : 1) : Mode;
-        if (mode == 1 && !OperatingSystem.IsWindows()) { await Main.Alert("Só no Windows", "Montar a ISO do Windows e dividir o install.wim exigem o Windows."); return; }
-        string iso = Iso, label = Label;
-        Main.Queue("Criar mídia inicializável", $"{Path.GetFileName(iso)} → {d.Title} ({d.Model}, {Fmt.Size(d.Size)}), modo {(mode == 1 ? "instalação do Windows" : "gravação direta (DD)")} — apaga o pendrive", "Boot", s =>
+        var d = Target.Selected?.Disk; var src = _src;
+        if (d == null || src == null) return;
+        if (!await Main.RequirePremium("Pendrive de boot e imagens", "Gravar ISOs e imagens de disco em pendrive ou cartão é do Premium.")) return;
+        int mode = Effective;
+        if (mode is 1 or 2 && !OperatingSystem.IsWindows()) { await Main.Alert("Só no Windows", "Copiar os arquivos da ISO exige montar a ISO pelo Windows."); return; }
+        if (mode is 1 or 2 && src.Compression != null) { await Main.Alert("ISO compactada", "Para copiar os arquivos, descompacte a ISO antes — ou use a gravação direta."); return; }
+        if (IsWindows && WindowsSetupOptions.ValidateUser(UserName) is { } ue) { await Main.Alert("Nome da conta", ue); return; }
+        if (src.Length is { } need && need > d.Size) { await Main.Alert("Não cabe", $"A imagem tem {Fmt.Size(need)} e {d.Title} tem {Fmt.Size(d.Size)}."); return; }
+        if (!d.Removable && d.Bus is not ("USB" or "SD" or "MMC") &&
+            !await Main.Confirm("Disco interno", $"{d.Title} ({d.Model}, {Fmt.Size(d.Size)}) não é pendrive nem cartão. Tudo nele será apagado.", "É este mesmo", danger: true)) return;
+        string iso = src.Path, label = Label;
+        bool gpt = Scheme == 1, verify = Verify;
+        var opts = IsWindows ? new WindowsSetupOptions(BypassRequirements, LocalAccount, string.IsNullOrWhiteSpace(UserName) ? null : UserName.Trim(), SkipPrivacy, NoAutoEncryption) : null;
+        string how = mode switch
+        {
+            1 => $"instalação do Windows, {(gpt ? "GPT" : "MBR")}" + (opts is { Any: true } ? $" ({opts.Summary})" : ""),
+            2 => $"arquivos da ISO em FAT32, {(gpt ? "GPT" : "MBR")}",
+            _ => "gravação direta" + (verify ? " com verificação" : ""),
+        };
+        Main.Queue("Gravar imagem", $"{Path.GetFileName(iso)} → {d.Title} ({d.Model}, {Fmt.Size(d.Size)}): {how} — apaga tudo que está nele", "Boot", s =>
         {
             var dq = MainViewModel.Fresh(d);
-            return mode == 1 ? BootMedia.WriteWindows(iso, dq, label, s) : Task.Run(() => BootMedia.WriteRaw(iso, dq, s));
+            return mode == 3 ? Task.Run(() => BootMedia.WriteImage(ImageSource.Inspect(iso), dq, verify, s))
+                             : BootMedia.WriteFiles(iso, dq, label, gpt, mode == 1, opts, s);
         }, d, dangerous: true);
     }
 }

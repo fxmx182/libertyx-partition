@@ -4,6 +4,7 @@
     <IsTrimmable>false</IsTrimmable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="0.50.5" />
     <PackageReference Include="System.IO.Hashing" Version="10.0.12" />
   </ItemGroup>
 </Project>
