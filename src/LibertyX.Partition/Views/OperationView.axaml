@@ -7,7 +7,7 @@
   <Border Width="640" Background="#F2141318" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="26" Padding="30,28" BoxShadow="0 24 60 0 #A0000000">
     <StackPanel Spacing="20">
       <TextBlock Text="{Binding Title}" Classes="h2" HorizontalAlignment="Center" />
-      <Panel Width="176" Height="176" HorizontalAlignment="Center">
+      <Panel Width="{Binding $parent[Window].Bounds.Height, Converter={x:Static vm:Conv.RingSize}}" Height="{Binding $parent[Window].Bounds.Height, Converter={x:Static vm:Conv.RingSize}}" HorizontalAlignment="Center">
         <c:UsageRing Value="{Binding Fraction}" Indeterminate="{Binding Indeterminate}" Thickness="12" />
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
           <TextBlock Text="{Binding PercentText}" Classes="big" HorizontalAlignment="Center" />
@@ -22,7 +22,7 @@
       <Border Classes="notice danger" IsVisible="{Binding Failed}">
         <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" />
       </Border>
-      <Border Classes="inset" Height="150" Padding="12,10">
+      <Border Classes="inset" Height="{Binding $parent[Window].Bounds.Height, Converter={x:Static vm:Conv.LogHeight}}" Padding="12,10">
         <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto">
           <ItemsControl ItemsSource="{Binding Log}">
             <ItemsControl.ItemTemplate>

@@ -4,7 +4,8 @@
       <TextBlock Classes="h1" Text="Converter GPT ⇄ MBR" />
       <TextBlock Classes="muted" Text="Troca o estilo da tabela sem apagar as partições: só a tabela é reescrita." />
     </StackPanel>
-    <Grid ColumnDefinitions="*,24,400">
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="400" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="10"><TextBlock Classes="section" Text="DISCO" /><ContentControl Content="{Binding Picker}" /></StackPanel>
       </ScrollViewer>

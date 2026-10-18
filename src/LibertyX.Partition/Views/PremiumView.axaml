@@ -29,7 +29,8 @@
         </Grid>
       </Border>
 
-      <Grid ColumnDefinitions="*,24,400">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="400" /></Grid.ColumnDefinitions>
         <!-- comparação -->
         <Border Classes="card" Padding="22,18">
           <StackPanel>

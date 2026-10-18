@@ -6,7 +6,8 @@
     </StackPanel>
     <TabControl SelectedIndex="{Binding Tab}" Padding="0,14,0,0">
       <TabItem Header="Criar imagem">
-        <Grid ColumnDefinitions="*,24,400">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="400" /></Grid.ColumnDefinitions>
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="10"><TextBlock Classes="section" Text="O QUE COPIAR" /><ContentControl Content="{Binding ImageSource}" /></StackPanel>
           </ScrollViewer>
@@ -34,7 +35,8 @@
         </Grid>
       </TabItem>
       <TabItem Header="Restaurar imagem">
-        <Grid ColumnDefinitions="*,24,400">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="400" /></Grid.ColumnDefinitions>
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="10"><TextBlock Classes="section" Text="DESTINO (SERÁ SOBRESCRITO)" /><ContentControl Content="{Binding RestoreTarget}" /></StackPanel>
           </ScrollViewer>

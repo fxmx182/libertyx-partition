@@ -5,7 +5,7 @@
         x:Class="LibertyX.Partition.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="LibertyX Partition"
-        Width="1440" Height="900" MinWidth="1140" MinHeight="720"
+        Width="1440" Height="900" MinWidth="860" MinHeight="560"
         WindowStartupLocation="CenterScreen"
         Icon="/Assets/app.ico"
         Background="#0C0B0A"
@@ -13,6 +13,21 @@
         FontFamily="{StaticResource Manrope}"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="40">
+  <Window.Styles>
+    <!-- janela estreita: a barra lateral vira só ícones (o nome aparece ao passar o mouse) -->
+    <Style Selector="Grid#Shell :is(Control).slim"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="Grid#Shell.compact :is(Control).slim"><Setter Property="IsVisible" Value="True" /></Style>
+    <Style Selector="Grid#Shell.compact :is(Control).wide"><Setter Property="IsVisible" Value="False" /></Style>
+    <Style Selector="Grid#Shell Button.nav"><Setter Property="ToolTip.ServiceEnabled" Value="False" /></Style>
+    <Style Selector="Grid#Shell.compact Button.nav">
+      <Setter Property="ToolTip.ServiceEnabled" Value="True" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="Padding" Value="0,9" />
+    </Style>
+    <Style Selector="Grid#Shell.compact DockPanel.side"><Setter Property="Margin" Value="8,18,8,12" /></Style>
+    <Style Selector="Grid#Shell.compact StackPanel.brand"><Setter Property="Margin" Value="10,10,0,18" /></Style>
+    <Style Selector="Grid#Shell.compact StackPanel.navgroup"><Setter Property="Margin" Value="0,0,0,10" /></Style>
+  </Window.Styles>
   <Panel>
     <!-- a luz de cima: ouro fraco no alto à esquerda, violeta frio no rodapé -->
     <Border IsHitTestVisible="False">
@@ -32,13 +47,13 @@
       </Border.Background>
     </Border>
 
-    <Grid ColumnDefinitions="256,*">
+    <Grid x:Name="Shell" ColumnDefinitions="256,*">
       <!-- barra lateral -->
       <Border Background="#59000000" BorderBrush="#10FFFFFF" BorderThickness="0,0,1,0">
-        <DockPanel Margin="14,18,14,14">
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="8,10,0,18">
+        <DockPanel Classes="side" Margin="14,18,14,14">
+          <StackPanel DockPanel.Dock="Top" Classes="brand" Orientation="Horizontal" Spacing="12" Margin="8,10,0,18">
             <Path Data="{StaticResource LogoMark}" Fill="{StaticResource OuroGradiente}" Width="40" Height="40" Stretch="Uniform" />
-            <StackPanel VerticalAlignment="Center">
+            <StackPanel VerticalAlignment="Center" Classes="wide">
               <StackPanel Orientation="Horizontal" Spacing="7">
                 <TextBlock Text="LIBERTYX" FontSize="10.5" FontWeight="Bold" LetterSpacing="2.6" Foreground="{StaticResource Ouro}" VerticalAlignment="Center" />
                 <Border CornerRadius="999" Padding="6,1" VerticalAlignment="Center" Background="#14FFFFFF" Classes.premiumchip="{Binding IsPremium}">
@@ -51,6 +66,12 @@
 
           <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,10,0,0">
             <!-- versão nova publicada: um clique baixa e atualiza por cima -->
+            <Panel Classes="slim">
+              <Button Classes="primary" Command="{Binding UpdateNowCommand}" IsVisible="{Binding UpdateAvailable}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="0,9" ToolTip.Tip="{Binding UpdateText}">
+                <PathIcon Data="{StaticResource IcDownload}" Width="15" Height="15" />
+              </Button>
+            </Panel>
+            <Panel Classes="wide">
             <Border Classes="notice gold" Padding="12,10" IsVisible="{Binding UpdateAvailable}">
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel VerticalAlignment="Center">
@@ -62,8 +83,21 @@
                 </Button>
               </Grid>
             </Border>
+            </Panel>
+            <!-- a fila, versão estreita: quantas alterações esperam, e os dois botões -->
+            <Border Classes="inset pendingbox slim" Classes.active="{Binding HasPending}" Padding="6,8" ToolTip.Tip="{Binding PendingTitle}">
+              <StackPanel Spacing="6">
+                <TextBlock Text="{Binding Pending.Count}" HorizontalAlignment="Center" FontWeight="ExtraBold" FontSize="15" Classes.goldtext="{Binding HasPending}" />
+                <Button Classes="primary" Command="{Binding ApplyPendingCommand}" IsEnabled="{Binding HasPending}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="0,8" ToolTip.Tip="Confirmar">
+                  <PathIcon Data="{StaticResource IcCheck}" Width="14" Height="14" />
+                </Button>
+                <Button Command="{Binding DiscardPendingCommand}" IsEnabled="{Binding HasPending}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="0,8" ToolTip.Tip="Cancelar">
+                  <PathIcon Data="{StaticResource IcClose}" Width="12" Height="12" />
+                </Button>
+              </StackPanel>
+            </Border>
             <!-- a fila: nada vai para o disco antes do Confirmar -->
-            <Border Classes="inset pendingbox" Classes.active="{Binding HasPending}" Padding="10,10,10,10">
+            <Border Classes="inset pendingbox wide" Classes.active="{Binding HasPending}" Padding="10,10,10,10">
               <StackPanel Spacing="8">
                 <TextBlock Classes="section" Text="{Binding PendingTitle}" Classes.goldtext="{Binding HasPending}" Margin="2,0,0,0" />
                 <ScrollViewer MaxHeight="210" VerticalScrollBarVisibility="Auto" IsVisible="{Binding HasPending}">
@@ -96,7 +130,7 @@
             <StackPanel Orientation="Horizontal" Spacing="7" Margin="6,0,0,0">
               <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Verde}" IsVisible="{Binding IsAdmin}" />
               <PathIcon Data="{StaticResource IcAlert}" Classes="small" Foreground="{StaticResource Laranja}" IsVisible="{Binding !IsAdmin}" />
-              <TextBlock FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="196">
+              <TextBlock Classes="wide" FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="196">
                 <Run Text="{Binding AdminText}" /><Run Text=" · " /><Run Text="{Binding Version}" />
               </TextBlock>
             </StackPanel>
@@ -106,22 +140,23 @@
             <ItemsControl ItemsSource="{Binding Nav}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:NavGroup">
-                  <StackPanel Margin="0,0,0,16">
-                    <TextBlock Classes="section" Text="{Binding Title}" Margin="12,0,0,6" />
+                  <StackPanel Classes="navgroup" Margin="0,0,0,16">
+                    <TextBlock Classes="section wide" Text="{Binding Title}" Margin="12,0,0,6" TextTrimming="CharacterEllipsis" />
                     <ItemsControl ItemsSource="{Binding Items}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:NavItem">
                           <Panel>
-                            <Button Classes="nav" Classes.active="{Binding IsActive}" Command="{Binding Go}">
+                            <Button Classes="nav" Classes.active="{Binding IsActive}" Command="{Binding Go}" ToolTip.Tip="{Binding Title}" ToolTip.Placement="Right">
                               <StackPanel Orientation="Horizontal" Spacing="11">
                                 <PathIcon Data="{Binding Icon}" Width="17" Height="17" />
-                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                <TextBlock Classes="wide" Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                               </StackPanel>
                             </Button>
                             <Border Classes="navmark" Classes.on="{Binding IsActive}" />
                             <!-- a coroa marca as telas cuja ação principal é do Premium -->
-                            <PathIcon Data="{StaticResource IcCrown}" Width="12" Height="12" Foreground="#A6FBC501" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                      Margin="0,0,12,0" IsHitTestVisible="False" IsVisible="{Binding Locked}" />
+                            <Panel Classes="wide" HorizontalAlignment="Right" VerticalAlignment="Center" IsHitTestVisible="False">
+                              <PathIcon Data="{StaticResource IcCrown}" Width="12" Height="12" Foreground="#A6FBC501" Margin="0,0,12,0" IsVisible="{Binding Locked}" />
+                            </Panel>
                           </Panel>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
@@ -140,7 +175,7 @@
           <c:UsageRing Width="14" Height="14" Thickness="2.5" Indeterminate="True" />
           <TextBlock Text="{Binding LoadingText}" FontSize="12" Foreground="{StaticResource Apagado}" />
         </StackPanel>
-        <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="30,0,30,26" />
+        <ContentControl x:Name="PageHost" Grid.Row="1" Content="{Binding CurrentPage}" Margin="30,0,30,26" />
       </Grid>
     </Grid>
 

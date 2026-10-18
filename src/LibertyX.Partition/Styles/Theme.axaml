@@ -2,6 +2,7 @@
 
   <!-- ───────── tipografia ───────── -->
   <Style Selector="TextBlock.h1">
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="FontSize" Value="28" />
     <Setter Property="FontWeight" Value="ExtraBold" />
     <Setter Property="LetterSpacing" Value="-0.7" />
@@ -27,6 +28,7 @@
     <Setter Property="Foreground" Value="{StaticResource Tenue}" />
   </Style>
   <Style Selector="TextBlock.muted">
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{StaticResource Apagado}" />
     <Setter Property="FontSize" Value="13" />
   </Style>
@@ -381,6 +383,8 @@
     <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style Selector="PathIcon.tree"><Setter Property="Foreground" Value="{StaticResource Ouro}" /></Style>
+  <!-- tabelas: célula estreita corta com "…" em vez de invadir a vizinha -->
+  <Style Selector="Grid.tbl TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis" /></Style>
   <Style Selector="PathIcon.del"><Setter Property="Foreground" Value="{StaticResource Laranja}" /></Style>
   <Style Selector="Border.premiumchip"><Setter Property="Background" Value="{StaticResource OuroGradiente}" /></Style>
   <Style Selector="Border.premiumchip > TextBlock"><Setter Property="Foreground" Value="{StaticResource SobreOuro}" /></Style>

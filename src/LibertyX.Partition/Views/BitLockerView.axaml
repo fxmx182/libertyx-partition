@@ -36,7 +36,7 @@
                 <TextBlock Text="{Binding Detail}" Classes="faint" TextWrapping="Wrap" />
                 <WrapPanel>
                   <Button Content="Desbloquear" Command="{Binding Unlock}" IsVisible="{Binding Locked}" Classes="primary" Margin="0,0,8,8" />
-                  <Button Content="Bloquear" Command="{Binding LockCmd}" IsVisible="{Binding Unlocked}" Margin="0,0,8,8" Classes.hidden="{Binding Decrypted}" />
+                  <Button Content="Bloquear" Command="{Binding LockCmd}" IsVisible="{Binding CanLock}" Margin="0,0,8,8" />
                   <Button Content="Chave de recuperação" Command="{Binding Keys}" IsVisible="{Binding Encrypted}" Margin="0,0,8,8" />
                   <Button Content="Desativar" Command="{Binding Disable}" IsVisible="{Binding Encrypted}" Margin="0,0,8,8" />
                   <Button Content="Ativar BitLocker" Command="{Binding Enable}" IsVisible="{Binding Decrypted}" Classes="primary" Margin="0,0,8,8" />

@@ -4,7 +4,8 @@
       <TextBlock Classes="h1" Text="Saúde e propriedades" />
       <TextBlock Classes="muted" Text="O que o próprio disco relata sobre si: S.M.A.R.T. (SATA) ou o log de saúde (NVMe)." />
     </StackPanel>
-    <Grid ColumnDefinitions="330,24,*">
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="0.8*" MinWidth="250" MaxWidth="330" /><ColumnDefinition Width="20" /><ColumnDefinition Width="*" MinWidth="320" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="10">
           <TextBlock Classes="section" Text="DISCO" />

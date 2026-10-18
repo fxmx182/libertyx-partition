@@ -4,19 +4,29 @@
              xmlns:c="using:LibertyX.Partition.Controls"
              x:Class="LibertyX.Partition.Views.DisksPageView"
              x:DataType="vm:DisksPageViewModel">
-  <Grid ColumnDefinitions="*,24,348">
-    <DockPanel>
+  <UserControl.Styles>
+    <!-- coluna estreita: botões só com ícone, e cada partição em duas linhas em vez da tabela de 7 colunas -->
+    <Style Selector="StackPanel.rownarrow"><Setter Property="IsVisible" Value="False" /></Style>
+    <ContainerQuery Name="discos" Query="max-width:640">
+      <Style Selector="TextBlock.btnlabel"><Setter Property="IsVisible" Value="False" /></Style>
+      <Style Selector="Grid.rowwide"><Setter Property="IsVisible" Value="False" /></Style>
+      <Style Selector="StackPanel.rownarrow"><Setter Property="IsVisible" Value="True" /></Style>
+    </ContainerQuery>
+  </UserControl.Styles>
+  <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="348" /></Grid.ColumnDefinitions>
+    <DockPanel Container.Name="discos" Container.Sizing="Width">
       <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,18">
         <StackPanel>
           <TextBlock Classes="h1" Text="Discos e partições" />
           <TextBlock Classes="muted" Text="{Binding Summary}" Margin="0,2,0,0" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenImageCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcDisc}" Classes="small" /><TextBlock Text="Abrir imagem de disco" /></StackPanel>
+          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenImageCommand}" ToolTip.Tip="Abrir imagem de disco">
+            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcDisc}" Classes="small" /><TextBlock Classes="btnlabel" Text="Abrir imagem de disco" /></StackPanel>
           </Button>
-          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RefreshCommand}">
-            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Text="Atualizar" /></StackPanel>
+          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RefreshCommand}" ToolTip.Tip="Atualizar">
+            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Classes="btnlabel" Text="Atualizar" /></StackPanel>
           </Button>
         </StackPanel>
       </Grid>
@@ -37,11 +47,10 @@
                         <PathIcon Data="{Binding Icon}" Width="20" Height="20" Foreground="{StaticResource Ouro}" />
                       </Panel>
                       <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                          <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="ExtraBold" LetterSpacing="-0.3" Foreground="{StaticResource Texto}" />
-                          <TextBlock Text="{Binding Model}" FontSize="14" FontWeight="Medium" Foreground="{StaticResource Apagado}" VerticalAlignment="Bottom" />
-                        </StackPanel>
-                        <TextBlock Text="{Binding Info}" FontSize="12.5" Foreground="{StaticResource Tenue}" Margin="0,2,0,0" />
+                        <TextBlock TextTrimming="CharacterEllipsis" Margin="0,0,8,0">
+                          <Run Text="{Binding Title}" FontSize="17" FontWeight="ExtraBold" Foreground="{StaticResource Texto}" /><Run Text="   " /><Run Text="{Binding Model}" FontSize="14" FontWeight="Medium" Foreground="{StaticResource Apagado}" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding Info}" FontSize="12.5" Foreground="{StaticResource Tenue}" Margin="0,2,8,0" TextTrimming="CharacterEllipsis" />
                       </StackPanel>
                       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <Border Classes="chip orange" IsVisible="{Binding HasPending}"><TextBlock Text="{Binding PendingText}" /></Border>
@@ -62,7 +71,7 @@
                   <c:PartitionRibbon Items="{Binding Partitions}" />
 
                   <StackPanel Spacing="2">
-                    <Grid ColumnDefinitions="2.1*,0.95*,0.95*,0.95*,0.9*,2.2*,1.4*" Margin="12,0,12,4">
+                    <Grid Classes="tbl rowwide" ColumnDefinitions="2.1*,0.95*,0.95*,0.95*,0.9*,2.2*,1.4*" Margin="12,0,12,4">
                       <TextBlock Classes="section" Text="PARTIÇÃO" />
                       <TextBlock Grid.Column="1" Classes="section" Text="TAMANHO" HorizontalAlignment="Right" />
                       <TextBlock Grid.Column="2" Classes="section" Text="USADO" HorizontalAlignment="Right" />
@@ -75,7 +84,18 @@
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:PartitionVM">
                           <Button Classes="action" Classes.sel="{Binding IsSelected}" Command="{Binding SelectCommand}" HorizontalContentAlignment="Stretch" Padding="12,8">
-                            <Grid ColumnDefinitions="2.1*,0.95*,0.95*,0.95*,0.9*,2.2*,1.4*">
+                            <Panel>
+                            <StackPanel Classes="rownarrow" Spacing="2">
+                              <Grid ColumnDefinitions="Auto,*,Auto">
+                                <Border Width="4" Height="16" CornerRadius="2" Background="{Binding ColorBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis"><Run Text="{Binding Name}" FontWeight="Bold" /><Run Text="  " /><Run Text="{Binding LabelText}" Foreground="{StaticResource Apagado}" /></TextBlock>
+                                <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" Margin="8,0,0,0" />
+                              </Grid>
+                              <TextBlock Margin="14,0,0,0" FontSize="12" Foreground="{StaticResource Apagado}" TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding FsText}" FontWeight="SemiBold" Foreground="{StaticResource Texto}" /><Run Text=" · " /><Run Text="{Binding UsedText}" /><Run Text=" usado · " /><Run Text="{Binding TypeText}" />
+                              </TextBlock>
+                            </StackPanel>
+                            <Grid Classes="tbl rowwide" ColumnDefinitions="2.1*,0.95*,0.95*,0.95*,0.9*,2.2*,1.4*">
                               <StackPanel Orientation="Horizontal" Spacing="10">
                                 <Border Width="4" Height="16" CornerRadius="2" Background="{Binding ColorBrush}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Name}" FontWeight="Bold" MinWidth="34" />
@@ -88,6 +108,7 @@
                               <TextBlock Grid.Column="5" Text="{Binding TypeText}" Foreground="{StaticResource Apagado}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
                               <TextBlock Grid.Column="6" Text="{Binding StatusText}" Foreground="{StaticResource Apagado}" TextTrimming="CharacterEllipsis" />
                             </Grid>
+                            </Panel>
                           </Button>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>

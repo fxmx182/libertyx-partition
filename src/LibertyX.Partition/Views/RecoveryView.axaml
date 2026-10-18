@@ -11,14 +11,17 @@
         <TextBlock Classes="h1" Text="Recuperar dados" />
         <TextBlock Classes="muted" Text="Arquivos apagados, Lixeira esvaziada, partição formatada, RAW ou que o Windows pede para formatar." />
       </StackPanel>
-      <Grid ColumnDefinitions="*,24,370">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="370" /></Grid.ColumnDefinitions>
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
           <StackPanel Spacing="10">
             <TextBlock Classes="section" Text="ONDE PROCURAR" />
             <ContentControl Content="{Binding Picker}" />
           </StackPanel>
         </ScrollViewer>
-        <Border Grid.Column="2" Classes="card" VerticalAlignment="Top">
+        <!-- rola em janelas baixas: o botão de procurar nunca fica escondido -->
+        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+        <Border Classes="card" VerticalAlignment="Top">
           <StackPanel Spacing="12">
             <TextBlock Classes="section" Text="COMO PROCURAR" />
             <Border Classes="option">
@@ -62,6 +65,7 @@
             </Button>
           </StackPanel>
         </Border>
+        </ScrollViewer>
       </Grid>
     </DockPanel>
 
@@ -126,7 +130,8 @@
           </Button>
         </Grid>
       </Border>
-      <Grid ColumnDefinitions="290,12,*,12,340">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="0.75*" MinWidth="180" MaxWidth="300" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" MinWidth="280" /><ColumnDefinition Width="12" /><ColumnDefinition Width="0.85*" MinWidth="220" MaxWidth="360" /></Grid.ColumnDefinitions>
         <Border Classes="glass" Padding="8">
           <TreeView ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedFolder}">
             <TreeView.Styles>

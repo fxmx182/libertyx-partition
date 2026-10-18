@@ -4,7 +4,8 @@
       <TextBlock Classes="h1" Text="Limpar disco" />
       <TextBlock Classes="muted" Text="Sobrescreve cada setor: para vender, doar ou descartar um disco sem deixar nada recuperável." />
     </StackPanel>
-    <Grid ColumnDefinitions="*,24,400">
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="400" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="10"><TextBlock Classes="section" Text="O QUE LIMPAR" /><ContentControl Content="{Binding Picker}" /></StackPanel>
       </ScrollViewer>

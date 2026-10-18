@@ -24,9 +24,11 @@ public sealed partial class SurfaceViewModel : PageViewModel
     public const int CellCount = 2400;
     [ObservableProperty] private byte[] _cells = new byte[CellCount];
     [ObservableProperty] private int _version;
-    [ObservableProperty] private bool _running;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanSaveReport))] private bool _running;
     [ObservableProperty] private bool _paused;
-    [ObservableProperty] private bool _hasRun;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanSaveReport))] private bool _hasRun;
+    /// <summary>Uma propriedade só: IsVisible + classe "hidden" juntos não se combinam (o IsVisible vence).</summary>
+    public bool CanSaveReport => HasRun && !Running;
     [ObservableProperty] private double _fraction;
     [ObservableProperty] private string _speed = "—";
     [ObservableProperty] private string _elapsed = "";

@@ -4,7 +4,8 @@
       <TextBlock Classes="h1" Text="Alinhar partições" />
       <TextBlock Classes="muted" Text="Partições criadas por Windows XP, clonagens antigas ou alguns programas começam fora do limite de 1 MB." />
     </StackPanel>
-    <Grid ColumnDefinitions="340,24,*">
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="0.8*" MinWidth="250" MaxWidth="340" /><ColumnDefinition Width="20" /><ColumnDefinition Width="*" MinWidth="320" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="10"><TextBlock Classes="section" Text="DISCO" /><ContentControl Content="{Binding Picker}" /></StackPanel>
       </ScrollViewer>

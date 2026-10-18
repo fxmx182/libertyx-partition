@@ -18,7 +18,8 @@ AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOp
 
 foreach (var i in images) DiskSystem.AttachedImages.Add(Path.GetFullPath(i));
 var vm = new MainViewModel();
-var w = new MainWindow { DataContext = vm, Width = 1440, Height = 900 };
+var size = (Environment.GetEnvironmentVariable("LX_SNAP_SIZE") ?? "1440x900").Split('x').Select(double.Parse).ToArray();
+var w = new MainWindow { DataContext = vm, Width = size[0], Height = size[1], MinWidth = 0, MinHeight = 0 };
 w.Show();
 vm.Start([]);
 

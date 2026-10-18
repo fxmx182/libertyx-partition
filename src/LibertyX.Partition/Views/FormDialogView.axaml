@@ -4,8 +4,8 @@
              x:Class="LibertyX.Partition.Views.FormDialogView"
              x:DataType="vm:FormDialogViewModel">
   <Border Width="560" Background="#F2141318" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="24" Padding="28,26" BoxShadow="0 24 60 0 #A0000000">
-    <StackPanel Spacing="18">
-      <Grid ColumnDefinitions="Auto,*">
+    <DockPanel>
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,18">
         <Border Width="44" Height="44" CornerRadius="14" Background="#1FFBC501" BorderBrush="#40FBC501" BorderThickness="1" Classes.dangerbox="{Binding Danger}">
           <PathIcon Data="{Binding Icon}" Width="22" Height="22" Foreground="{StaticResource Ouro}" />
         </Border>
@@ -15,7 +15,17 @@
         </StackPanel>
       </Grid>
 
-      <ScrollViewer MaxHeight="520" VerticalScrollBarVisibility="Auto">
+      <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,18,0,0">
+        <Button Classes="ghost" Content="{Binding CancelText}" Command="{Binding CancelCommand}" />
+        <Button Classes.primary="{Binding !Danger}" Classes.danger="{Binding Danger}" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" IsEnabled="{Binding CanConfirm}" MinWidth="120" HorizontalContentAlignment="Center" />
+      </StackPanel>
+      <Border DockPanel.Dock="Bottom" Margin="0,14,0,0" Classes="notice danger" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding Error}" TextWrapping="Wrap" />
+      </Border>
+
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="18">
+      <Panel>
         <ItemsControl ItemsSource="{Binding Fields}">
           <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="14" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
           <ItemsControl.DataTemplates>
@@ -76,7 +86,7 @@
             </DataTemplate>
           </ItemsControl.DataTemplates>
         </ItemsControl>
-      </ScrollViewer>
+      </Panel>
 
       <StackPanel Spacing="6" IsVisible="{Binding PhraseRequired}">
         <TextBlock FontSize="12.5" Foreground="{StaticResource Apagado}">
@@ -85,14 +95,8 @@
         <TextBox Text="{Binding Typed}" />
       </StackPanel>
 
-      <Border Classes="notice danger" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-        <TextBlock Text="{Binding Error}" TextWrapping="Wrap" />
-      </Border>
-
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
-        <Button Classes="ghost" Content="{Binding CancelText}" Command="{Binding CancelCommand}" />
-        <Button Classes.primary="{Binding !Danger}" Classes.danger="{Binding Danger}" Content="{Binding ConfirmText}" Command="{Binding ConfirmCommand}" IsEnabled="{Binding CanConfirm}" MinWidth="120" HorizontalContentAlignment="Center" />
       </StackPanel>
-    </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
   </Border>
 </UserControl>

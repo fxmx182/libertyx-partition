@@ -85,4 +85,9 @@ public static class Conv
 {
     public static readonly Avalonia.Data.Converters.IValueConverter Size =
         new Avalonia.Data.Converters.FuncValueConverter<long, string>(v => Fmt.Size(v));
+    /// <summary>Janela de operação em tela baixa: o anel e o registro encolhem para os botões caberem.</summary>
+    public static readonly Avalonia.Data.Converters.IValueConverter RingSize =
+        new Avalonia.Data.Converters.FuncValueConverter<double, double>(h => h < 760 ? 120 : 176);
+    public static readonly Avalonia.Data.Converters.IValueConverter LogHeight =
+        new Avalonia.Data.Converters.FuncValueConverter<double, double>(h => Math.Clamp(h - 600, 70, 150));
 }

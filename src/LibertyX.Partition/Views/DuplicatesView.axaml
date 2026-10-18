@@ -20,11 +20,11 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <Button Content="Adicionar pasta…" Command="{Binding AddFolderCommand}" />
-            <ComboBox ItemsSource="{Binding MinSizes}" SelectedIndex="{Binding MinIndex}" Width="190" />
-            <ComboBox ItemsSource="{Binding Kinds}" SelectedIndex="{Binding KindIndex}" Width="170" />
-          </StackPanel>
+          <WrapPanel>
+            <Button Content="Adicionar pasta…" Command="{Binding AddFolderCommand}" Margin="0,0,10,6" />
+            <ComboBox ItemsSource="{Binding MinSizes}" SelectedIndex="{Binding MinIndex}" Width="170" Margin="0,0,10,6" />
+            <ComboBox ItemsSource="{Binding Kinds}" SelectedIndex="{Binding KindIndex}" Width="160" Margin="0,0,10,6" />
+          </WrapPanel>
         </StackPanel>
         <Panel Grid.Column="2" VerticalAlignment="Center">
           <Button Classes="primary" Command="{Binding FindCommand}" IsVisible="{Binding !Busy}" Padding="20,11">

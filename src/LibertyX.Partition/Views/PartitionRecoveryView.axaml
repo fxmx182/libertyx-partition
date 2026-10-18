@@ -10,7 +10,8 @@
         <TextBlock Classes="h1" Text="Recuperar partição" />
         <TextBlock Classes="muted" Text="Partição excluída, disco que aparece como “não inicializado” ou “não alocado”, tabela corrompida." />
       </StackPanel>
-      <Grid ColumnDefinitions="*,24,370">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="370" /></Grid.ColumnDefinitions>
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Spacing="10">
             <TextBlock Classes="section" Text="EM QUAL DISCO" />

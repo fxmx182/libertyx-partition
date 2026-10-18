@@ -5,7 +5,8 @@
       <TextBlock Classes="muted" Text="{Binding Description}" TextWrapping="Wrap" />
     </StackPanel>
     <Border DockPanel.Dock="Bottom" Classes="glass" Padding="20,16" Margin="0,14,0,0" IsVisible="{Binding HasPlan}">
-      <Grid ColumnDefinitions="*,24,330">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="330" /></Grid.ColumnDefinitions>
         <StackPanel Spacing="10">
           <TextBlock Classes="section" Text="ORIGEM" />
           <c:PartitionRibbon Items="{Binding SourceMap}" Compact="True" />

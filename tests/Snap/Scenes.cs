@@ -10,6 +10,27 @@ public static class Scenes
         PartitionVM Part(FsKind fs) => disks.Disks.SelectMany(d => d.Partitions).First(p => p.P.FileSystem == fs);
         switch (scene)
         {
+            case "superficie":
+                vm.Navigate("superficie");
+                var sv = vm.Page<SurfaceViewModel>("superficie");
+                pump(500);
+                sv.Picker.Select(vm.Disks[0], null);
+                pump(300);
+                _ = sv.StartCommand.ExecuteAsync(null);
+                pump(150);
+                snap("23-superficie-rodando");
+                wait(() => sv.Running, 60000);
+                snap("24-superficie-fim");
+                break;
+            case "todas":
+                int k = 30;
+                foreach (var key in new[] { "discos", "premium", "recuperar", "particoes", "imagem", "superficie", "saude", "migrar", "copiar-disco", "copiar-particao", "converter", "alinhar", "limpar", "excluir-todas", "bitlocker", "benchmark", "espaco", "duplicados", "boot" })
+                {
+                    vm.Navigate(key, vm.Disks.FirstOrDefault());
+                    pump(600);
+                    snap($"{k++}-{key}");
+                }
+                break;
             case "premium":
                 vm.Navigate("premium");
                 snap("20-premium");

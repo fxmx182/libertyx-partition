@@ -19,6 +19,7 @@ public sealed partial class BitLockerRow(WinCommands.BitLockerInfo i, BitLockerV
     public bool Unlocked => !Locked;
     public bool Encrypted => !I.Status.Contains("FullyDecrypted", StringComparison.OrdinalIgnoreCase);
     public bool Decrypted => !Encrypted;
+    public bool CanLock => Unlocked && Encrypted;
     public string StatusText => I.Status switch
     {
         "FullyEncrypted" => "Criptografado", "FullyDecrypted" => "Sem BitLocker", "EncryptionInProgress" => $"Criptografando… {I.Percent}%",
