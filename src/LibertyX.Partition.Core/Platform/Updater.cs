@@ -36,7 +36,29 @@ public static partial class Updater
     [GeneratedRegex(@"Versão 1\.0\.(\d+)")] private static partial Regex VersionRx();
     [GeneratedRegex(@"Novidades: (.+)")] private static partial Regex NotesRx();
 
-    public static async Task<Info?> Check(CancellationToken ct = default)
+    public static async Task<Info?> Check(CancellationToken ct = default) => await CheckFile(ct) ?? await CheckApi(ct);
+
+    /// <summary>
+    /// O versao.txt que o CI publica junto: download direto, sem o limite de 60 consultas por hora
+    /// da API do GitHub (que redes compartilhadas e os próprios servidores do CI estouram).
+    /// </summary>
+    private static async Task<Info?> CheckFile(CancellationToken ct)
+    {
+        try
+        {
+            using var http = NewHttp();
+            string txt = await http.GetStringAsync($"https://github.com/{Repo}/releases/download/latest/versao.txt", ct);
+            var kv = txt.Split('\n').Select(l => l.Split('=', 2)).Where(p => p.Length == 2).ToDictionary(p => p[0].Trim(), p => p[1].Trim());
+            if (!kv.TryGetValue("versao", out var v) || !v.StartsWith("1.0.") || !int.TryParse(v[4..], out int build)) return null;
+            string baseUrl = $"https://github.com/{Repo}/releases/download/latest/";
+            long.TryParse(kv.GetValueOrDefault("tamanho"), out long size);
+            return new Info(build, v, baseUrl + kv.GetValueOrDefault("setup", "LibertyXPartition-Setup.exe"), size,
+                            baseUrl + kv.GetValueOrDefault("portatil", "LibertyXPartition.exe"), kv.GetValueOrDefault("novidades", ""));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { return null; }
+    }
+
+    private static async Task<Info?> CheckApi(CancellationToken ct)
     {
         try
         {

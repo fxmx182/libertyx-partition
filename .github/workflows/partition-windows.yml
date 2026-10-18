@@ -113,4 +113,7 @@ jobs:
           $novidade = (git log -1 --pretty=%s).Trim()
           if ($novidade.Length -gt 400) { $novidade = $novidade.Substring(0, 400) + "…" }
           $notes = "Versão 1.0.${{ github.run_number }}, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nNovidades: $novidade`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"
-          gh release create latest dist/LibertyXPartition-Setup.exe dist/LibertyXPartition.exe --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease
+          # versao.txt: o app confere atualização por download direto (a API do GitHub limita a 60/h por IP)
+          $tam = (Get-Item dist/LibertyXPartition-Setup.exe).Length
+          "versao=1.0.${{ github.run_number }}`ncommit=$sha`nsetup=LibertyXPartition-Setup.exe`ntamanho=$tam`nportatil=LibertyXPartition.exe`nnovidades=$novidade" | Set-Content -Encoding utf8NoBOM dist/versao.txt
+          gh release create latest dist/LibertyXPartition-Setup.exe dist/LibertyXPartition.exe dist/versao.txt --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease
