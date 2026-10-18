@@ -53,8 +53,15 @@ FAT32 UEFI+BIOS com install.wim dividido, ou gravação DD).
 
 O CI (`.github/workflows/partition-windows.yml`) compila num runner Windows, roda o autoteste
 num disco virtual (inicializa, cria NTFS, apaga e recupera, reduz, move, alinha, converte,
-troca série, formata FAT32, faz imagem, exclui tudo, acha e restaura, limpa) e publica o
-.exe em [`releases/download/latest/LibertyXPartition.exe`](https://github.com/fxmx182/libertyx-partition/releases/download/latest/LibertyXPartition.exe).
+troca série, formata FAT32, faz imagem, exclui tudo, acha e restaura, limpa), monta o
+instalador (Inno Setup, `installer/`), testa instalar e desinstalar em silêncio, e publica:
+
+- **Instalador** (recomendado): [`LibertyXPartition-Setup.exe`](https://github.com/fxmx182/libertyx-partition/releases/download/latest/LibertyXPartition-Setup.exe)
+  — Arquivos de Programas, Menu Iniciar, atalho na área de trabalho, desinstalação em
+  "Aplicativos instalados"; a versão nova atualiza por cima.
+- **Portátil**: [`LibertyXPartition.exe`](https://github.com/fxmx182/libertyx-partition/releases/download/latest/LibertyXPartition.exe) — roda sem instalar (bom para levar num pendrive).
+
+As artes do instalador saem de `Scripts/instalador.py`.
 
 ## Família LibertyX
 

@@ -40,7 +40,7 @@ jobs:
         run: |
           dotnet publish src/LibertyX.Partition/LibertyX.Partition.csproj -c Release -r win-x64 --self-contained true `
             -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
-            -p:DebugType=none -p:SourceRevisionId=${{ github.sha }} -o dist 2>&1 | Tee-Object build.log
+            -p:DebugType=none -p:SourceRevisionId=${{ github.sha }} -p:Version=1.0.${{ github.run_number }} -o dist 2>&1 | Tee-Object build.log
           if (-not (Test-Path dist/LibertyXPartition.exe)) {
             $errs = (Select-String -Path build.log -Pattern ' error ' | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique) -join "`n"
             $enc = $errs.Replace('%','%25').Replace("`r",'').Replace("`n",'%0A')
@@ -71,6 +71,28 @@ jobs:
           Write-Output ("::notice title=Resumo::" + ($res.Replace('%','%25').Replace("`r",'').Replace("`n",'%0A')))
           exit $p.ExitCode
 
+      # O instalador (Inno Setup): Arquivos de Programas, atalhos, desinstalação e atualização
+      # por cima. É testado de verdade aqui: instala em silêncio, confere, desinstala, confere.
+      - name: Montar e testar o instalador
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Q "/DVersion=1.0.${{ github.run_number }}" installer\LibertyXPartition.iss
+          if (-not (Test-Path dist\LibertyXPartition-Setup.exe)) { Write-Output "::error title=Instalador::o ISCC não gerou o Setup"; exit 1 }
+          Get-Item dist\LibertyXPartition-Setup.exe | Format-List Name, Length
+          $p = Start-Process dist\LibertyXPartition-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=desktopicon' -Wait -PassThru
+          $exe = "$env:ProgramFiles\LibertyX Partition\LibertyXPartition.exe"
+          $menu = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\LibertyX Partition.lnk"
+          $desk = "$env:PUBLIC\Desktop\LibertyX Partition.lnk"
+          $reg = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' | Where-Object { $_.DisplayName -eq 'LibertyX Partition' }
+          $ok = ($p.ExitCode -eq 0) -and (Test-Path $exe) -and (Test-Path $menu) -and (Test-Path $desk) -and $reg
+          Write-Output "::notice title=Instalador::instalou=$($p.ExitCode) exe=$(Test-Path $exe) menu=$(Test-Path $menu) desktop=$(Test-Path $desk) versão=$($reg.DisplayVersion)"
+          if (-not $ok) { Write-Output "::error title=Instalador::a instalação silenciosa não deixou tudo no lugar"; exit 1 }
+          $u = Start-Process $reg.UninstallString.Trim('"') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          Start-Sleep -Seconds 3
+          if ((Test-Path $exe) -or (Test-Path $menu)) { Write-Output "::error title=Instalador::a desinstalação deixou arquivos"; exit 1 }
+          Write-Output "::notice title=Instalador::desinstalou=$($u.ExitCode), nada sobrou"
+
       - name: Guardar o relatório
         if: always()
         uses: actions/upload-artifact@v4
@@ -86,5 +108,6 @@ jobs:
         run: |
           gh release delete latest --yes --cleanup-tag 2>$null
           $sha = "${{ github.sha }}".Substring(0,7)
-          $notes = "Compilado de $sha e aprovado no autoteste num disco virtual do Windows.`n`nBaixe e execute (pede administrador): https://github.com/${{ github.repository }}/releases/download/latest/LibertyXPartition.exe"
-          gh release create latest dist/LibertyXPartition.exe --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease
+          $base = "https://github.com/${{ github.repository }}/releases/download/latest"
+          $notes = "Versão 1.0.${{ github.run_number }}, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"
+          gh release create latest dist/LibertyXPartition-Setup.exe dist/LibertyXPartition.exe --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease
