@@ -21,7 +21,8 @@ public sealed partial class PartitionVM : ObservableObject
     public string SizeText => Fmt.Size(P.Length);
     public string UsedText => P.IsUnallocated ? "—" : Fmt.Size(P.Used);
     public string FreeText => P.IsUnallocated ? Fmt.Size(P.Length) : Fmt.Size(P.Free);
-    public string FsText => P.IsUnallocated ? "—" : P.FsVariant ?? FsDetect.Name(P.FileSystem);
+    // "RAW" é como o Windows chama o volume sem sistema de arquivos reconhecido (e cabe na coluna)
+    public string FsText => P.IsUnallocated ? "—" : P.FsVariant ?? (P.FileSystem == FsKind.Unknown ? "RAW" : FsDetect.Name(P.FileSystem));
     public string TypeText => P.TypeText;
     public string StatusText => P.StatusText;
     public double UsedFraction => P.Used is { } u && P.Length > 0 ? Math.Clamp((double)u / P.Length, 0, 1) : 0;

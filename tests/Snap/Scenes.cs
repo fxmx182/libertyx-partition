@@ -41,7 +41,7 @@ public static class Scenes
                 break;
             case "dialogo":
                 vm.Navigate("discos");
-                var f = new FormDialogViewModel { Title = "Formatar partição", IconKey = "Format", Subtitle = "DADOS · 120 MB", ConfirmText = "Formatar", Danger = true, ConfirmPhrase = "FORMATAR" };
+                var f = new FormDialogViewModel { Title = "Formatar partição", IconKey = "Format", Subtitle = "DADOS · 120 MB", ConfirmText = "Formatar", Danger = true };
                 var c = f.Add(new ChoiceField { Label = "Sistema de arquivos" }); c.Options.Add("NTFS"); c.Options.Add("exFAT");
                 f.Add(new TextField { Label = "Rótulo", Value = "DADOS" });
                 f.Add(new SizeField { Label = "Tamanho", MinMb = 16, MaxMb = 1000, ValueMb = 500, Caption = "Livre depois: 500 MB" });

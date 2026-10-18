@@ -21,7 +21,10 @@ public static class WinCommands
     public static async Task<CommandResult> PowerShell(string script, CancellationToken ct = default, Action<string>? onLine = null)
     {
         string full = "$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;" +
-                      "try{" + script + "}catch{[Console]::Error.WriteLine($_.Exception.Message);exit 1}";
+                      "try{" + script + "}catch{$m=$_.Exception.Message;" +
+                      // os cmdlets de Storage devolvem só "Failed": o motivo de verdade vem no ErrorData do CIM
+                      "try{$d=$_.Exception.ErrorData;if($d){foreach($n in 'MessageId','Message','ErrorDescription'){$v=$d.CimInstanceProperties[$n].Value;if($v -and \"$v\" -ne $m){$m+=' · '+$v}}}}catch{};" +
+                      "[Console]::Error.WriteLine($m);exit 1}";
         string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(full));
         return await Run("powershell.exe", $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}", ct, onLine);
     }
@@ -107,6 +110,18 @@ public static class WinCommands
         string s = $"{PartSel(disk, offset)} | Format-Volume -FileSystem {fs} -NewFileSystemLabel {Q(label)} -Confirm:$false -Force -Full:${(!quick).ToString().ToLowerInvariant()}";
         if (cluster > 0) s += $" -AllocationUnitSize {cluster}";
         return PowerShell(s + " | Out-Null", ct);
+    }
+
+    /// <summary>
+    /// O format clássico do Windows (format.com): plano B quando o Format-Volume recusa — é o que
+    /// o Explorador usa, e aceita cartões e pendrives que o Storage às vezes rejeita.
+    /// </summary>
+    public static Task<CommandResult> FormatCom(char letter, string fs, string label, int cluster, bool quick, CancellationToken ct, Action<string>? onLine = null)
+    {
+        var lab = new string(label.Where(c => c != '"').ToArray());
+        string args = $"format {letter}: /FS:{fs} /V:\"{lab}\" /Y /X" + (quick ? " /Q" : "") + (cluster > 0 ? $" /A:{cluster}" : "");
+        // cartões removíveis pedem ENTER ("insira o disco novo"): responde sozinho
+        return Cmd(args, ct, onLine, "\r\n\r\n");
     }
 
     public static Task<CommandResult> AssignTemporaryLetter(int disk, long offset)

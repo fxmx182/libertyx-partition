@@ -71,12 +71,7 @@ public static partial class ActionsBuilder
             var q = MainViewModel.FreshPart(p);
             await Exec(async s =>
         {
-            if (Win && !q.Disk.IsImage && !(fsName == "FAT32" && bytes > 32L << 30))
-            {
-                var r = await WinCommands.CreatePartition(q.Disk.Number, start, bytes, null, null, fsName, label.Value, 0, letter.Value, s.Token);
-                Ensure(r, "Criar partição");
-                return;
-            }
+            if (Win && !q.Disk.IsImage) { await CreateOnWindows(q.Disk, start, bytes, fsName, label.Value, letter.Value, s); return; }
             var t = q.Disk.Table.Clone();
             var e = new PartitionEntry { StartLba = start / q.Disk.SectorSize, SectorCount = bytes / q.Disk.SectorSize, Name = label.Value };
             if (t.Style == TableStyle.Gpt) { e.TypeGuid = PartitionTypes.BasicData; e.UniqueGuid = Guid.NewGuid(); }
@@ -393,25 +388,89 @@ public static partial class ActionsBuilder
         Main.Queue("Formatar partição", $"{Who(p)} → {fsList[fs.SelectedIndex]}, rótulo “{label.Value}” — apaga o conteúdo", "Format", async s =>
         {
             var q = MainViewModel.FreshPart(p);
-            await Exec(async s =>
-        {
-            s.Progress(-1, "Formatando");
-            if (fsName == "FAT32" && (q.Disk.IsImage || !Win || q.Length > 32L << 30))
-            {
-                using (var dev = DiskSystem.OpenDisk(q.Disk, true))
-                using (DiskSystem.Native.LockVolumes(q.Disk, [q]))
-                    Fat32Formatter.Format(new SubDevice(dev, q.Offset, q.Length), label.Value, cl, q.StartLba, new Progress<double>(x => s.Progress(x, "Formatando FAT32")));
-                DiskSystem.Native.Rescan(q.Disk);
-                if (q.Disk.Table.Style == TableStyle.Mbr && q.Entry!.MbrType != 0x0C)
-                {
-                    if (Win && !q.Disk.IsImage) await WinCommands.SetMbrType(q.Disk.Number, q.Offset, 0x0C);
-                    else DiskOperations.ChangeTypeRaw(q, null, 0x0C, s);
-                }
-                return;
-            }
-            Ensure(await WinCommands.Format(q.Disk.Number, q.Offset, fsName, label.Value, cl, quick.Value, s.Token), "Formatar");
-        }, s);
+            await FormatRobust(q, fsName, FsLabel(fsName, label.Value), cl, quick.Value, s);
         }, p.Disk, dangerous: true, canPause: false);
+    }
+
+    /// <summary>
+    /// Criar no Windows em dois passos: a partição primeiro e só então a formatação (com planos B).
+    /// Antes era um comando só, e uma recusa do Format-Volume deixava a partição criada e crua.
+    /// </summary>
+    internal static async Task<PartitionInfo?> CreateOnWindows(DiskInfo disk, long start, long bytes, string? fsName, string label, bool letter, OpSink s, int skipWindowsSteps = 0)
+    {
+        byte? mbr = disk.Table.Style == TableStyle.Mbr ? (fsName == "FAT32" ? (byte)0x0C : (byte)0x07) : null;
+        var r = await WinCommands.CreatePartition(disk.Number, start, bytes, null, mbr, null, label, 0, letter, s.Token);
+        Ensure(r, "Criar partição");
+        long off = long.TryParse(r.Output.Trim().Split('\n').LastOrDefault()?.Trim(), out var o) ? o : start;
+        s.Log($"Partição criada em {Fmt.Size(off)}.");
+        PartitionInfo? np = null;
+        for (int i = 0; i < 10 && np == null; i++)
+        {
+            await Task.Delay(700, s.Token);
+            np = MainViewModel.Fresh(disk).Partitions.FirstOrDefault(x => !x.IsUnallocated && x.Offset == off);
+        }
+        if (np == null) throw new InvalidOperationException("A partição foi criada, mas o Windows ainda não a mostra — clique em Atualizar e use Formatar.");
+        if (fsName != null) await FormatRobust(np, fsName, FsLabel(fsName, label), 0, true, s, skipWindowsSteps);
+        return np;
+    }
+
+    /// <summary>FAT e exFAT guardam rótulo de no máximo 11 caracteres — o Windows recusa o resto.</summary>
+    internal static string FsLabel(string fs, string label) => fs is "FAT32" or "exFAT" && label.Length > 11 ? label[..11].TrimEnd() : label;
+
+    /// <summary>
+    /// Formata pelo caminho que funcionar: Format-Volume do Windows; se ele recusar (acontece com
+    /// cartões SD e pendrives), o format clássico; e, para FAT32, o formatador do próprio LibertyX
+    /// (o mesmo que o autoteste prova com o chkdsk). Só desiste se todos falharem, e diz por quê.
+    /// </summary>
+    internal static async Task FormatRobust(PartitionInfo q, string fs, string label, int cluster, bool quick, OpSink s, int skipWindowsSteps = 0)
+    {
+        s.Progress(-1, "Formatando");
+        if (fs == "FAT32" && (q.Disk.IsImage || !Win || q.Length > 32L << 30)) { OwnFat32(q, label, cluster, s); return; }
+        var why = new List<string>();
+        if (skipWindowsSteps < 1)
+        {
+            var r = await WinCommands.Format(q.Disk.Number, q.Offset, fs, label, cluster, quick, s.Token);
+            if (r.Ok) return;
+            why.Add("Format-Volume: " + r.Message);
+            s.Log($"O Format-Volume recusou ({r.Message}). Tentando o format do Windows…");
+        }
+        if (skipWindowsSteps < 2)
+        {
+            var lr = await WinCommands.AssignTemporaryLetter(q.Disk.Number, q.Offset);
+            string letter = lr.Output.Trim();
+            if (lr.Ok && letter.Length == 1 && char.IsLetter(letter[0]))
+            {
+                var f = await WinCommands.FormatCom(letter[0], fs, label, cluster, quick, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
+                if (f.Ok)
+                {
+                    try { if (new DriveInfo(letter + ":\\").DriveFormat.Equals(fs, StringComparison.OrdinalIgnoreCase)) return; } catch { }
+                    why.Add("format: terminou, mas o volume não ficou " + fs);
+                }
+                else why.Add("format: " + f.Message);
+            }
+            else why.Add("letra para o format: " + lr.Message);
+        }
+        if (fs == "FAT32")
+        {
+            s.Log("Formatando FAT32 pelo próprio LibertyX…");
+            OwnFat32(MainViewModel.FreshPart(q), label, cluster, s);
+            return;
+        }
+        throw new InvalidOperationException($"O Windows não conseguiu formatar em {fs}:\n" + string.Join("\n", why) +
+            "\n\nSe for cartão SD, confira a trava lateral de proteção contra gravação. FAT32 funciona sempre — o LibertyX formata sozinho.");
+    }
+
+    private static void OwnFat32(PartitionInfo q, string label, int cluster, OpSink s)
+    {
+        using (var dev = DiskSystem.OpenDisk(q.Disk, true))
+        using (DiskSystem.Native.LockVolumes(q.Disk, [q]))
+            Fat32Formatter.Format(new SubDevice(dev, q.Offset, q.Length), label, cluster, q.StartLba, new Progress<double>(x => s.Progress(x, "Formatando FAT32")));
+        DiskSystem.Native.Rescan(q.Disk);
+        if (q.Disk.Table.Style == TableStyle.Mbr && q.Entry is { } e && e.MbrType != 0x0C)
+        {
+            if (Win && !q.Disk.IsImage) _ = WinCommands.SetMbrType(q.Disk.Number, q.Offset, 0x0C).Result;
+            else DiskOperations.ChangeTypeRaw(q, null, 0x0C, s);
+        }
     }
 
     private static async Task Delete(PartitionVM pv)

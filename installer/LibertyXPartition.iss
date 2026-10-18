@@ -59,3 +59,11 @@ Name: "{autodesktop}\LibertyX Partition"; Filename: "{app}\LibertyXPartition.exe
 [Run]
 ; shellexec: o .exe pede administrador pelo manifesto
 Filename: "{app}\LibertyXPartition.exe"; Description: "{cm:LaunchProgram,LibertyX Partition}"; Flags: nowait postinstall skipifsilent shellexec
+; atualização pelo próprio app (/UPDATE=1): reabre o app no fim
+Filename: "{app}\LibertyXPartition.exe"; Flags: nowait shellexec skipifnotsilent; Check: IsUpdate
+
+[Code]
+function IsUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = '1';
+end;

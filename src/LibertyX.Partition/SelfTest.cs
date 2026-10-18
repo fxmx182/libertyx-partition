@@ -355,6 +355,64 @@ public static class SelfTest
             File.Delete(img); File.Delete(img + ".json");
         });
 
+        // O caminho dos botões do app, num disco MBR como o de um cartão SD: criar em dois passos e
+        // formatar com planos B — cada plano forçado de propósito, e o Windows tem de reconhecer.
+        await Step("VHD: como o app — MBR, criar e formatar (com planos B)", async () =>
+        {
+            d = DiskSystem.Enumerate().First(x => x.Number == n);
+            DiskOperations.Wipe(d, null, WipeMethod.Zeros, sink);
+            d = await Settle(n, x => x.Table.Style == TableStyle.None);
+            var t = new PartitionTable { Style = TableStyle.Mbr, SectorSize = d.SectorSize, DiskSectors = d.Size / d.SectorSize };
+            DiskOperations.WriteTable(d, t, "autoteste", sink);
+            d = await Settle(n, x => x.Table.Style == TableStyle.Mbr);
+            long mb = 1 << 20;
+            // 4 primárias (o MBR não cabe mais sem lógica): os planos B e C são o caminho dos cartões SD
+            var cases = new (string fs, int skip, string how)[]
+            {
+                ("FAT32", 1, "format clássico (plano B)"), ("exFAT", 1, "format clássico (plano B)"),
+                ("FAT32", 2, "formatador do LibertyX (plano C)"), ("NTFS", 0, "Format-Volume"),
+            };
+            long at = mb;
+            foreach (var (fs, skip, how) in cases)
+            {
+                d = DiskSystem.Enumerate().First(x => x.Number == n);
+                var np = await ViewModels.ActionsBuilder.CreateOnWindows(d, at, 80 * mb, fs, "LX" + fs, true, sink, skip);
+                at += 81 * mb;
+                var now = await Settle(n, x => x.Partitions.Any(p => p.Offset == np!.Offset && p.Letter != null));
+                var q = now.Partitions.First(p => p.Offset == np!.Offset);
+                string drv = "";
+                try { drv = q.Letter != null ? new DriveInfo(q.Letter + "\\").DriveFormat : ""; } catch { }
+                Check(string.Equals(drv, fs, StringComparison.OrdinalIgnoreCase), $"criar + formatar {fs} por {how}: Windows monta {q.Letter} como {drv}");
+                if (q.Letter != null)
+                    try { File.WriteAllText($@"{q.Letter}\ok.txt", fs); Check(File.ReadAllText($@"{q.Letter}\ok.txt") == fs, $"{fs} ({how}) grava e lê"); }
+                    catch (Exception ex) { Check(false, $"{fs} ({how}) grava e lê: {ex.Message}"); }
+            }
+            // reformatar uma partição existente (o botão Formatar), trocando o sistema de arquivos
+            d = DiskSystem.Enumerate().First(x => x.Number == n);
+            var first = d.Partitions.First(p => p.Offset == mb);
+            await ViewModels.ActionsBuilder.FormatRobust(first, "exFAT", "REFORMAT", 0, true, sink);
+            var re = await Settle(n, x => x.Partitions.Any(p => p.Offset == mb && p.FileSystem == FsKind.ExFat));
+            Check(re.Partitions.First(p => p.Offset == mb).FileSystem == FsKind.ExFat, "Formatar (Format-Volume): FAT32 → exFAT na partição existente");
+            Check(re.Table.Entries.Count == 4 && re.Table.Style == TableStyle.Mbr, "4 partições no MBR, como o Windows criou");
+        });
+
+        await Step("VHD: lista de discos com limite de tempo", async () =>
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var all = DiskSystem.Enumerate();
+            Check(all.Count >= 2 && sw.Elapsed < TimeSpan.FromSeconds(20), $"{all.Count} discos lidos em {sw.Elapsed.TotalSeconds:0.0}s");
+            int v = Bounded.Run(() => { Thread.Sleep(30000); return 1; }, TimeSpan.FromSeconds(1), -1, out bool slow);
+            Check(slow && v == -1, "uma consulta presa é abandonada no limite, sem travar o app");
+            await Task.CompletedTask;
+        });
+
+        await Step("atualização: acha a versão publicada", async () =>
+        {
+            var u = await Updater.Check();
+            Check(u != null && u.Build > 0 && u.SetupUrl.EndsWith("LibertyXPartition-Setup.exe") && u.SetupSize > 1_000_000,
+                $"release latest lido: versão {u?.Version}, instalador de {Fmt(u?.SetupSize)} (este build: 1.0.{Updater.CurrentBuild})");
+        });
+
         await Step("VHD: limpar disco", async () =>
         {
             d = DiskSystem.Enumerate().First(x => x.Number == n);

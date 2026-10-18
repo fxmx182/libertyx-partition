@@ -71,7 +71,6 @@ public sealed partial class MainViewModel
         int i = 1;
         foreach (var o in ops) f.Add(new InfoField { Label = $"{i++}. {o.Title}", Text = o.Detail });
         f.Note("Feche os programas que usam esses discos. Não desligue o computador durante a execução. A tabela de cada disco é salva antes em Documentos\\LibertyX Partition.", ops.Any(o => o.Dangerous) ? "danger" : "gold");
-        if (ops.Any(o => o.Dangerous)) f.ConfirmPhrase = "CONFIRMAR";
         if (!await ShowDialog(f)) return;
 
         await Run(ops.Count == 1 ? ops[0].Title : $"Aplicando {ops.Count} alterações", async s =>

@@ -23,6 +23,8 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
         public uint Serial;
         public long? Total, Free;
         public List<(int disk, long offset, long length)> Extents = [];
+        /// <summary>As consultas ao volume passaram do limite (mídia com defeito).</summary>
+        public bool NotResponding;
         public string DevicePath => GuidPath.TrimEnd('\\').Replace(@"\\?\", @"\\.\");
         public string? Letter => Paths.FirstOrDefault(p => p.Length == 3 && p[1] == ':')?[..2];
     }
@@ -41,8 +43,6 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
         var res = new List<VolumeData>();
         char* name = stackalloc char[300];
         char* paths = stackalloc char[2048];
-        char* lbl = stackalloc char[261];
-        char* fs = stackalloc char[261];
         IntPtr fh = Native.FindFirstVolumeW(name, 300);
         if (fh == (IntPtr)(-1)) return res;
         try
@@ -55,31 +55,38 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
                     var all = new string(paths, 0, 2048).Split('\0', StringSplitOptions.RemoveEmptyEntries);
                     v.Paths.AddRange(all);
                 }
-                if (Native.GetVolumeInformationW(v.GuidPath, lbl, 261, out uint serial, out _, out _, fs, 261))
-                {
-                    v.Label = new string(lbl);
-                    v.FileSystem = new string(fs);
-                    v.Serial = serial;
-                    if (Native.GetDiskFreeSpaceExW(v.GuidPath, out _, out ulong total, out ulong free)) { v.Total = (long)total; v.Free = (long)free; }
-                }
-                using (var h = Native.Open(v.DevicePath, 0))
-                {
-                    if (!h.IsInvalid)
-                    {
-                        var ext = Native.Ioctl(h, Native.IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, null, 256);
-                        if (ext is { Length: >= 8 })
-                        {
-                            int n = (int)U32(ext, 0);
-                            for (int i = 0; i < n && 8 + i * 24 + 24 <= ext.Length; i++)
-                                v.Extents.Add(((int)U32(ext, 8 + i * 24), I64(ext, 8 + i * 24 + 8), I64(ext, 8 + i * 24 + 16)));
-                        }
-                    }
-                }
+                // estas consultas leem a mídia: num cartão com defeito ficam presas — 5 s no máximo
+                Bounded.Run(() => { FillVolume(v); return true; }, TimeSpan.FromSeconds(5), false, out bool slow);
+                if (slow) v.NotResponding = true;
                 res.Add(v);
             } while (Native.FindNextVolumeW(fh, name, 300));
         }
         finally { Native.FindVolumeClose(fh); }
         return res;
+    }
+
+    private static void FillVolume(VolumeData v)
+    {
+        char* lbl = stackalloc char[261];
+        char* fs = stackalloc char[261];
+        if (Native.GetVolumeInformationW(v.GuidPath, lbl, 261, out uint serial, out _, out _, fs, 261))
+        {
+            v.Label = new string(lbl);
+            v.FileSystem = new string(fs);
+            v.Serial = serial;
+            if (Native.GetDiskFreeSpaceExW(v.GuidPath, out _, out ulong total, out ulong free)) { v.Total = (long)total; v.Free = (long)free; }
+        }
+        using var h = Native.Open(v.DevicePath, 0);
+        if (h.IsInvalid) return;
+        var ext = Native.Ioctl(h, Native.IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, null, 256);
+        if (ext is { Length: >= 8 })
+        {
+            int n = (int)U32(ext, 0);
+            var list = new List<(int, long, long)>();
+            for (int i = 0; i < n && 8 + i * 24 + 24 <= ext.Length; i++)
+                list.Add(((int)U32(ext, 8 + i * 24), I64(ext, 8 + i * 24 + 8), I64(ext, 8 + i * 24 + 16)));
+            lock (v) v.Extents.AddRange(list);
+        }
     }
 
     private static byte[] PropertyQuery(int propertyId, int extra = 0)
@@ -99,9 +106,26 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
 
         for (int n = 0; n < 64; n++)
         {
+            int num = n;
+            // um disco que não responde não pode segurar a lista inteira: 20 s por disco
+            var d = Bounded.Run(() => ReadDisk(num, winVol, pageFileDrives), TimeSpan.FromSeconds(20), null, out bool slow);
+            if (slow)
+            {
+                d = new DiskInfo { Number = n, DevicePath = $@"\\.\PhysicalDrive{n}", Model = "Disco que não respondeu", Size = 0,
+                    Error = "O disco não respondeu em 20 segundos — cartão ou pendrive com defeito, ou um leitor travado. Tire e ponha de novo e clique em Atualizar." };
+                // ainda sem tabela: o painel mostra o aviso e nenhuma ação de escrita
+            }
+            if (d != null) disks.Add(d);
+        }
+        return disks;
+    }
+
+    private DiskInfo? ReadDisk(int n, VolumeData? winVol, HashSet<char> pageFileDrives)
+    {
+        {
             string path = $@"\\.\PhysicalDrive{n}";
             using var h = Native.Open(path, 0);
-            if (h.IsInvalid) continue;
+            if (h.IsInvalid) return null;
             var d = new DiskInfo { Number = n, DevicePath = path };
             var geo = Native.Ioctl(h, Native.IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, null, 256);
             if (geo is { Length: >= 32 })
@@ -110,7 +134,7 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
                 d.Size = I64(geo, 24);
                 if (d.SectorSize is not (512 or 1024 or 2048 or 4096)) d.SectorSize = 512;
             }
-            else continue; // leitor de cartão vazio etc.
+            else return null; // leitor de cartão vazio etc.
             var desc = Native.Ioctl(h, Native.IOCTL_STORAGE_QUERY_PROPERTY, PropertyQuery(0), 1024);
             if (desc is { Length: >= 36 })
             {
@@ -152,9 +176,10 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
                 }
             }
             catch (Exception ex) { d.Error = ex.Message; }
-            disks.Add(d);
+            var stuck = Volumes.Where(v => v.NotResponding && v.Extents.Any(e => e.disk == n)).ToList();
+            if (stuck.Count > 0 && d.Error == null) d.Error = "Um volume deste disco não responde ao Windows (mídia com defeito ou formatação interrompida) — formate de novo ou tire e ponha o cartão.";
+            return d;
         }
-        return disks;
     }
 
     private static HashSet<char> PageFileDrives()

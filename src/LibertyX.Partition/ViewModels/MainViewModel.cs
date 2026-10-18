@@ -79,6 +79,44 @@ public sealed partial class MainViewModel : ViewModelBase
         if (_pages.TryGetValue("premium", out var p) && p is PremiumViewModel pv) pv.Refresh();
     }
 
+    // ───────── atualização ─────────
+
+    [ObservableProperty] private bool _updateAvailable;
+    [ObservableProperty] private string _updateText = "";
+    private Updater.Info? _update;
+
+    private async Task CheckUpdate()
+    {
+        var i = await Updater.Check();
+        if (i == null || !Updater.IsNewer(i)) return;
+        _update = i;
+        UpdateText = $"Versão {i.Version} disponível";
+        UpdateAvailable = true;
+    }
+
+    [RelayCommand]
+    private async Task UpdateNow()
+    {
+        var i = _update; if (i == null) return;
+        if (!Updater.IsInstalled)
+        {
+            // versão portátil: não há o que atualizar no lugar — baixa o .exe novo pelo navegador
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(i.PortableUrl.Length > 0 ? i.PortableUrl : $"https://github.com/{Updater.Repo}/releases/latest") { UseShellExecute = true }); } catch { }
+            return;
+        }
+        if (HasPending) { await Alert("Alterações pendentes", "Confirme ou cancele as alterações da fila antes de atualizar."); return; }
+        string? setup = null;
+        bool ok = await Run($"Baixando a versão {i.Version}", async s =>
+        {
+            setup = await Updater.Download(i, new Progress<double>(x => s.Progress(x, "Baixando o instalador")), s.Token);
+            s.Log("Download conferido. O instalador vai fechar o app, atualizar e abrir de novo.");
+        }, refresh: false, success: "Pronto para atualizar");
+        if (!ok || setup == null) return;
+        Operation = null;
+        Updater.LaunchSetup(setup);
+        if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime l) l.Shutdown();
+    }
+
     /// <summary>Barra a ação no Básico com uma explicação e o caminho para o Premium.</summary>
     public async Task<bool> RequirePremium(string feature, string why)
     {
@@ -146,6 +184,10 @@ public sealed partial class MainViewModel : ViewModelBase
         foreach (var a in args.Where(File.Exists)) DiskSystem.AttachedImages.Add(Path.GetFullPath(a));
         Navigate("discos");
         _ = Refresh();
+        _ = CheckUpdate();
+        var ut = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+        ut.Tick += async (_, _) => await CheckUpdate();
+        ut.Start();
         // chave da loja: reconfere de vez em quando, sem atrapalhar (sem internet, nada muda)
         _ = Task.Run(async () => { try { if (await License.RevalidateIfDue()) Ui.Post(() => { LicenseChanged(); ShowToast("A licença da loja não vale mais (reembolso ou cancelamento) — voltou ao Básico."); }); } catch { } });
         StartHotplug();
@@ -187,7 +229,8 @@ public sealed partial class MainViewModel : ViewModelBase
         t.Start();
     }
 
-    private static string? SafeSignature() { try { return DiskSystem.Signature(); } catch { return null; } }
+    // com limite: um leitor travado não pode congelar o plug and play
+    private static string? SafeSignature() { try { return Bounded.Run(DiskSystem.Signature, TimeSpan.FromSeconds(6), null, out _); } catch { return null; } }
 
     public void Navigate(string key, object? arg = null)
     {
