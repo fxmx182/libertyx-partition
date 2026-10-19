@@ -10,7 +10,7 @@ namespace LibertyX.Partition.Core.Licensing;
 public enum Edition { Basic, Premium }
 
 /// <summary>
-/// Chave Premium assinada: "LXP1-" + base32 de 12 bytes de dados (versão, edição, data, número
+/// Chave Premium assinada: "LXP1-" + base32 de 12 bytes de dados (versão, produto, data, número
 /// da licença) e 64 de assinatura ECDSA P-256. O app só tem a chave pública — confere sozinho,
 /// sem internet. Quem emite é o Scripts/licenca.py (bot de venda, ou à mão), com a chave privada.
 /// </summary>
@@ -39,7 +39,10 @@ public static class LicenseKey
         using var ec = ECDsa.Create();
         ec.ImportSubjectPublicKeyInfo(TestPublicKey ?? Convert.FromBase64String(PublicKey), out _);
         if (!ec.VerifyData(data, sig, HashAlgorithmName.SHA256)) { error = "Chave inválida."; return null; }
-        if (data[0] != 1 || data[1] is not 1) { error = "Chave de uma versão que este app não conhece — atualize o app."; return null; }
+        // data[1] é o produto: 1 = Partition, 9 = pacote com todos os apps LibertyX. As chaves do
+        // Player (2) e do Folder (3) saem da mesma loja e com a mesma assinatura, mas não valem aqui.
+        if (data[0] == 1 && data[1] is 2 or 3) { error = "Esta chave é de outro app LibertyX (Player ou Folder), não do Partition."; return null; }
+        if (data[0] != 1 || data[1] is not (1 or 9)) { error = "Chave de uma versão que este app não conhece — atualize o app."; return null; }
         var issued = Epoch.AddDays(BinaryPrimitives.ReadUInt16BigEndian(data[2..]));
         return new Parsed(Convert.ToHexString(data[4..12]), issued, Edition.Premium);
     }
@@ -53,10 +56,10 @@ public static class LicenseKey
         return Prefix + "-" + string.Join('-', groups);
     }
 
-    public static byte[] Payload(DateTime issued, byte[] id8)
+    public static byte[] Payload(DateTime issued, byte[] id8, byte product = 1)
     {
         var d = new byte[12];
-        d[0] = 1; d[1] = 1;
+        d[0] = 1; d[1] = product;
         BinaryPrimitives.WriteUInt16BigEndian(d.AsSpan(2), (ushort)Math.Clamp((issued - Epoch).TotalDays, 0, 65535));
         id8.AsSpan(0, 8).CopyTo(d.AsSpan(4));
         return d;

@@ -15,7 +15,7 @@ public sealed partial class PremiumViewModel : PageViewModel
 {
     /// <summary>Onde se compra. Vazio = canal ainda não aberto (o botão aparece como "em breve").</summary>
     public const string CardUrl = "";
-    public const string TelegramUrl = "https://t.me/libertx_partition_bot";
+    public const string TelegramUrl = "https://t.me/libertx_partition_bot?start=partition";
 
     public override string Title => "LibertyX Premium";
     public override string IconKey => "Crown";

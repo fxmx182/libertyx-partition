@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Emite uma chave Premium do LibertyX Partition ("LXP1-…"), assinada com a chave privada que
-fica fora do repositório. É o que o bot de venda chama depois do pagamento — e serve para
-emitir à mão (cortesia, troca, suporte).
+Emite uma chave dos apps LibertyX ("LXP1-…"), assinada com a chave privada que fica fora do
+repositório. O bot de venda emite pelo mesmo formato (em Node); este serve para emitir à mão
+(cortesia, troca, suporte).
 
-  python3 Scripts/licenca.py "nota (comprador, pedido…)"      → imprime a chave
+  python3 Scripts/licenca.py "nota (comprador, pedido…)"             → chave do Partition
+  python3 Scripts/licenca.py --produto pacote "nota"                 → vale em todos os apps
+
+Produtos (segundo byte dos dados): partition = 1, player = 2, folder = 3, pacote = 9.
 
 Cada chave emitida vai para o registro (CSV ao lado da chave privada), com número e nota:
 é o que permite achar a licença de alguém depois. Formato igual ao do app
@@ -33,11 +36,14 @@ def b32(b):
     return "".join(out)
 
 
-def emitir(nota="", hoje=None):
+PRODUTOS = {"partition": 1, "player": 2, "folder": 3, "pacote": 9}
+
+
+def emitir(nota="", hoje=None, produto="partition"):
     hoje = hoje or datetime.date.today()
     chave = serialization.load_pem_private_key(open(PRIVADA, "rb").read(), None)
     ident = secrets.token_bytes(8)
-    dados = bytes([1, 1]) + struct.pack(">H", (hoje - EPOCA).days) + ident
+    dados = bytes([1, PRODUTOS[produto]]) + struct.pack(">H", (hoje - EPOCA).days) + ident
     r, s = decode_dss_signature(chave.sign(dados, ec.ECDSA(hashes.SHA256())))
     corpo = b32(dados + r.to_bytes(32, "big") + s.to_bytes(32, "big"))
     texto = "LXP1-" + "-".join(corpo[i:i + 6] for i in range(0, len(corpo), 6))
@@ -46,10 +52,16 @@ def emitir(nota="", hoje=None):
         w = csv.writer(f)
         if novo:
             w.writerow(["licenca", "data", "nota", "chave"])
-        w.writerow([ident.hex().upper(), hoje.isoformat(), nota, texto])
+        w.writerow([ident.hex().upper(), hoje.isoformat(), f"[{produto}] {nota}".strip(), texto])
     os.chmod(REGISTRO, 0o600)
     return texto
 
 
 if __name__ == "__main__":
-    print(emitir(" ".join(sys.argv[1:])))
+    args = sys.argv[1:]
+    produto = "partition"
+    if args[:1] == ["--produto"] and len(args) > 1:
+        produto = args[1]; args = args[2:]
+    if produto not in PRODUTOS:
+        sys.exit(f"produto desconhecido: {produto} (use {', '.join(PRODUTOS)})")
+    print(emitir(" ".join(args), produto=produto))

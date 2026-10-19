@@ -30,6 +30,10 @@ public static class LicenseTests
             var other = data.ToArray(); other[4] ^= 1;
             Check(LicenseKey.Verify(LicenseKey.Format(other, ec.SignData(data, HashAlgorithmName.SHA256)), out _) == null, "assinatura de outra licença recusada");
             Check(LicenseKey.Verify(key[..40], out _) == null, "chave cortada recusada");
+            string DoProduto(byte produto) { var d = LicenseKey.Payload(DateTime.UtcNow, RandomNumberGenerator.GetBytes(8), produto); return LicenseKey.Format(d, ec.SignData(d, HashAlgorithmName.SHA256)); }
+            Check(LicenseKey.Verify(DoProduto(9), out _) != null, "chave do pacote LibertyX (produto 9) aceita");
+            Check(LicenseKey.Verify(DoProduto(2), out var e2) == null && e2!.Contains("outro app"), "chave do Player (produto 2) recusada com aviso");
+            Check(LicenseKey.Verify(DoProduto(3), out var e3) == null && e3!.Contains("outro app"), "chave do Folder (produto 3) recusada com aviso");
 
             var dir = Path.Combine(Path.GetTempPath(), "lx-lic-" + Guid.NewGuid().ToString("N"));
             var m = new LicenseManager(dir);
