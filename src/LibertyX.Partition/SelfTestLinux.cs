@@ -105,6 +105,65 @@ public static partial class SelfTest
         }
     }
 
+    // ───────── discos extras (clone) ─────────
+
+    private static readonly List<(string dev, string file)> _extra = [];
+
+    private static (string dev, string file) TempLoop(long bytes)
+    {
+        string file = _loopFile + $".{_extra.Count + 2}";
+        using (var f = new FileStream(file, FileMode.Create)) f.SetLength(bytes);
+        string dev = Loop("-f", "--show", "-P", file);
+        _extra.Add((dev, file));
+        return (dev, file);
+    }
+
+    /// <summary>Um disco extra de teste — conferido como o principal: é loop e aponta para o nosso arquivo.</summary>
+    private static DiskInfo TempDisk(string dev, string file)
+    {
+        var d = DiskSystem.Enumerate().FirstOrDefault(x => x.DevicePath == dev) ?? throw new InvalidOperationException($"{dev} sumiu da lista de discos.");
+        string back = File.ReadAllText($"/sys/block/{Path.GetFileName(dev)}/loop/backing_file").Trim();
+        if (!d.KernelName.StartsWith("loop") || Path.GetFullPath(back) != Path.GetFullPath(file))
+            throw new InvalidOperationException($"Recusado: {d.DevicePath} não é o disco de teste ({back}).");
+        return d;
+    }
+
+    private static async Task<DiskInfo> SettleTemp(string dev, string file, Func<DiskInfo, bool> ready)
+    {
+        for (int i = 0; i < 80; i++)
+        {
+            var d = TempDisk(dev, file);
+            if (ready(d)) return d;
+            await Task.Delay(250);
+        }
+        return TempDisk(dev, file);
+    }
+
+    private static void DropLoop(string dev, string file)
+    {
+        foreach (var m in LinuxDiskSystem.ReadMounts().Where(m => m.Source.StartsWith(dev)).OrderByDescending(m => m.MountPoint.Length))
+            Proc.RunSync("umount", ["-l", m.MountPoint], TimeSpan.FromSeconds(20));
+        Proc.RunSync("losetup", ["-d", dev], TimeSpan.FromSeconds(20));
+        try { File.Delete(file); } catch { }
+        _extra.Remove((dev, file));
+    }
+
+    /// <summary>O disco principal de teste com GPT nova e um ext4 cheio de arquivos no começo.</summary>
+    private static async Task<DiskInfo> FreshExtDisk(long len, string label, Dictionary<string, string> files, OpSink sink)
+    {
+        const long MB = 1 << 20;
+        var d = LoopDisk();
+        DiskOperations.WriteTable(d, new PartitionTable { Style = TableStyle.Gpt, SectorSize = d.SectorSize, DiskSectors = d.Size / d.SectorSize }, "autoteste", sink);
+        d = await SettleLoop(x => x.Table.Style == TableStyle.Gpt && x.Table.Entries.Count == 0);
+        await ActionsBuilder.CreateLinux(d, MB, len, "ext4", label, sink);
+        d = await SettleLoop(x => x.Partitions.Any(p => p.Offset == MB && p.FileSystem == FsKind.Ext && p.DeviceNode != null));
+        var p = PartAt(d, MB);
+        string mp = await MountAt(p, sink);
+        WriteTestFiles(mp, 30, 11, files, "clone");
+        await LinuxFs.Unmount(MainViewModel.FreshPart(p), sink);
+        return await SettleLoop(x => x.Partitions.Any(q => q.Offset == MB && !q.IsMounted));
+    }
+
     // ───────── o disco de teste ─────────
 
     private static string Loop(params string[] a) { var r = Proc.RunSync("losetup", a, TimeSpan.FromSeconds(30)); return r.Ok ? r.Output.Trim() : throw new InvalidOperationException("losetup: " + r.Message); }
@@ -124,6 +183,7 @@ public static partial class SelfTest
             }
         }
         catch { }
+        foreach (var (dev, file) in _extra.ToList()) try { DropLoop(dev, file); } catch { }
         try { if (_loopFile != null) File.Delete(_loopFile); } catch { }
     }
 
@@ -535,6 +595,134 @@ public static partial class SelfTest
                 }
             }
             File.Delete(raw); File.Delete(gz);
+        });
+
+        await Step("Copiar disco Linux para um maior: ids mantidos e a partição cresce (como o Windows faz)", async () =>
+        {
+            d = await FreshExtDisk(700 * MB, "CLONE", files = new(), sink);
+            var src = PartAt(d, MB);
+            var (dev2, file2) = TempLoop(1024 * MB);
+            try
+            {
+                var t = TempDisk(dev2, file2);
+                var plan = DiskOperations.PlanClone(d, t, false, fitToTarget: true);
+                Check(plan.Deficit == 0 && plan.Grow?.Offset == MB, $"plano: cabe, e o ext4 cresce {Fmt(plan.GrowBy)}");
+                await DiskOperations.Clone(plan, usedOnly: true, useVss: true, makeBootable: false, sink);
+                await ActionsBuilder.GrowAfterClone(plan, sink);
+                t = await SettleTemp(dev2, file2, x => x.Partitions.Any(q => q.FileSystem == FsKind.Ext && q.DeviceNode != null));
+                var q = PartAt(t, MB);
+                Check(t.Table.DiskGuid == d.Table.DiskGuid && q.Entry?.UniqueGuid == src.Entry?.UniqueGuid, "mesmo GUID do disco e PARTUUID (root=PARTUUID= e fstab continuam valendo no clone)");
+                Check(q.FsUuid == src.FsUuid, "mesmo UUID do ext4");
+                Check(q.Length > 900 * MB, $"partição cresceu até o fim do disco novo ({Fmt(q.Length)})");
+                using (var v = DiskSystem.OpenPartition(q))
+                {
+                    var sb = FsDetect.ParseExt(v.ReadBytes(1024, 1024));
+                    Check(sb != null && sb.Blocks * sb.BlockSize > q.Length - 16 * MB, $"o ext4 ocupa a partição inteira ({Fmt(sb?.Blocks * sb?.BlockSize)})");
+                }
+                var fsck = await Proc.Run("e2fsck", ["-fn", q.DeviceNode!]);
+                Check(fsck.ExitCode == 0, "e2fsck -fn limpo no clone");
+                string mp = await MountAt(q, sink, ro: true);
+                Check(SameFiles(mp, files), "arquivos idênticos no clone");
+                await LinuxFs.Unmount(MainViewModel.FreshPart(q), sink);
+            }
+            finally { DropLoop(dev2, file2); }
+        });
+
+        await Step("Copiar disco para um menor: reduz a origem sem perder dados e copia", async () =>
+        {
+            d = await FreshExtDisk(900 * MB, "MENOR", files = new(), sink);
+            var (dev2, file2) = TempLoop(600 * MB);
+            try
+            {
+                var t = TempDisk(dev2, file2);
+                var plan = DiskOperations.PlanClone(d, t, false, fitToTarget: true);
+                Check(plan.Deficit > 0 && plan.ShrinkCandidate?.Offset == MB, $"plano: não cabe (faltam {Fmt(plan.Deficit)}) e oferece reduzir o ext4");
+                var p = PartAt(d, MB);
+                long newSize = (p.Length - plan.Deficit - 32 * MB) / MB * MB;
+                await ActionsBuilder.ApplyGeometryLinux(p, p.Offset, newSize, sink);
+                d = await SettleLoop(x => x.Partitions.Any(q => q.Offset == MB && q.Length == newSize && q.DeviceNode != null));
+                plan = DiskOperations.PlanClone(d, TempDisk(dev2, file2), false, fitToTarget: true);
+                Check(plan.Deficit == 0, $"depois de reduzir para {Fmt(newSize)}, cabe");
+                await DiskOperations.Clone(plan, usedOnly: true, useVss: false, makeBootable: false, sink);
+                if (plan.Grow != null) await ActionsBuilder.GrowAfterClone(plan, sink);
+                t = await SettleTemp(dev2, file2, x => x.Partitions.Any(q => q.FileSystem == FsKind.Ext && q.DeviceNode != null));
+                var q = PartAt(t, MB);
+                Check((await Proc.Run("e2fsck", ["-fn", q.DeviceNode!])).ExitCode == 0, "e2fsck -fn limpo no clone menor");
+                string mp = await MountAt(q, sink, ro: true);
+                Check(SameFiles(mp, files), "arquivos idênticos no disco menor");
+                await LinuxFs.Unmount(MainViewModel.FreshPart(q), sink);
+            }
+            finally { DropLoop(dev2, file2); }
+        });
+
+        await Step("Cópia consistente de partição montada (só leitura durante a cópia)", async () =>
+        {
+            d = LoopDisk();
+            var p = PartAt(d, MB);
+            string mp = await MountAt(p, sink);
+            p = MainViewModel.FreshPart(p);
+            var (dev, release) = await DiskOperations.OpenSource(p, true, sink);
+            bool ro = LinuxDiskSystem.ReadMounts().First(m => m.MountPoint == mp).Options.Split(',').Contains("ro");
+            bool blocked; try { File.WriteAllText(Path.Combine(mp, "x.txt"), "x"); blocked = false; } catch { blocked = true; }
+            dev.Dispose();
+            await release();
+            bool rw = LinuxDiskSystem.ReadMounts().First(m => m.MountPoint == mp).Options.Split(',').Contains("rw");
+            Check(ro && blocked, "durante a cópia a partição fica só leitura (nada muda no meio)");
+            Check(rw, "no fim volta a aceitar gravação");
+            await LinuxFs.Unmount(MainViewModel.FreshPart(p), sink);
+        });
+
+        await Step("Cópia consistente de volume LVM em uso (instantâneo do LVM, o VSS do Linux)", async () =>
+        {
+            if (!LinuxTools.Has("lvm")) { W("   (sem lvm2 — pulado)"); return; }
+            var (dev2, file2) = TempLoop(512 * MB);
+            string vg = $"lxvg{Guid.NewGuid().ToString("N")[..6]}";
+            string? mp = null;
+            try
+            {
+                TempDisk(dev2, file2);
+                Check((await Proc.Run("pvcreate", ["-ff", "-y", dev2])).Ok && (await Proc.Run("vgcreate", [vg, dev2])).Ok
+                      && (await Proc.Run("lvcreate", ["-y", "-L", "200M", "-n", "dados", vg])).Ok, "grupo e volume LVM criados");
+                KernelSync.Settle();
+                Check((await Proc.Run("mkfs.ext4", ["-q", "-L", "LVMTESTE", $"/dev/{vg}/dados"])).Ok, "ext4 no volume");
+                mp = Path.Combine("/run/libertyx-teste", vg);
+                Directory.CreateDirectory(mp);
+                Check((await Proc.Run("mount", [$"/dev/{vg}/dados", mp])).Ok, "volume montado (em uso)");
+                var lvFiles = new Dictionary<string, string>();
+                WriteTestFiles(mp, 12, 21, lvFiles, "lv");
+                var lvDisk = DiskSystem.Enumerate().First(x => x.VirtualKind == "LVM" && x.Partitions.Any(q => q.MountPoints.Contains(mp)));
+                var part = lvDisk.Partitions.First(q => q.MountPoints.Contains(mp));
+                var log = new List<string>();
+                sink.LogLine += log.Add;
+                var (sdev, release) = await DiskOperations.OpenSource(part, true, sink);
+                sink.LogLine -= log.Add;
+                bool hasSnap = (await Proc.Run("lvs", ["--noheadings", "-o", "lv_name", vg])).Output.Contains("lx-snap-");
+                // grava no volume de verdade durante a cópia: o instantâneo não pode ver
+                File.WriteAllBytes(Path.Combine(mp, "depois.bin"), new byte[4 << 20]);
+                Proc.RunSync("sync", [], TimeSpan.FromSeconds(20));
+                string img = Path.Combine(Path.GetTempPath(), $"lx-lv-{Environment.ProcessId}.img");
+                using (var o = ImageFileDevice.Create(img, sdev.Length, 512)) SectorCopier.Copy(sdev, o, new CopyOptions { Ranges = [(0, sdev.Length)] }, null, CancellationToken.None, null);
+                sdev.Dispose();
+                await release();
+                bool gone = !(await Proc.Run("lvs", ["--noheadings", "-o", "lv_name", vg])).Output.Contains("lx-snap-");
+                Check(hasSnap && log.Any(l => l.Contains("Instantâneo pronto")), "instantâneo LVM criado para a cópia");
+                Check(gone, "instantâneo apagado no fim");
+                Check((await Proc.Run("e2fsck", ["-fn", img])).ExitCode == 0, "a cópia do volume em uso passa no e2fsck -fn (consistente)");
+                string imp = mp + "-img";
+                Directory.CreateDirectory(imp);
+                await Proc.Run("mount", ["-o", "ro,loop,noload", img, imp]);
+                Check(SameFiles(imp, lvFiles) && !File.Exists(Path.Combine(imp, "depois.bin")), "arquivos de antes íntegros; o gravado depois do instantâneo não entrou");
+                await Proc.Run("umount", [imp]);
+                File.Delete(img);
+            }
+            finally
+            {
+                if (mp != null && !(await Proc.Run("umount", [mp])).Ok) await Proc.Run("umount", ["-l", mp]);
+                await Proc.Run("vgchange", ["-an", vg]);
+                await Proc.Run("vgremove", ["-f", vg]);
+                await Proc.Run("pvremove", ["-ff", "-y", dev2]);
+                DropLoop(dev2, file2);
+            }
         });
 
         await Step("atualização: acha a versão publicada", async () =>

@@ -222,7 +222,7 @@ public sealed partial class BenchmarkViewModel : PageViewModel
         // não passam mais pela linha da tela — que travava e ainda inflava a latência medida
         var token = _cts.Token;
         bool write = IncludeWrite;
-        try { await Task.Run(() => DiskBenchmark.RunAsync(drive.Root, size, dur, write, prog, token)); Phase = "Concluído"; }
+        try { await Task.Run(() => DiskBenchmark.RunAsync(drive.Root, size, dur, write, prog, token)); Phase = DiskBenchmark.NoDirect ? "Concluído — este sistema de arquivos não aceita leitura direta: a leitura passou pelo cache" : "Concluído"; }
         catch (OperationCanceledException) { Phase = "Cancelado"; }
         catch (Exception ex) { Phase = "Erro: " + ex.Message; }
         finally { Running = false; Fraction = 1; }

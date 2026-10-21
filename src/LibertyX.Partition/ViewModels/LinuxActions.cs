@@ -322,6 +322,54 @@ public static partial class ActionsBuilder
         }
     }
 
+    /// <summary>
+    /// Copiar disco para um maior: a partição principal cresce para usar o disco novo inteiro
+    /// (o que o Windows faz com Resize-Partition). XFS/Btrfs com o mesmo UUID de um volume montado
+    /// não montam para crescer — aí fica para depois, com o disco antigo desligado.
+    /// </summary>
+    internal static async Task GrowAfterClone(DiskOperations.ClonePlan plan, OpSink s)
+    {
+        var g = plan.Grow!;
+        long start = plan.Items.First(i => i.src == g).start * plan.Target.SectorSize;
+        var q = MainViewModel.Fresh(plan.Target).Partitions.FirstOrDefault(x => !x.IsUnallocated && x.Offset == start);
+        if (q == null) { s.Log("A partição copiada não apareceu ainda — use Estender partição no disco novo depois."); return; }
+        if (q.FileSystem is FsKind.Xfs or FsKind.Btrfs && q.FsUuid != null
+            && MainViewModel.Fresh(plan.Source).Partitions.Any(x => x.IsMounted && x.FsUuid == q.FsUuid))
+        {
+            s.Log($"{FsDetect.Name(q.FileSystem)} com o mesmo UUID de um volume montado não monta para crescer. Desconecte o disco antigo e use Estender partição no novo para usar os {Fmt.Size(plan.GrowBy)} livres.");
+            return;
+        }
+        if (!LinuxFs.CanResize(q, shrink: false, out var why) && why != null && !why.StartsWith("Desmonte"))
+        {
+            s.Log($"O espaço extra ({Fmt.Size(plan.GrowBy)}) ficou livre: {why}");
+            return;
+        }
+        s.Log($"Expandindo {q.DisplayName} para ocupar o espaço extra ({Fmt.Size(plan.GrowBy)})…");
+        try
+        {
+            await ApplyGeometryLinux(q, q.Offset, q.Length + plan.GrowBy, s);
+            s.Log("Partição expandida.");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { s.Log("Não foi possível expandir agora (faça depois em Estender partição): " + ex.Message); }
+    }
+
+    /// <summary>
+    /// O ponto de montagem onde <paramref name="path"/> cai, se ele fica no disco <paramref name="disk"/>
+    /// (atravessando LVM e LUKS até o disco físico). Nulo = outro disco.
+    /// </summary>
+    internal static string? MountOnDisk(string path, DiskInfo disk)
+    {
+        string full = Path.GetFullPath(path);
+        var m = LinuxDiskSystem.ReadMounts().Where(x => full == x.MountPoint || full.StartsWith(x.MountPoint.TrimEnd('/') + "/")).OrderByDescending(x => x.MountPoint.Length).FirstOrDefault();
+        string? kn = m != null && m.Source.StartsWith("/dev/") ? LinuxDiskSystem.KernelNameOf(m.Source) : null;
+        var phys = kn == null ? [] : LinuxDiskSystem.SlavesOf(kn).DefaultIfEmpty(kn).ToList();
+        string srcKn = disk.KernelName;
+        var srcPhys = disk.IsVirtual ? LinuxDiskSystem.SlavesOf(srcKn) : [srcKn];
+        bool same = phys.Any(x => srcPhys.Any(s => x == s || x.StartsWith(s) && x.Length > s.Length && (char.IsDigit(x[s.Length]) || x[s.Length] == 'p')));
+        return same ? m!.MountPoint : null;
+    }
+
     private static PartitionInfo Find(PartitionInfo p, long offset)
     {
         var nd = MainViewModel.Fresh(p.Disk);

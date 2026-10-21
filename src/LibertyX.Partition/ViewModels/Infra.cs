@@ -31,6 +31,10 @@ public static class Ui
     /// <summary>"Disco do Windows em uso." / "Disco do sistema em uso." — os filtros e avisos que bloqueiam o disco do sistema.</summary>
     public static string SystemDiskInUse => IsWin ? "Disco do Windows em uso." : "Disco do sistema em uso (onde está o /).";
     public static string SystemBadge => IsWin ? "Windows" : "Sistema";
+    /// <summary>A opção de copiar um volume em uso sem pegá-lo no meio de uma gravação: VSS no Windows; LVM ou só leitura no Linux.</summary>
+    public static string SnapshotImage => IsWin ? "Instantâneo VSS dos volumes em uso" : "Cópia consistente dos volumes em uso (instantâneo LVM ou só leitura)";
+    public static string SnapshotPartition => IsWin ? "Instantâneo VSS se estiver em uso" : "Cópia consistente se estiver em uso (LVM ou só leitura)";
+    public static string SnapshotClone => IsWin ? "Instantâneo VSS (Windows em uso)" : "Cópia consistente (instantâneo LVM ou só leitura)";
 
     public static Geometry? Icon(string key) =>
         Application.Current != null && Application.Current.TryGetResource("Ic" + key, null, out var v) ? v as Geometry : null;

@@ -299,7 +299,8 @@ public static class DiskOperations
 
     /// <summary>
     /// Abre a origem de uma partição para cópia. Volume NTFS montado → instantâneo VSS (cópia
-    /// consistente com o Windows rodando); o resto → leitura direta.
+    /// consistente com o Windows rodando); no Linux, instantâneo LVM ou só leitura durante a cópia;
+    /// o resto → leitura direta.
     /// </summary>
     public static async Task<(IBlockDevice dev, Func<Task> release)> OpenSource(PartitionInfo p, bool useVss, OpSink sink)
     {
@@ -315,6 +316,8 @@ public static class DiskOperations
                 return (dev, async () => { dev.Dispose(); await WinCommands.DeleteShadow(s.id); });
             }
         }
+        if (useVss && OperatingSystem.IsLinux() && !p.Disk.IsImage && await Platform.Linux.LinuxSnapshot.Open(p, sink) is { } snap)
+            return snap;
         var d = DiskSystem.OpenPartition(p);
         return (d, () => { d.Dispose(); return Task.CompletedTask; });
     }
@@ -485,7 +488,8 @@ public static class DiskOperations
         long align = probe.AlignSectors;
         long first = probe.Style == TableStyle.Gpt ? PartitionCodec.GptFirstUsable(probe) : 1;
         long last = probe.Style == TableStyle.Gpt ? PartitionCodec.GptLastUsable(probe) : probe.DiskSectors - 1;
-        var main = parts.FirstOrDefault(p => p.IsSystemVolume) ?? parts.Where(p => p.FileSystem == FsKind.Ntfs).MaxBy(p => p.Length);
+        var main = parts.FirstOrDefault(p => p.IsSystemVolume) ?? parts.Where(p => p.FileSystem == FsKind.Ntfs).MaxBy(p => p.Length)
+            ?? parts.Where(p => p.FileSystem is FsKind.Ext or FsKind.Xfs or FsKind.Btrfs or FsKind.F2fs).MaxBy(p => p.Length);
         plan.ShrinkCandidate = main;
 
         // mantém o deslocamento original quando dá (ajuda o Windows a reconhecer), senão compacta
@@ -520,10 +524,17 @@ public static class DiskOperations
         if (plan.Target.SectorSize != plan.Source.SectorSize) throw new InvalidOperationException("Os discos têm tamanhos de setor diferentes (512 × 4096): a cópia setor a setor não funcionaria.");
         int ss = plan.Source.SectorSize;
         var style = plan.Source.Table.Style == TableStyle.None ? TableStyle.Gpt : plan.Source.Table.Style;
+        // Linux copiado no Linux: mantém os identificadores da tabela. root=PARTUUID=, fstab com
+        // PARTUUID= e o "PARTUUID=assinatura-02" do Raspberry Pi só ligam pelo clone assim — os UUIDs
+        // dos sistemas de arquivos já vêm iguais na cópia setor a setor. No Windows, ids novos (dois
+        // discos com a mesma assinatura: o Windows desliga um deles).
+        bool keepIds = OperatingSystem.IsLinux() && plan.Source.Partitions.Any(p => FsDetect.IsLinuxNative(p.FileSystem));
         var t = new PartitionTable
         {
-            Style = style, SectorSize = ss, DiskSectors = plan.Target.Size / ss, DiskGuid = Guid.NewGuid(),
-            BootCode = plan.Source.Table.BootCode, DiskSignature = (uint)Random.Shared.NextInt64(1, uint.MaxValue),
+            Style = style, SectorSize = ss, DiskSectors = plan.Target.Size / ss,
+            DiskGuid = keepIds && plan.Source.Table.DiskGuid != Guid.Empty ? plan.Source.Table.DiskGuid : Guid.NewGuid(),
+            BootCode = plan.Source.Table.BootCode,
+            DiskSignature = keepIds && plan.Source.Table.DiskSignature != 0 ? plan.Source.Table.DiskSignature : (uint)Random.Shared.NextInt64(1, uint.MaxValue),
         };
         long total = plan.Items.Sum(i => i.src.Length), baseDone = 0;
         using var tdev = DiskSystem.OpenDisk(plan.Target, true);
@@ -549,13 +560,16 @@ public static class DiskOperations
                 var e = src.Entry!.Clone();
                 e.StartLba = start;
                 e.SectorCount = sectors;
-                e.UniqueGuid = Guid.NewGuid();
+                if (!keepIds || e.UniqueGuid == Guid.Empty) e.UniqueGuid = Guid.NewGuid();
                 e.EbrLba = 0;
                 t.Entries.Add(e);
             }
             tdev.Flush();
         }
         WriteTable(plan.Target, t, plan.SystemOnly ? "Migrar sistema" : "Copiar disco", sink);
+        if (keepIds)
+            sink.Log("O disco novo é uma cópia idêntica do Linux (mesmos UUIDs e PARTUUIDs): para ligar por ele, desconecte o antigo. " +
+                     "Para manter os dois ligados juntos, use Migrar sistema, que dá identificadores novos e ajusta o fstab e o boot.");
 
         if (!OperatingSystem.IsWindows() || plan.Target.IsImage) return;
         await Task.Delay(2500, sink.Token);

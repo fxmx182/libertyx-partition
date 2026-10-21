@@ -166,6 +166,19 @@ public sealed partial class CloneViewModel : PageViewModel
                 CanShrink = true;
                 ShrinkText = $"Reduzir {sc.Letter} em {Fmt.Size(plan.Deficit + (1L << 30))} (pelo próprio Windows, sem perder dados)";
             }
+            else if (plan.ShrinkCandidate is { } lc && OperatingSystem.IsLinux() && !lc.Disk.IsImage)
+            {
+                // Linux: encolhe o sistema de arquivos e a partição (resize2fs, ntfsresize, btrfs) — só fora de uso
+                if (lc.IsMounted && (lc.IsSystemVolume || lc.IsSystemCritical))
+                    Notes.Add($"{lc.DisplayName} é o sistema em uso e não encolhe com ele rodando. Use Migrar sistema: ele copia só os arquivos e cabe num disco menor.");
+                else if (!Core.Platform.Linux.LinuxFs.CanResize(lc, shrink: true, out var why) && why != null && !why.StartsWith("Desmonte"))
+                    Notes.Add(why);
+                else
+                {
+                    CanShrink = true;
+                    ShrinkText = $"Reduzir {lc.DisplayName} em {Fmt.Size(plan.Deficit + (1L << 30))} (sem perder dados)";
+                }
+            }
             return;
         }
         CanRun = true;
@@ -176,6 +189,21 @@ public sealed partial class CloneViewModel : PageViewModel
     {
         var sc = _plan?.ShrinkCandidate; if (sc == null || _plan == null) return;
         long newSize = (sc.Length - _plan.Deficit - (1L << 30)) / (1024 * 1024) * (1024 * 1024);
+        if (OperatingSystem.IsLinux())
+        {
+            var min = await Core.Platform.Linux.LinuxFs.MinSize(sc);
+            if (min != null && newSize < min.Value)
+            {
+                await Main.Alert("Não dá para reduzir tanto", $"{sc.DisplayName} tem dados demais: o menor tamanho seguro é {Fmt.Size(min.Value)}. Libere espaço, escolha um disco maior, ou use Migrar sistema (copia só os arquivos).", "warn");
+                return;
+            }
+            Main.Queue("Reduzir " + sc.DisplayName, $"{sc.DisplayName}: {Fmt.Size(sc.Length)} → {Fmt.Size(newSize)} (encolhe o sistema de arquivos e a partição, sem perder dados)", "Resize", async s =>
+            {
+                var q = MainViewModel.FreshPart(sc);
+                await ActionsBuilder.ApplyGeometryLinux(q, q.Offset, newSize, s);
+            }, sc.Disk);
+            return;
+        }
         var sup = await WinCommands.SupportedSize(sc.Disk.Number, sc.Offset);
         if (sup != null && newSize < sup.Value.min)
         {
@@ -203,6 +231,7 @@ public sealed partial class CloneViewModel : PageViewModel
         {
             var fresh = DiskOperations.PlanClone(MainViewModel.Fresh(src), MainViewModel.Fresh(dst), sysOnly, fit);
             await DiskOperations.Clone(fresh, used, vss, boot, s);
+            if (OperatingSystem.IsLinux() && fresh.Grow != null && !fresh.Target.IsImage) await ActionsBuilder.GrowAfterClone(fresh, s);
         }, dst, dangerous: true, canPause: true);
         await Task.CompletedTask;
     }
@@ -280,6 +309,15 @@ public sealed partial class BackupViewModel : PageViewModel
         if (OperatingSystem.IsWindows() && !sel.Disk.IsImage && sel.Disk.Partitions.Any(p => string.Equals(p.Letter, root, StringComparison.OrdinalIgnoreCase)))
         {
             if (!await Main.Confirm("Destino dentro da origem", $"A imagem seria gravada em {root}, que fica no próprio disco que está sendo copiado. Num disco com defeito isso acelera a perda — use outro disco.", "Continuar mesmo assim", true)) return;
+        }
+        if (OperatingSystem.IsLinux() && !sel.Disk.IsImage && ActionsBuilder.MountOnDisk(ImagePath, sel.Disk) is { } mp)
+        {
+            if (sel.Partition != null && sel.Partition.MountPoints.Contains(mp))
+            {
+                await Main.Alert("Destino dentro da origem", $"A imagem seria gravada em {mp}, dentro da própria partição que está sendo copiada — ela cresceria enquanto é lida. Escolha outro disco.", "warn");
+                return;
+            }
+            if (!await Main.Confirm("Destino dentro da origem", $"A imagem seria gravada em {mp}, que fica no próprio disco que está sendo copiado. Num disco com defeito isso acelera a perda — use outro disco.", "Continuar mesmo assim", true)) return;
         }
         string path = ImagePath; bool hash = Hash, vss = UseVss; int retries = Retries;
         await Main.Run("Criando imagem", s => DiskOperations.CreateImage(sel.Disk, sel.Partition, path, vss, hash, retries, s), refresh: false, canPause: true, success: $"Imagem salva em {path}");

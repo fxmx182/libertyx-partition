@@ -54,6 +54,7 @@ public static class DiskBenchmark
                                                          IProgress<BenchProgress>? progress, CancellationToken ct)
     {
         string path = Path.Combine(folder, $"LibertyX-bench-{Guid.NewGuid():N}.tmp");
+        NoDirect = false;
         var results = new List<BenchResult>();
         var opts = FileOptions.Asynchronous | FileOptions.WriteThrough | (OperatingSystem.IsWindows() ? NoBuffering : 0);
         try
@@ -61,7 +62,7 @@ public static class DiskBenchmark
             progress?.Report(new("Preparando arquivo de teste", 0, null));
             // sem pré-alocar: no FAT32/exFAT de cartões o Windows zeraria o arquivo inteiro antes de
             // devolver o controle (um minuto ou mais parado); gravar em sequência já estende o arquivo
-            using (var h = File.OpenHandle(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, opts))
+            using (var h = OpenTestFile(path, true, opts))
             using (var b = new AlignedBuffer(8 << 20))
             {
                 // dados aleatórios: SSD com compressão não pode trapacear com zeros
@@ -78,7 +79,7 @@ public static class DiskBenchmark
             {
                 var t = tests[i];
                 progress?.Report(new(t.Label + (t.Write ? " — escrita" : " — leitura"), 0.1 + 0.9 * i / tests.Count, null));
-                using var h = File.OpenHandle(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, opts);
+                using var h = OpenTestFile(path, false, opts);
                 var r = await RunOne(h, fileSize, t, perTest, ct);
                 results.Add(r);
                 progress?.Report(new(t.Label, 0.1 + 0.9 * (i + 1) / tests.Count, r));
@@ -91,6 +92,29 @@ public static class DiskBenchmark
         }
         return results;
     }
+
+    /// <summary>
+    /// Arquivo de teste sem o cache do sistema: no Windows FILE_FLAG_NO_BUFFERING; no Linux O_DIRECT
+    /// (sem ele, a leitura sai da RAM e o resultado chega a dezenas de GB/s) e O_DSYNC na escrita.
+    /// </summary>
+    private static SafeFileHandle OpenTestFile(string path, bool create, FileOptions opts)
+    {
+        if (!OperatingSystem.IsLinux()) return File.OpenHandle(path, create ? FileMode.CreateNew : FileMode.Open, FileAccess.ReadWrite, FileShare.None, opts);
+        const int O_CREAT = 0x40, O_EXCL = 0x80, EINVAL = 22;
+        int flags = Platform.Linux.LinuxNative.O_RDWR | Platform.Linux.LinuxNative.O_CLOEXEC | Platform.Linux.LinuxNative.O_DSYNC | (create ? O_CREAT | O_EXCL : 0);
+        int fd = Platform.Linux.LinuxNative.Open(path, flags | Platform.Linux.LinuxNative.O_DIRECT, Convert.ToInt32("644", 8));
+        if (fd < 0 && Marshal.GetLastPInvokeError() == EINVAL)
+        {
+            // sistema de arquivos sem O_DIRECT (tmpfs, alguns FUSE): mede assim mesmo, com o cache
+            fd = Platform.Linux.LinuxNative.Open(path, flags, Convert.ToInt32("644", 8));
+            NoDirect = true;
+        }
+        if (fd < 0) throw new IOException($"Não deu para abrir o arquivo de teste em {Path.GetDirectoryName(path)} (erro {Marshal.GetLastPInvokeError()}).");
+        return new SafeFileHandle(fd, ownsHandle: true);
+    }
+
+    /// <summary>A última medição no Linux passou pelo cache (o sistema de arquivos não aceita O_DIRECT).</summary>
+    public static bool NoDirect { get; private set; }
 
     private static async Task<BenchResult> RunOne(SafeFileHandle h, long fileSize, BenchTest t, TimeSpan duration, CancellationToken ct)
     {

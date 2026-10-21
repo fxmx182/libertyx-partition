@@ -19,7 +19,7 @@
                 <Button Grid.Column="2" Content="Escolher…" Command="{Binding PickImagePathCommand}" />
               </Grid>
               <CheckBox IsChecked="{Binding Hash}" Content="Calcular SHA-256 (prova de integridade)" />
-              <CheckBox IsChecked="{Binding UseVss}" Content="Instantâneo VSS dos volumes em uso" />
+              <CheckBox IsChecked="{Binding UseVss}" Content="{x:Static vm:Ui.SnapshotImage}" />
               <StackPanel Orientation="Horizontal" Spacing="10">
                 <TextBlock Text="Novas tentativas por setor ruim" VerticalAlignment="Center" FontSize="13" />
                 <NumericUpDown Value="{Binding Retries}" Minimum="0" Maximum="10" Width="110" FormatString="0" />

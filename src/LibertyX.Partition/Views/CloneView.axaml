@@ -20,8 +20,8 @@
           <CheckBox IsChecked="{Binding SystemOnly}" Content="Só as partições do sistema" IsVisible="{Binding Migrate}" />
           <CheckBox IsChecked="{Binding FitToTarget}" Content="Usar o disco novo inteiro" />
           <CheckBox IsChecked="{Binding UsedOnly}" Content="Copiar só o espaço em uso" ToolTip.Tip="Mais rápido, mas arquivos apagados (o espaço livre) não vão para o disco novo. Desmarque se ainda for recuperar algo dele." />
-          <CheckBox IsChecked="{Binding UseVss}" Content="Instantâneo VSS (Windows em uso)" />
-          <CheckBox IsChecked="{Binding MakeBootable}" Content="Preparar para iniciar (bcdboot)" />
+          <CheckBox IsChecked="{Binding UseVss}" Content="{x:Static vm:Ui.SnapshotClone}" />
+          <CheckBox IsChecked="{Binding MakeBootable}" Content="Preparar para iniciar (bcdboot)" IsVisible="{x:Static vm:Ui.IsWin}" />
           <Button Command="{Binding ShrinkCommand}" IsVisible="{Binding CanShrink}" HorizontalAlignment="Stretch">
             <TextBlock Text="{Binding ShrinkText}" TextWrapping="Wrap" />
           </Button>

@@ -7,7 +7,7 @@
     <Border DockPanel.Dock="Bottom" Classes="glass" Padding="18,12" Margin="0,14,0,0">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto">
         <CheckBox IsChecked="{Binding UsedOnly}" Content="Só o espaço em uso (mais rápido)" Margin="0,0,20,0" ToolTip.Tip="Arquivos apagados não são copiados nesse modo." />
-        <CheckBox Grid.Column="1" IsChecked="{Binding UseVss}" Content="Instantâneo VSS se estiver em uso" />
+        <CheckBox Grid.Column="1" IsChecked="{Binding UseVss}" Content="{x:Static vm:Ui.SnapshotPartition}" />
         <TextBlock Grid.Column="2" Text="{Binding Problem}" Foreground="{StaticResource Laranja}" VerticalAlignment="Center" Margin="16,0" TextWrapping="Wrap" />
         <Button Grid.Column="3" Classes="primary" Command="{Binding CopyCommand}" IsEnabled="{Binding CanCopy}" Padding="20,11">
           <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcCopyPartition}" /><TextBlock Text="Copiar" /></StackPanel>

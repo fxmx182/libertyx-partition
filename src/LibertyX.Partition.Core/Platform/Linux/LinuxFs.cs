@@ -121,7 +121,16 @@ public static partial class LinuxFs
         }
         args.Add(dev);
         s.Log($"{spec.Mkfs} {string.Join(' ', args)}");
+        await WaitNode(dev, s.Token);
         var r = await Proc.Run(LinuxTools.Find(spec.Mkfs)!, args, s.Token, Lines(s));
+        // o udev às vezes recria o /dev da partição logo depois de o kernel reler a tabela: espera e tenta de novo
+        if (!r.Ok && (r.Output + r.Error).Contains("No such file or directory"))
+        {
+            KernelSync.Settle();
+            await WaitNode(dev, s.Token);
+            s.Log("O /dev da partição ainda estava sendo criado; tentando de novo…");
+            r = await Proc.Run(LinuxTools.Find(spec.Mkfs)!, args, s.Token, Lines(s));
+        }
         if (!r.Ok && key == "fat32")
         {
             s.Log("O mkfs.fat recusou; formatando FAT32 pelo próprio LibertyX…");
@@ -130,6 +139,11 @@ public static partial class LinuxFs
         }
         Ensure(r, $"Formatar em {spec.Name}");
         KernelSync.Settle();
+    }
+
+    private static async Task WaitNode(string dev, CancellationToken ct)
+    {
+        for (int i = 0; i < 40 && !File.Exists(dev); i++) await Task.Delay(250, ct);
     }
 
     private static void OwnFat32(string dev, string label, int cluster, OpSink s)
