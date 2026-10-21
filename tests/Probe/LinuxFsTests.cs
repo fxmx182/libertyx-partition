@@ -86,7 +86,8 @@ public static class LinuxFsTests
             {
                 string? want = gone.FirstOrDefault(g => g.Key.EndsWith("/" + d.Name) || g.Key == d.Name).Value;
                 if (want == null) continue;
-                if (Hash(d) == want) intact++; else wrong++;
+                if (Hash(d) == want) intact++;
+                else { wrong++; if (wrong <= 5) Console.WriteLine($"     apagado bom com conteúdo errado: {Rel(d)} ({d.Size:N0} bytes, {d.Condition}, {d.Note})"); }
             }
             Console.WriteLine($"   apagados: {named}/{gone.Count} achados pelo nome; {intact} com conteúdo íntegro; {wrong} marcados bons com conteúdo errado");
             Check(named >= gone.Count * 8 / 10, "pelo menos 80% dos apagados aparecem com o nome");

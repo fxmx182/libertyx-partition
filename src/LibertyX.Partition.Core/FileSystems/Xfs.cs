@@ -428,7 +428,13 @@ public sealed class XfsVolume
 
     // ───────── log (journal) ─────────
 
-    public sealed record Historic(ulong Ino, ushort Mode, ulong Size, byte Format, byte[] Fork, List<Bmbt> Extents, long Lsn, DateTime? Mtime);
+    public sealed record Historic(ulong Ino, ushort Mode, ulong Size, byte Format, byte[] Fork, List<Bmbt> Extents, long Lsn, DateTime? Mtime)
+    {
+        /// <summary>O log tem uma versão mais nova, ainda com tamanho, com outro mapa (buraco furado, reescrita em árvore):
+        /// o mapa usado pode trazer blocos que já não eram do arquivo.</summary>
+        public bool Stale { get; set; }
+    }
+    private readonly Dictionary<ulong, Historic> _latestSized = [];
     private Dictionary<ulong, Historic>? _hist;
     /// <summary>Versões antigas de pastas pequenas (formato curto, dentro do inode) que passaram pelo log.</summary>
     public Dictionary<ulong, List<byte[]>> HistoricDirForks { get; } = [];
@@ -451,8 +457,13 @@ public sealed class XfsVolume
             if (U32BE(log, bb) != 0xFEEDBABE) continue;
             try { bb = ParseRecord(log, bb) - 512; } catch { }
         }
+        foreach (var (ino, h) in _hist)
+            if (_latestSized.TryGetValue(ino, out var last) && last.Lsn > h.Lsn && !SameMap(last, h)) h.Stale = true;
         return _hist;
     }
+
+    private static bool SameMap(Historic a, Historic b) =>
+        a.Format == b.Format && a.Extents.Count == b.Extents.Count && a.Extents.Zip(b.Extents).All(z => z.First.Off == z.Second.Off && z.First.Block == z.Second.Block && z.First.Count == z.Second.Count);
 
     private static bool Better(Historic a, Historic b)
     {
@@ -565,5 +576,6 @@ public sealed class XfsVolume
         // tamanho e o maior mapa (truncar só diminui); empate, a mais recente
         var cand = new Historic(ino, mode, size, format, fork, ext, lsn, mt);
         if (!_hist!.TryGetValue(ino, out var old) || Better(cand, old)) _hist[ino] = cand;
+        if (size > 0 && (!_latestSized.TryGetValue(ino, out var ls) || lsn >= ls.Lsn)) _latestSized[ino] = cand;
     }
 }

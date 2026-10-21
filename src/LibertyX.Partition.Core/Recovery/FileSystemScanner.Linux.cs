@@ -120,6 +120,12 @@ public static partial class FileSystemScanner
                         item.Data = v.DataSource(fake, h.Extents);
                         item.Size = (long)h.Size;
                         item.Condition = Eval(h.Extents);
+                        if (h.Stale && item.Condition is Condition.Excellent or Condition.Good)
+                        {
+                            // o arquivo mudou de mapa depois da versão usada: parte pode não ser mais dele
+                            item.Condition = Condition.Partial;
+                            item.Note = "mapa de blocos do log, mas o arquivo mudou depois dele (trechos soltos ou reescritos): confira o conteúdo";
+                        }
                     }
                 }
                 else if (isDir)
