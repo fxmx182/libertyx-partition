@@ -379,7 +379,10 @@ public sealed partial class LuksViewModel : PageViewModel
     [ObservableProperty] private string _elapsed = "";
     [ObservableProperty] private string _targetText = "";
     [ObservableProperty] private string _verdict = "";
-    [ObservableProperty] private string _verdictClass = "gold";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(VerdictGood), nameof(VerdictDanger), nameof(VerdictGold))] private string _verdictClass = "gold";
+    public bool VerdictGood => VerdictClass == "green";
+    public bool VerdictDanger => VerdictClass == "danger";
+    public bool VerdictGold => VerdictClass == "gold";
     [ObservableProperty] private int _found;
     public ObservableCollection<LuksRow> Results { get; } = [];
     private CancellationTokenSource? _cts;

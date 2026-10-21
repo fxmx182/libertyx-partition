@@ -82,7 +82,7 @@ public sealed class LuksFinding
             LuksState.Openable => ". Quem tiver a senha (ou o arquivo de chave) ainda abre isso.",
             _ => ". Sem chave inteira, não abre nem com a senha — mas ainda revela que o disco foi criptografado (UUID, rótulo, cifra).",
         };
-        return $"{hdr}; {keys}{data}{tail}";
+        return char.ToUpperInvariant(hdr[0]) + $"{hdr[1..]}; {keys}{data}{tail}";
     }
 
     /// <summary>O que apagar para não sobrar nada: as cópias do cabeçalho e as áreas das chaves (os dados sem chave já são ruído).</summary>

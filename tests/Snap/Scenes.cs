@@ -22,6 +22,17 @@ public static class Scenes
                 wait(() => sv.Running, 60000);
                 snap("24-superficie-fim");
                 break;
+            case "luks":
+                vm.Navigate("luks");
+                var lv = vm.Page<LuksViewModel>("luks");
+                pump(500);
+                lv.Picker.Select(vm.Disks.First(d => d.ImagePath?.EndsWith("luks.img") == true), null);
+                pump(300);
+                _ = lv.StartCommand.ExecuteAsync(null);
+                wait(() => lv.Running, 60000);
+                pump(400);
+                snap("27-luks");
+                break;
             case "todas":
                 int k = 30;
                 foreach (var key in new[] { "discos", "premium", "recuperar", "particoes", "imagem", "superficie", "saude", "migrar", "copiar-disco", "copiar-particao", "converter", "alinhar", "limpar", "excluir-todas", "bitlocker", "benchmark", "espaco", "duplicados", "boot" })

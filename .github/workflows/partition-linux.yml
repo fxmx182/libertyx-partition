@@ -80,6 +80,13 @@ jobs:
           dotnet run --project tests/Probe -c Release -- tests/images linux | tee leitores.txt
           grep -q "TUDO OK" leitores.txt
 
+      - name: Detector de LUKS (imagens gravadas pelo cryptsetup, formatadas por cima e apagadas)
+        run: |
+          sudo apt-get install -y -qq cryptsetup-bin ntfs-3g >/dev/null
+          sudo WORK="$PWD/tests/images/luks" tests/scripts/make-luks.sh
+          dotnet run --project tests/Probe -c Release -- tests/images luks | tee luks.txt
+          grep -q "LUKS OK" luks.txt
+
       - name: Empacotar (AppImage, .deb, .rpm, .tar.gz)
         run: |
           packaging/linux/empacotar.sh ${{ matrix.arch }} 1.0.${{ github.run_number }} dist/LibertyXPartition pacotes

@@ -45,6 +45,7 @@ public static partial class ActionsBuilder
         g1.Add(ActionItem.Of("Recuperar partição perdida", "RecoverPartition", () => { Main.Navigate("particoes", d.D); return Task.CompletedTask; }));
         g1.Add(ActionItem.Of("Criar imagem do disco", "Backup", () => { Main.Navigate("imagem", d.D); return Task.CompletedTask; }));
         g1.Add(ActionItem.Of("Teste de superfície", "Surface", () => { Main.Navigate("superficie", d.D); return Task.CompletedTask; }));
+        g1.Add(ActionItem.Of("Procurar LUKS", "Lock", () => { Main.Navigate("luks", d.D); return Task.CompletedTask; }));
         g1.Add(ActionItem.Of("Saúde e propriedades", "Health", () => { Main.Navigate("saude", d.D); return Task.CompletedTask; }));
         yield return new ActionGroup("Resgate", g1);
 
@@ -84,6 +85,7 @@ public static partial class ActionsBuilder
                 ActionItem.Of("Recuperar dados desta área", "RecoverFiles", () => { Main.Navigate("recuperar", p); return Task.CompletedTask; }),
                 ActionItem.Of("Procurar partição perdida aqui", "RecoverPartition", () => { Main.Navigate("particoes", p.Disk); return Task.CompletedTask; }),
                 ActionItem.Of("Teste de superfície", "Surface", () => { Main.Navigate("superficie", p); return Task.CompletedTask; }),
+                ActionItem.Of("Procurar LUKS", "Lock", () => { Main.Navigate("luks", p); return Task.CompletedTask; }),
             ]);
             yield break;
         }
@@ -122,6 +124,7 @@ public static partial class ActionsBuilder
             ActionItem.Of("Verificar sistema de arquivos", "CheckFs", () => CheckFs(pv), !Win ? OnlyWindows : p.VolumePath == null ? "Sem volume montado." : null),
             ActionItem.Of("Explorar partição", "Explore", () => { Main.Navigate("recuperar", new RecoveryTarget(p, true)); return Task.CompletedTask; }),
             ActionItem.Of("Teste de superfície", "Surface", () => { Main.Navigate("superficie", p); return Task.CompletedTask; }),
+            ActionItem.Of("Procurar LUKS", "Lock", () => { Main.Navigate("luks", p); return Task.CompletedTask; }),
             ActionItem.Of("Propriedades da partição", "Properties", () => Properties(pv)),
             ActionItem.Of("Recuperação de dados", "RecoverFiles", () => { Main.Navigate("recuperar", p); return Task.CompletedTask; }),
             .. (p.BitLocker ? new[] { ActionItem.Of("Gerenciar BitLocker", "BitLocker", () => { Main.Navigate("bitlocker"); return Task.CompletedTask; }) } : []),

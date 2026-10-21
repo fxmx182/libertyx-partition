@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LuksView" x:DataType="vm:LuksViewModel">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Margin="0,4,0,18">
+      <TextBlock Classes="h1" Text="Detector de LUKS" />
+      <TextBlock Classes="muted" Text="Diz se ainda há LUKS (a criptografia do Linux) no disco — inclusive o que sobra depois de formatar por cima: a cópia reserva do cabeçalho e as chaves, que com a senha reabrem os dados antigos." />
+    </StackPanel>
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="0.8*" MinWidth="250" MaxWidth="360" /><ColumnDefinition Width="20" /><ColumnDefinition Width="*" MinWidth="320" /></Grid.ColumnDefinitions>
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,14,0,0">
+          <Border Classes="option">
+            <StackPanel Spacing="3">
+              <RadioButton GroupName="luksmodo" IsChecked="{Binding Deep}" Content="Busca completa" FontWeight="Bold" />
+              <TextBlock Classes="faint" TextWrapping="Wrap" Margin="30,0,0,0" Text="Lê cada setor: acha qualquer pedaço de cabeçalho, onde estiver. É a que dá certeza." />
+            </StackPanel>
+          </Border>
+          <Border Classes="option">
+            <StackPanel Spacing="3">
+              <RadioButton GroupName="luksmodo" IsChecked="{Binding !Deep}" Content="Busca rápida" FontWeight="Bold" />
+              <TextBlock Classes="faint" TextWrapping="Wrap" Margin="30,0,0,0" Text="Só o começo das partições e dos espaços livres, onde o LUKS costuma estar. Segundos." />
+            </StackPanel>
+          </Border>
+          <Button Classes="primary" Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="16,12">
+            <StackPanel Orientation="Horizontal" Spacing="9"><PathIcon Data="{StaticResource IcSearch}" /><TextBlock Text="Procurar LUKS (só leitura)" /></StackPanel>
+          </Button>
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="section" Text="ONDE PROCURAR" />
+            <ContentControl Content="{Binding Picker}" />
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+      <Border Grid.Column="2" Classes="card">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+            <StackPanel Margin="0,0,10,0">
+              <TextBlock Text="{Binding TargetText}" Classes="h3" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Elapsed}" Classes="faint" />
+            </StackPanel>
+            <Button Grid.Column="1" Classes="danger" Content="Parar" Command="{Binding StopCommand}" IsVisible="{Binding Running}" />
+            <Button Grid.Column="1" Content="Salvar relatório" Command="{Binding SaveReportCommand}" IsVisible="{Binding CanSaveReport}" />
+          </Grid>
+          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <StackPanel MinWidth="112" Margin="0,0,22,8"><TextBlock Classes="section" Text="LIDO" /><TextBlock Text="{Binding Fraction, StringFormat='{}{0:P0}'}" Classes="h2" /></StackPanel>
+            <StackPanel MinWidth="112" Margin="0,0,22,8"><TextBlock Classes="section" Text="VELOCIDADE" /><TextBlock Text="{Binding Speed}" Classes="h2" /></StackPanel>
+            <StackPanel MinWidth="112" Margin="0,0,22,8"><TextBlock Classes="section" Text="ACHADOS" /><TextBlock Text="{Binding Found}" Classes="h2" Foreground="{StaticResource Ouro}" /></StackPanel>
+          </WrapPanel>
+          <ProgressBar DockPanel.Dock="Top" Value="{Binding Fraction}" Maximum="1" Margin="0,0,0,14" />
+          <Border DockPanel.Dock="Top" Classes="notice" Classes.good="{Binding VerdictGood}" Classes.danger="{Binding VerdictDanger}" Classes.gold="{Binding VerdictGold}" Margin="0,0,0,12" IsVisible="{Binding Verdict, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding Verdict}" TextWrapping="Wrap" />
+          </Border>
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Results}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LuksRow">
+                  <Border Classes="option" Padding="14,12">
+                    <StackPanel Spacing="6">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <PathIcon Data="{StaticResource IcLock}" Width="16" Height="16" Margin="0,0,10,0" Foreground="{StaticResource Ouro}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <Border Grid.Column="2" Classes="chip" Classes.green="{Binding IsActive}" Classes.red="{Binding IsOpenable}" Classes.orange="{Binding IsDead}" Classes.gold="{Binding IsInFile}" Margin="10,0,0,0"><TextBlock Text="{Binding StateText}" /></Border>
+                      </Grid>
+                      <TextBlock Text="{Binding Where}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding Explain}" Classes="muted" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding Details}" Classes="faint" TextWrapping="Wrap" FontSize="12" />
+                      <Button Classes="danger" HorizontalAlignment="Left" Margin="0,4,0,0" Command="{Binding Erase}" IsVisible="{Binding CanErase}">
+                        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcWipe}" Width="14" Height="14" /><TextBlock Text="{Binding EraseText}" /></StackPanel>
+                      </Button>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

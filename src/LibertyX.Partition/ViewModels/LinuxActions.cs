@@ -38,6 +38,7 @@ public static partial class ActionsBuilder
                 ActionItem.Of("Recuperar dados desta área", "RecoverFiles", () => { Main.Navigate("recuperar", p); return Task.CompletedTask; }),
                 ActionItem.Of("Procurar partição perdida aqui", "RecoverPartition", () => { Main.Navigate("particoes", p.Disk); return Task.CompletedTask; }),
                 ActionItem.Of("Teste de superfície", "Surface", () => { Main.Navigate("superficie", p); return Task.CompletedTask; }),
+                ActionItem.Of("Procurar LUKS", "Lock", () => { Main.Navigate("luks", p); return Task.CompletedTask; }),
             ]);
             yield break;
         }
@@ -92,6 +93,7 @@ public static partial class ActionsBuilder
             ActionItem.Of("Verificar sistema de arquivos", "CheckFs", () => CheckLinux(pv), NeedsDev(p) ?? held ?? (!mountable || p.FileSystem is FsKind.Jfs or FsKind.ReiserFs or FsKind.Bcachefs or FsKind.Squashfs or FsKind.HfsPlus or FsKind.Apfs or FsKind.ReFS ? "Sem verificador para este sistema de arquivos." : null)),
             ActionItem.Of("Explorar partição", "Explore", () => { Main.Navigate("recuperar", new RecoveryTarget(p, true)); return Task.CompletedTask; }),
             ActionItem.Of("Teste de superfície", "Surface", () => { Main.Navigate("superficie", p); return Task.CompletedTask; }),
+            ActionItem.Of("Procurar LUKS", "Lock", () => { Main.Navigate("luks", p); return Task.CompletedTask; }),
             ActionItem.Of("Propriedades da partição", "Properties", () => Properties(pv)),
             ActionItem.Of("Recuperação de dados", "RecoverFiles", () => { Main.Navigate("recuperar", p); return Task.CompletedTask; }),
             .. (p.FileSystem is FsKind.Luks or FsKind.BitLocker ? new[] { ActionItem.Of(p.HeldBy != null ? "Criptografia (fechar, chaves)" : "Desbloquear", "BitLocker", () => { Main.Navigate("bitlocker", p); return Task.CompletedTask; }) } : []),

@@ -441,6 +441,47 @@ public static partial class SelfTest
             File.Delete(raw); File.Delete(gz);
         });
 
+        // O que a formatação rápida do Windows deixa de um LUKS2 — e o detector apagando o resto sem
+        // estragar o NTFS novo (o Windows tem de montar e o chkdsk não pode achar erro).
+        await Step("VHD: LUKS formatado por cima no Windows — achar e apagar o resto", async () =>
+        {
+            long mb = 1 << 20;
+            d = DiskSystem.Enumerate().First(x => x.Number == n);
+            var t = new PartitionTable { Style = TableStyle.Gpt, SectorSize = d.SectorSize, DiskSectors = d.Size / d.SectorSize };
+            t.Entries.Add(new PartitionEntry { StartLba = mb / d.SectorSize, SectorCount = 300 * mb / d.SectorSize, TypeGuid = PartitionTypes.BasicData, UniqueGuid = Guid.NewGuid(), Name = "luks" });
+            DiskOperations.WriteTable(d, t, "autoteste", sink);
+            d = await Settle(n, x => x.Table.Style == TableStyle.Gpt && x.Table.Entries.Count == 1);
+            var part = d.Partitions.First(p => p.Offset == mb);
+            using (DiskSystem.Native.LockVolumes(d, [part]))
+            using (var dev = DiskSystem.OpenDisk(d, true)) { dev.Write(mb, FakeLuks2("LXWIN")); dev.Flush(); }
+            DiskSystem.Native.Rescan(d);
+            d = await Settle(n, x => x.Partitions.Any(p => p.Offset == mb && p.FileSystem == FsKind.Luks));
+            List<LuksFinding> Scan(DiskInfo dd)
+            {
+                using var dev = DiskSystem.OpenDisk(dd, false);
+                var pp = dd.Partitions.First(p => p.Offset == mb);
+                return LuksFinder.Find(dev, LuksFinder.Layout(dd, dev.Length), pp.Offset, pp.Length, LuksScanMode.Full, null, default, a => LuksFinder.UsedRanges(dev.Slice(a.Offset, a.Length)));
+            }
+            var before = Scan(d);
+            Check(before.Count == 1 && before[0].State == LuksState.Active, $"LUKS2 gravado na partição: o detector vê o contêiner em uso ({string.Join("; ", before.Select(f => f.StateText))})");
+            await ViewModels.ActionsBuilder.FormatRobust(d.Partitions.First(p => p.Offset == mb), "NTFS", "LXLUKS", 0, true, sink);
+            d = await Settle(n, x => x.Partitions.Any(p => p.Offset == mb && p.FileSystem == FsKind.Ntfs && p.Letter != null));
+            var after = Scan(d);
+            W($"   depois da formatação rápida (Format-Volume NTFS): {(after.Count == 0 ? "nenhum LUKS" : string.Join(" | ", after.Select(f => $"{f.StateText} — {f.Explain()}")))}");
+            foreach (var f in after.Where(f => f.State != LuksState.InFile))
+                DiskOperations.EraseLuks(DiskSystem.Enumerate().First(x => x.Number == n), f, sink);
+            d = await Settle(n, x => x.Partitions.Any(p => p.Offset == mb && p.FileSystem == FsKind.Ntfs && p.Letter != null));
+            var rest = Scan(d);
+            Check(rest.Count == 0, after.Count == 0 ? "nada para apagar" : $"resto apagado: a varredura completa não acha mais nada ({rest.Count})");
+            string l = d.Partitions.First(p => p.Offset == mb).Letter ?? "";
+            try { File.WriteAllText($@"{l}\ok.txt", "ok"); Check(File.ReadAllText($@"{l}\ok.txt") == "ok", $"o NTFS de hoje continua montando e gravando ({l})"); }
+            catch (Exception ex) { Check(false, $"NTFS depois de apagar: {ex.Message}"); }
+            var ck = Process.Start(new ProcessStartInfo("chkdsk.exe", l) { RedirectStandardOutput = true, UseShellExecute = false })!;
+            string ckOut = await ck.StandardOutput.ReadToEndAsync();
+            await ck.WaitForExitAsync();
+            Check(ck.ExitCode == 0, $"chkdsk {l} sem erros (código {ck.ExitCode})" + (ck.ExitCode == 0 ? "" : ": " + ckOut.Trim().Split('\n').LastOrDefault()));
+        });
+
         await Step("atualização: acha a versão publicada", async () =>
         {
             var u = await Updater.Check();
@@ -457,6 +498,37 @@ public static partial class SelfTest
             d = await Settle(n, x => x.Table.Style == TableStyle.None);
             Check(d.Table.Style == TableStyle.None, "disco zerado aparece sem tabela");
         });
+    }
+
+    /// <summary>Um LUKS2 como o cryptsetup grava: duas cópias do cabeçalho (16 KiB) com checksum e uma chave de material aleatório.</summary>
+    private static byte[] FakeLuks2(string label)
+    {
+        const int hdr = 0x4000, ksOff = 0x8000, ksSize = 258048;
+        var b = new byte[ksOff + ksSize];
+        RandomNumberGenerator.Fill(b.AsSpan(ksOff));
+        string uuid = Guid.NewGuid().ToString();
+        string salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)), dig = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        string json = "{\"keyslots\":{\"0\":{\"type\":\"luks2\",\"key_size\":64,\"af\":{\"type\":\"luks1\",\"stripes\":4000,\"hash\":\"sha256\"},"
+            + $"\"kdf\":{{\"type\":\"pbkdf2\",\"hash\":\"sha256\",\"iterations\":1000,\"salt\":\"{salt}\"}},"
+            + $"\"area\":{{\"type\":\"raw\",\"offset\":\"{ksOff}\",\"size\":\"{ksSize}\",\"encryption\":\"aes-xts-plain64\",\"key_size\":64}}}}}},"
+            + "\"segments\":{\"0\":{\"type\":\"crypt\",\"offset\":\"16777216\",\"size\":\"dynamic\",\"iv_tweak\":\"0\",\"encryption\":\"aes-xts-plain64\",\"sector_size\":512}},"
+            + $"\"digests\":{{\"0\":{{\"type\":\"pbkdf2\",\"keyslots\":[\"0\"],\"segments\":[\"0\"],\"hash\":\"sha256\",\"iterations\":1000,\"salt\":\"{salt}\",\"digest\":\"{dig}\"}}}},\"tokens\":{{}},\"config\":{{\"json_size\":\"12288\",\"keyslots_size\":\"16744448\"}}}}";
+        foreach (int c in new[] { 0, hdr })
+        {
+            var h = b.AsSpan(c, hdr);
+            (c == 0 ? "LUKS"u8 : "SKUL"u8).CopyTo(h); h[4] = 0xBA; h[5] = 0xBE;
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(h[6..], 2);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(h[8..], hdr);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(h[16..], 1);
+            Encoding.ASCII.GetBytes(label).CopyTo(h[24..]);
+            "sha256"u8.CopyTo(h[72..]);
+            RandomNumberGenerator.Fill(h.Slice(104, 64));
+            Encoding.ASCII.GetBytes(uuid).CopyTo(h[168..]);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(h[256..], (ulong)c);
+            Encoding.ASCII.GetBytes(json).CopyTo(h[4096..]);
+            SHA256.HashData(h).CopyTo(h[448..]);
+        }
+        return b;
     }
 
     private static string Fmt(long? b) => b == null ? "—" : DiskOperations.Size(b.Value);
