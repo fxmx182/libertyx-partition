@@ -489,7 +489,7 @@ public static class DiskOperations
         long first = probe.Style == TableStyle.Gpt ? PartitionCodec.GptFirstUsable(probe) : 1;
         long last = probe.Style == TableStyle.Gpt ? PartitionCodec.GptLastUsable(probe) : probe.DiskSectors - 1;
         var main = parts.FirstOrDefault(p => p.IsSystemVolume) ?? parts.Where(p => p.FileSystem == FsKind.Ntfs).MaxBy(p => p.Length)
-            ?? parts.Where(p => p.FileSystem is FsKind.Ext or FsKind.Xfs or FsKind.Btrfs or FsKind.F2fs).MaxBy(p => p.Length);
+            ?? (OperatingSystem.IsLinux() ? parts.Where(p => p.FileSystem is FsKind.Ext or FsKind.Xfs or FsKind.Btrfs or FsKind.F2fs).MaxBy(p => p.Length) : null);
         plan.ShrinkCandidate = main;
 
         // mantém o deslocamento original quando dá (ajuda o Windows a reconhecer), senão compacta

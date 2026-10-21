@@ -148,7 +148,7 @@
             <StackPanel Orientation="Horizontal" Spacing="7" Margin="6,0,0,0">
               <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Verde}" IsVisible="{Binding IsAdmin}" />
               <PathIcon Data="{StaticResource IcAlert}" Classes="small" Foreground="{StaticResource Laranja}" IsVisible="{Binding !IsAdmin}" />
-              <TextBlock Classes="wide" FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="170">
+              <TextBlock Classes="wide" FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="{Binding StatusMaxWidth}">
                 <Run Text="{Binding AdminText}" /><Run Text=" · " /><Run Text="{Binding Version}" />
               </TextBlock>
             </StackPanel>

@@ -124,7 +124,11 @@ jobs:
           $subjects = @()
           if ($prev) { git cat-file -e "$prev^{commit}" 2>$null; if ($LASTEXITCODE -eq 0) { $subjects = @(git log --pretty=%s "$prev..HEAD") } }
           if ($subjects.Count -eq 0) { $subjects = @(git log -1 --pretty=%s) }
+          $all = @($subjects | Where-Object { $_ })
           $subjects = @($subjects | Where-Object { $_ -and $_ -notmatch '^\s*Linux\b' })
+          # só commits do Linux desde a versão no ar (mesmo mexendo em arquivo comum, atrás de IsLinux):
+          # o Windows foi compilado e testado, mas não vira versão nova
+          if ($prev -and $all.Count -gt 0 -and $subjects.Count -eq 0) { Write-Output "::notice title=Sem versão nova::só mudanças do Linux desde a $prev"; exit 0 }
           $novidade = if ($subjects.Count -gt 0) { $subjects -join ' · ' } else { 'Correções e melhorias' }
           if ($novidade.Length -gt 400) { $novidade = $novidade.Substring(0, 400) + "…" }
           $notes = "Versão $ver, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nNovidades: $novidade`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"

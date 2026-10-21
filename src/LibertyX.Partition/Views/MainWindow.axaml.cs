@@ -17,7 +17,8 @@ public partial class MainWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-        if (Screens.ScreenFromWindow(this) is not { } sc) return;
+        // só no Linux (a escala vem do app); no Windows a janela abre como sempre abriu
+        if (!OperatingSystem.IsLinux() || Screens.ScreenFromWindow(this) is not { } sc) return;
         var area = sc.WorkingArea.Size.ToSize(sc.Scaling);
         if (Width <= area.Width * 0.96 && Height <= area.Height * 0.94) return;
         Width = Math.Max(MinWidth, Math.Min(Width, area.Width * 0.96));

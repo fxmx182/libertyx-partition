@@ -78,6 +78,8 @@ public sealed partial class MainViewModel : ViewModelBase
     // ───────── tamanho da interface (Linux) ─────────
 
     public bool IsLinux { get; } = OperatingSystem.IsLinux();
+    /// <summary>No Linux a linha de status divide espaço com o botão "Aa"; no Windows fica como sempre foi.</summary>
+    public double StatusMaxWidth { get; } = OperatingSystem.IsLinux() ? 170 : 196;
 
     /// <summary>Automático (com o valor detectado) e os tamanhos fixos; o atual vem marcado.</summary>
     public List<ScaleItem> ScaleItems
