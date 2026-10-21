@@ -458,6 +458,14 @@ public static partial class LinuxFs
         var args = opts.Count > 0 ? new List<string> { "-o", string.Join(',', opts), dev, mp } : [dev, mp];
         var r = await Proc.Run("mount", args, s.Token, Lines(s));
         if (!r.Ok) { try { Directory.Delete(mp); } catch { } }
+        if (!r.Ok && r.Message.Contains("unknown filesystem type"))
+        {
+            string fsName = FsDetect.Name(p.FileSystem);
+            string hint = p.FileSystem == FsKind.ExFat ? "instale o módulo do kernel (pacote linux-modules-extra no Ubuntu) ou o exfat-fuse"
+                        : p.FileSystem == FsKind.Ntfs ? "instale o ntfs-3g"
+                        : "instale o pacote de módulos extras do kernel da sua distribuição";
+            throw new InvalidOperationException($"O kernel deste sistema não tem suporte a {fsName} para montar — {hint}. Os arquivos continuam acessíveis pela Recuperação de dados, que lê o volume sem montar.");
+        }
         Ensure(r, "Montar");
         return mp;
     }

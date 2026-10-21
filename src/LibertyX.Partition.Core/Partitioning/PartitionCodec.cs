@@ -19,9 +19,14 @@ public static class PartitionCodec
         var mbr = new byte[ss];
         dev.Read(0, mbr);
         bool hasMbrSig = mbr[510] == 0x55 && mbr[511] == 0xAA;
-        bool protective = false;
+        bool protective = false, mbrHasParts = false;
         if (hasMbrSig)
-            for (int i = 0; i < 4; i++) if (mbr[446 + i * 16 + 4] == 0xEE) protective = true;
+            for (int i = 0; i < 4; i++)
+            {
+                byte ty = mbr[446 + i * 16 + 4];
+                if (ty == 0xEE) protective = true;
+                else if (ty != 0 && U32(mbr, 446 + i * 16 + 12) != 0) mbrHasParts = true;
+            }
 
         // GPT vence quando existe: há discos com MBR "híbrido" ou sem a protetora.
         if (TryReadGpt(dev, 1, out var gpt, out var primaryOk) && primaryOk)
@@ -30,7 +35,9 @@ public static class PartitionCodec
             CheckBackup(dev, gpt!);
             return gpt!;
         }
-        if (protective || TryReadGpt(dev, sectors - 1, out _, out _))
+        // a cópia da GPT no fim só vale se o MBR não tem partições de verdade: um pendrive que já foi
+        // GPT e virou MBR guarda a cópia velha lá no fim, e ela não pode vencer a tabela atual
+        if (protective || (!mbrHasParts && TryReadGpt(dev, sectors - 1, out _, out _)))
         {
             // Primária danificada: tenta a reserva no fim do disco.
             if (TryReadGpt(dev, sectors - 1, out var backup, out var ok2) && ok2)

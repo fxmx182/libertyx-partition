@@ -308,7 +308,9 @@ public sealed partial class WipeViewModel : PageViewModel
         DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : null,
         PartitionFilter = p => p.IsSystemCritical ? "Partição do sistema em uso." : p.Disk.ReadOnly ? "Imagem só para leitura." : null,
     };
-    public List<string> Methods { get; } = Enum.GetValues<WipeMethod>().Select(Wiper.Describe).ToList();
+    /// <summary>TRIM e o apagamento do fabricante só existem na camada do Linux.</summary>
+    private static readonly List<WipeMethod> MethodValues = Enum.GetValues<WipeMethod>().Where(m => OperatingSystem.IsLinux() || m is not (WipeMethod.Discard or WipeMethod.Sanitize)).ToList();
+    public List<string> Methods { get; } = MethodValues.Select(Wiper.Describe).ToList();
     [ObservableProperty] private int _method;
     public bool CanWipe => Picker.Selected != null;
     public WipeViewModel() { Picker.Changed += _ => OnPropertyChanged(nameof(CanWipe)); }
@@ -324,7 +326,13 @@ public sealed partial class WipeViewModel : PageViewModel
     private async Task Wipe()
     {
         var sel = Picker.Selected; if (sel == null) return;
-        var m = (WipeMethod)Method;
+        var m = MethodValues[Math.Clamp(Method, 0, MethodValues.Count - 1)];
+        if (m == WipeMethod.Sanitize && (sel.Partition != null || Core.Platform.Linux.LinuxErase.CannotSanitize(sel.Disk) is not null))
+        {
+            await Main.Alert("Apagamento do fabricante", sel.Partition != null ? "Esse apagamento é sempre do disco inteiro: escolha o disco, não uma partição." : Core.Platform.Linux.LinuxErase.CannotSanitize(sel.Disk)!, "warn");
+            return;
+        }
+        if (m == WipeMethod.Discard && sel.Disk.IsSsd == false) { await Main.Alert("HD mecânico", "TRIM só vale para SSD, cartões e pendrives. Num HD, use “Preencher com zeros”.", "warn"); return; }
         string what = sel.Partition == null ? $"o disco {sel.Disk.Title} inteiro ({sel.Disk.Model}, {Fmt.Size(sel.Disk.Size)}), com todas as partições" : $"a partição {sel.Title} ({Fmt.Size(sel.Partition.Length)})";
         var sd = sel.Disk; var sp = sel.Partition;
         Main.Queue("Limpar (sobrescrever)", $"{what} — {Wiper.Describe(m)}. Sem volta: nenhuma recuperação traz os dados depois.", "Wipe", s =>

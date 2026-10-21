@@ -134,6 +134,8 @@ public static class BootMedia
             using (DiskSystem.Native.LockVolumes(usb))
             {
                 dev.Write(0, new byte[1 << 20]);
+                // a cópia de uma GPT antiga no fim do disco confunde quem lê a tabela depois
+                dev.Write((dev.Length - (1 << 20)) / ss * ss, new byte[1 << 20]);
                 Fat32Formatter.Format(new SubDevice(dev, start * ss, count * ss), label, 0, start, new Progress<double>(x => sink.Progress(x * 0.05, "Formatando FAT32")));
                 PartitionCodec.Write(dev, t);
                 DiskSystem.Native.Rescan(usb);
@@ -213,6 +215,8 @@ public static class BootMedia
             using (DiskSystem.Native.LockVolumes(usb))
             {
                 dev.Write(0, new byte[1 << 20]);
+                // a cópia de uma GPT antiga no fim do disco confunde quem lê a tabela depois
+                dev.Write((dev.Length - (1 << 20)) / ss * ss, new byte[1 << 20]);
                 Fat32Formatter.Format(new SubDevice(dev, start * ss, count * ss), label, 0, start, new Progress<double>(x => sink.Progress(x * 0.05, "Formatando FAT32")));
                 PartitionCodec.Write(dev, t);
                 DiskSystem.Native.Rescan(usb);

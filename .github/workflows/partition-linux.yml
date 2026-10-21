@@ -43,7 +43,10 @@ jobs:
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
             e2fsprogs xfsprogs btrfs-progs dosfstools exfatprogs ntfs-3g f2fs-tools cryptsetup-bin \
-            rsync rpm smartmontools lvm2 >/dev/null
+            rsync rpm smartmontools lvm2 wimtools genisoimage >/dev/null
+          # o kernel da nuvem vem sem exFAT/F2FS; os módulos extras trazem (para o teste montar de verdade)
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "linux-modules-extra-$(uname -r)" >/dev/null 2>&1 || true
+          sudo modprobe -a exfat f2fs 2>/dev/null || true
 
       - name: Publicar o executável
         run: |
@@ -111,9 +114,40 @@ jobs:
             autoteste.txt
           retention-days: 30
 
+  # Migrar o sistema de verdade: uma VM Ubuntu (KVM do próprio runner) migra a si mesma para um
+  # disco vazio e liga de novo só pelo disco novo — em UEFI (NVRAM limpo) e em BIOS.
+  migrar:
+    name: Migração do sistema numa VM (${{ matrix.modo }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        modo: [uefi, bios]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-x64
+          path: art
+      - name: KVM e QEMU
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils ovmf dosfstools mtools genisoimage >/dev/null
+          tar -xzf art/pacotes/LibertyXPartition-linux.tar.gz -C "$RUNNER_TEMP"
+      - name: Migrar e ligar pelo disco novo
+        run: |
+          mkdir -p "$RUNNER_TEMP/vm"
+          tests/scripts/test-migrar-vm.sh ${{ matrix.modo }} "$RUNNER_TEMP/vm" "$RUNNER_TEMP/libertyx-partition/LibertyXPartition" | tee migrar.txt
+          grep '^FALHA' migrar.txt | while read -r l; do echo "::error title=Migração ${{ matrix.modo }}::$l"; done || true
+          echo "::notice title=Migração ${{ matrix.modo }}::$(tail -n 1 migrar.txt)"
+
   release:
     name: Publicar "linux-latest"
-    needs: build
+    needs: [build, migrar]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:

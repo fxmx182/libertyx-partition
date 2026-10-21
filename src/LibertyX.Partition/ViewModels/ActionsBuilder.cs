@@ -28,9 +28,15 @@ public static partial class ActionsBuilder
     private static string? NeedsVolume(PartitionInfo p) =>
         !Win ? OnlyWindows : p.VolumePath == null ? "A partição precisa estar montada (com sistema de arquivos reconhecido pelo Windows)." : null;
 
+    /// <summary>Linux sem root: disco de verdade não abre — no lugar das ações, o caminho para entrar como administrador.</summary>
+    private static ActionGroup? NoRoot(DiskInfo d) => Lin && !d.IsImage && !DiskSystem.Native.IsElevated
+        ? new ActionGroup("Sem permissão", [ActionItem.Of("Entrar como administrador", "Shield", () => Main.ElevateCommand.ExecuteAsync(null))])
+        : null;
+
     public static IEnumerable<ActionGroup> ForDisk(DiskVM d)
     {
         var D = d.D;
+        if (NoRoot(D) is { } nr) { yield return nr; yield break; }
         string? lockR = DiskLock(D);
         var g1 = new List<ActionItem>();
         if (D.Table.Style == TableStyle.None && !D.IsImage && !D.IsVirtual)
@@ -65,6 +71,7 @@ public static partial class ActionsBuilder
     public static IEnumerable<ActionGroup> ForPartition(PartitionVM pv)
     {
         var p = pv.P;
+        if (NoRoot(p.Disk) is { } nr) { yield return nr; yield break; }
         if (Lin && !p.Disk.IsImage)
         {
             foreach (var g in ForPartitionLinux(pv)) yield return g;

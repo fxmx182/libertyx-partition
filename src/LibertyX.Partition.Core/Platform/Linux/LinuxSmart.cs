@@ -26,10 +26,12 @@ public static unsafe class LinuxSmart
         }
         catch { }
         if (LinuxTools.Has("smartctl") && SmartCtl(d.DevicePath) is { } r) return r;
+        bool virtualDisk = d.Bus == "Virtio" || System.Text.RegularExpressions.Regex.IsMatch(d.Model, @"Virtual|QEMU|VMware|VBOX|Xen|Msft", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return d.Bus switch
         {
             "SD" or "MMC" => new SmartReport { Summary = "Cartões SD e eMMC não têm S.M.A.R.T. — o teste de superfície é o jeito de avaliar." },
-            "Virtio" => new SmartReport { Summary = "Disco virtual: a saúde é a do disco físico do hospedeiro." },
+            _ when virtualDisk => new SmartReport { Summary = "Disco virtual: a saúde é a do disco físico do hospedeiro." },
+            "USB" => new SmartReport { Summary = "Este adaptador USB não repassa o S.M.A.R.T. (instale o smartmontools: ele conhece mais pontes USB)." },
             _ => new SmartReport(),
         };
     }

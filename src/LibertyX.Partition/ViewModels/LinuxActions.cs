@@ -71,6 +71,8 @@ public static partial class ActionsBuilder
                 p.IsSystemCritical && p.IsMounted ? "Em uso pelo sistema." : NeedsDev(p) ?? (p.IsMounted ? null : !mountable ? (FsDetect.IsContainer(p.FileSystem) ? "Recipiente: abra primeiro em Criptografia (LUKS/BitLocker) ou ative o LVM." : "Sem sistema de arquivos montável.") : held)),
             .. (p.FileSystem == FsKind.LinuxSwap ? new[] { ActionItem.Of(p.HasPageFile ? "Desligar swap" : "Ligar swap", "Swap", () => SwapToggle(pv), NeedsDev(p) ?? (p.HasPageFile && p.InUseBySystem && !p.HasPageFile ? "Em uso." : null)) } : []),
             .. (p.IsMounted ? new[] { ActionItem.Of("Abrir no gerenciador de arquivos", "Explore", () => { LinuxSession.OpenAsUser(p.MountPoints[0]); return Task.CompletedTask; }) } : []),
+            ActionItem.Of(p.Disk.IsSsd == false ? "Otimizar (desfragmentar)" : "Otimizar (TRIM)", "Benchmark", () => OptimizeLinux(pv),
+                !p.IsMounted ? "Monte a partição primeiro (a otimização roda com o volume em uso)." : p.Disk.IsSsd == false && p.FileSystem is not (FsKind.Ext or FsKind.Xfs or FsKind.Btrfs) ? $"{FsDetect.Name(p.FileSystem)} não tem desfragmentador no Linux." : null),
             ActionItem.Of("Copiar partição", "CopyPartition", () => { Main.Navigate("copiar-particao", p); return Task.CompletedTask; }),
             ActionItem.Of("Alinhar partição", "Align", () => Align(pv), !table ? "Sem tabela de partições." : lockR ?? held ?? (DiskOperations.IsAligned(p) ? "Já está alinhada a 1 MB." : null)),
             ActionItem.Of("Limpar partição", "Wipe", () => { Main.Navigate("limpar", p); return Task.CompletedTask; }, lockR ?? held, true),
@@ -680,6 +682,27 @@ public static partial class ActionsBuilder
             }
             DiskOperations.WriteTable(q.Disk, t, "Sinalizadores", s);
         }, p.Disk, dangerous: false, canPause: false);
+    }
+
+    // ───────── otimizar ─────────
+
+    /// <summary>SSD: TRIM do espaço livre (fstrim). HD: desfragmentação online (e4defrag, xfs_fsr, btrfs defragment).</summary>
+    private static async Task OptimizeLinux(PartitionVM pv)
+    {
+        var p = pv.P;
+        string mp = p.MountPoints[0];
+        bool ssd = p.Disk.IsSsd != false;
+        string tool = ssd ? "fstrim" : p.FileSystem switch { FsKind.Ext => "e4defrag", FsKind.Xfs => "xfs_fsr", _ => "btrfs" };
+        if (LinuxTools.Missing(tool) is { } miss) { await Main.Alert("Falta ferramenta", miss, "warn"); return; }
+        await Main.Run(ssd ? $"TRIM em {Who(p)}" : $"Desfragmentando {Who(p)}", async s =>
+        {
+            s.Progress(-1, ssd ? "Avisando o SSD dos blocos livres" : "Reorganizando os arquivos");
+            var r = ssd ? await Proc.Run("fstrim", ["-v", mp], s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); })
+                  : tool == "btrfs" ? await Proc.Run("btrfs", ["filesystem", "defragment", "-r", mp], s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); })
+                  : await Proc.Run(tool, tool == "xfs_fsr" ? ["-v", mp] : [mp], s.Token, l => { if (l.Trim().Length > 0 && !l.Contains("[")) s.Log(l.Trim()); });
+            if (!r.Ok) throw new InvalidOperationException(r.Message.Split('\n').LastOrDefault()?.Trim() ?? "falhou");
+            s.Log(ssd ? "Pronto: o SSD sabe quais blocos estão livres e pode reaproveitá-los (mais velocidade e vida útil)." : "Pronto.");
+        }, refresh: false, success: "Otimizado");
     }
 
     // ───────── verificar ─────────

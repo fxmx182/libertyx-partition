@@ -4,7 +4,7 @@ using LibertyX.Partition.Core.IO;
 
 namespace LibertyX.Partition.Core.Tools;
 
-public enum WipeMethod { Zeros, Random, DoD3Pass, Gutmann7 }
+public enum WipeMethod { Zeros, Random, DoD3Pass, Gutmann7, Discard, Sanitize }
 
 public readonly record struct WipeProgress(int Pass, int Passes, long Done, long Total, double BytesPerSecond);
 
@@ -17,6 +17,8 @@ public static class Wiper
         WipeMethod.Random => "Dados aleatórios (1 passada)",
         WipeMethod.DoD3Pass => "DoD 5220.22-M (3 passadas: zeros, uns, aleatório)",
         WipeMethod.Gutmann7 => "Reforçado (7 passadas alternadas) — lento; para discos mecânicos antigos",
+        WipeMethod.Discard => "SSD: descartar todos os blocos (TRIM) — segundos, e o SSD volta ao desempenho de novo",
+        WipeMethod.Sanitize => "SSD: apagamento seguro do fabricante (NVMe Format / ATA Secure Erase) — inclusive as células de reserva",
         _ => "",
     };
 

@@ -19,6 +19,8 @@ internal static class Program
         if (st >= 0)
         {
             string outPath = st + 1 < args.Length ? args[st + 1] : "autoteste.txt";
+            int mg = Array.IndexOf(args, "--migrar");
+            if (mg >= 0 && mg + 1 < args.Length) Environment.Exit(SelfTest.RunMigrate(outPath, args[mg + 1]));
             Environment.Exit(SelfTest.Run(outPath, args.Contains("--vhd") || args.Contains("--loop")));
             return;
         }
@@ -31,8 +33,15 @@ internal static class Program
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args.Where(a => a != "--sem-root").ToArray());
     }
 
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace();
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        var b = AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace();
+        // Linux como root (pkexec): sem acesso ao D-Bus da sessão, o seletor de arquivos do sistema
+        // (portal) não abre — usa o do próprio Avalonia, com o tema do app
+        if (OperatingSystem.IsLinux() && LibertyX.Partition.Core.Platform.Linux.LinuxSession.IsRoot)
+            b = Avalonia.Dialogs.ManagedFileDialogExtensions.UseManagedSystemDialogs(b);
+        return b;
+    }
 }
 
 public static class CrashLog

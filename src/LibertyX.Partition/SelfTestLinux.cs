@@ -328,7 +328,13 @@ public static partial class SelfTest
                 Check(p.FileSystem == spec.Kind, $"motor reconhece {FsDetect.Name(p.FileSystem)} (rótulo {p.Label}, uuid {p.FsUuid})");
                 made.Add((key, ofs));
                 if (key == "swap") return;
-                string mp = await MountAt(p, sink);
+                string mp;
+                try { mp = await MountAt(p, sink); }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("não tem suporte"))
+                {
+                    W($"   (o kernel deste computador não monta {spec.Name}: {ex.Message.Split('—')[0].Trim()} — ambiente, não falha do app)");
+                    return;
+                }
                 var mine = new Dictionary<string, string>();
                 WriteTestFiles(mp, 3, ofs.GetHashCode(), mine, "teste");
                 Check(SameFiles(mp, mine), $"{spec.Name} grava e lê");
@@ -381,11 +387,15 @@ public static partial class SelfTest
             e.Name = "raiz-teste";
             e.TypeGuid = PartitionTypes.LinuxRootX64;
             e.Attributes |= PartitionTypes.AttrLegacyBoot;
+            var before = d.Partitions.Where(x => x.Entry != null).ToDictionary(x => x.Offset, x => x.Entry!.Slot);
             DiskOperations.WriteTable(d, t, "autoteste", sink);
-            d = await SettleLoop(x => PartAt(x, extStart).Entry?.Name == "raiz-teste");
+            d = await SettleLoop(x => PartAt(x, extStart).Entry?.Name == "raiz-teste" && x.Partitions.Where(q => q.Entry != null).All(q => q.DeviceNode != null));
             var ne = PartAt(d, extStart).Entry!;
             Check(ne.Name == "raiz-teste" && ne.TypeGuid == PartitionTypes.LinuxRootX64 && (ne.Attributes & PartitionTypes.AttrLegacyBoot) != 0, "nome, tipo e legacy_boot gravados");
-            Check(d.Partitions.Where(x => x.Entry != null).All(x => x.DeviceNode != null), "numeração preservada: todas as partições continuam com /dev");
+            var lost = d.Partitions.Where(x => x.Entry != null && x.DeviceNode == null).ToList();
+            foreach (var x in lost) W($"   sem /dev: slot {x.Entry!.Slot} em {Fmt(x.Offset)} ({x.HeldBy})");
+            Check(lost.Count == 0, "todas as partições continuam com /dev");
+            Check(d.Partitions.Where(x => x.Entry != null).All(x => before.TryGetValue(x.Offset, out var sl) && sl == x.Entry!.Slot), "numeração preservada (cada partição no mesmo número)");
         });
 
         await Step("Imagem, excluir tudo, achar e restaurar", async () =>
@@ -461,6 +471,36 @@ public static partial class SelfTest
             await Task.CompletedTask;
         });
 
+        await Step("Pendrive de instalação do Windows (arquivos e autounattend, como o Rufus)", async () =>
+        {
+            string? mk = LinuxTools.Find("genisoimage") ?? LinuxTools.Find("xorriso");
+            if (mk == null) { W("   (sem genisoimage/xorriso para montar a ISO de teste — pulado)"); return; }
+            string dir = Path.Combine(Path.GetTempPath(), "lx-win"), iso = Path.Combine(Path.GetTempPath(), "lx-win.iso");
+            Directory.CreateDirectory(Path.Combine(dir, "sources"));
+            Directory.CreateDirectory(Path.Combine(dir, "efi", "boot"));
+            File.WriteAllText(Path.Combine(dir, "bootmgr"), "bootmgr");
+            File.WriteAllBytes(Path.Combine(dir, "efi", "boot", "bootx64.efi"), new byte[64 * 1024]);
+            var wim = new byte[2_000_000]; "MSWIM\0\0\0"u8.CopyTo(wim);
+            File.WriteAllBytes(Path.Combine(dir, "sources", "install.wim"), wim);
+            var r = mk.EndsWith("xorriso") ? await Proc.Run(mk, ["-as", "mkisofs", "-quiet", "-J", "-R", "-V", "WIN11_PTBR", "-o", iso, dir])
+                                           : await Proc.Run(mk, ["-quiet", "-J", "-R", "-V", "WIN11_PTBR", "-o", iso, dir]);
+            Check(r.Ok, "ISO de teste montada " + r.Message);
+            d = LoopDisk();
+            await BootMedia.WriteFiles(iso, d, "WIN11", false, true, new WindowsSetupOptions(true, true, "Teste", true, true), sink);
+            d = await SettleLoop(x => x.Table.Style == TableStyle.Mbr && x.Partitions.Any(p => p.FileSystem == FsKind.Fat32 && p.DeviceNode != null));
+            var fp = d.Partitions.FirstOrDefault(p => p.FileSystem == FsKind.Fat32 && p.DeviceNode != null);
+            Check(fp != null && fp.Entry?.Active == true, "MBR com a partição FAT32 ativa (BIOS e UEFI)");
+            if (fp != null)
+            {
+                string mp = await MountAt(fp, sink, ro: true);
+                Check(File.Exists(Path.Combine(mp, "bootmgr")) && File.Exists(Path.Combine(mp, "sources", "install.wim")) && File.Exists(Path.Combine(mp, "efi", "boot", "bootx64.efi")), "arquivos da instalação copiados");
+                string un = File.Exists(Path.Combine(mp, "autounattend.xml")) ? File.ReadAllText(Path.Combine(mp, "autounattend.xml")) : "";
+                Check(un.Contains("BypassTPMCheck") && un.Contains("Teste"), "autounattend.xml do Windows 11 gravado (sem TPM, conta local)");
+                await LinuxFs.Unmount(MainViewModel.FreshPart(fp), sink);
+            }
+            Directory.Delete(dir, true); File.Delete(iso);
+        });
+
         await Step("Gravar imagem compactada com verificação (balenaEtcher)", async () =>
         {
             string raw = Path.Combine(Path.GetTempPath(), "lx-flash.img"), gz = raw + ".gz";
@@ -511,6 +551,55 @@ public static partial class SelfTest
             DiskOperations.Wipe(d, null, WipeMethod.Zeros, sink);
             d = await SettleLoop(x => x.Table.Style == TableStyle.None);
             Check(d.Table.Style == TableStyle.None, "disco zerado aparece sem tabela");
+        });
+    }
+
+    /// <summary>
+    /// Teste da migração (numa VM descartável): migra o sistema em uso para <paramref name="targetDev"/>
+    /// e confere o disco novo — fstab e GRUB com os UUIDs novos. Quem liga a VM pelo disco novo é o script.
+    /// </summary>
+    public static int RunMigrate(string outPath, string targetDev)
+    {
+        RunMigrateAsync(targetDev).Wait();
+        W(_fails == 0 ? "\nRESULTADO: TUDO OK" : $"\nRESULTADO: {_fails} FALHA(S)");
+        File.WriteAllText(outPath, Log.ToString(), System.Text.Encoding.UTF8);
+        return _fails;
+    }
+
+    private static async Task RunMigrateAsync(string targetDev)
+    {
+        W($"LibertyX Partition · teste de migração · {LinuxTools.Current.Name} · kernel {Environment.OSVersion.Version} · {(Directory.Exists("/sys/firmware/efi") ? "UEFI" : "BIOS")}");
+        var sink = new OpSink();
+        sink.LogLine += l => W("   · " + l);
+        await Step("Planejar e migrar", async () =>
+        {
+            var target = DiskSystem.Enumerate().First(d => d.DevicePath == targetDev);
+            var plan = LinuxMigrate.Analyze(target);
+            foreach (var p in plan.Pieces) W($"   {p.Title,-10} {p.FsType,-6} {p.SourceDev} usado {Fmt(p.Used)} de {Fmt(p.Size)} → {Fmt(p.TargetSize)} {(p.Include ? "" : "(fica)")} subvols=[{string.Join(",", p.Subvols.Select(s => s.subvol + "@" + s.mountPoint))}]");
+            foreach (var n in plan.Notes) W("   nota: " + n);
+            Check(plan.Problem == null, "plano sem problemas " + plan.Problem);
+            if (plan.Problem != null) return;
+            await LinuxMigrate.Run(plan, sink);
+            foreach (var p in plan.Pieces.Where(p => p.Include)) W($"LXMAP|{p.Title}|{p.Uuid}|{p.NewUuid}|{p.NewDev}");
+            Check(plan.Pieces.Where(p => p.Include).All(p => p.NewUuid != null && p.NewUuid != p.Uuid), "cada sistema de arquivos tem UUID novo");
+        });
+        await Step("Conferir o disco novo", async () =>
+        {
+            var target = DiskSystem.Enumerate().First(d => d.DevicePath == targetDev);
+            var root = target.Partitions.FirstOrDefault(p => p.Entry?.TypeGuid == PartitionTypes.LinuxRootX64 || p.Entry?.TypeGuid == PartitionTypes.LinuxRootArm64);
+            Check(root?.DeviceNode != null, "raiz no disco novo: " + root?.DeviceNode);
+            if (root?.DeviceNode == null) return;
+            string mp = "/run/libertyx-confere";
+            Directory.CreateDirectory(mp);
+            await Proc.Run("mount", ["-o", "ro", root.DeviceNode, mp]);
+            try
+            {
+                string fstab = File.ReadAllText(Path.Combine(mp, "etc/fstab"));
+                W("   fstab novo:\n" + string.Join("\n", fstab.Split('\n').Where(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith('#')).Select(l => "      " + l)));
+                Check(root.FsUuid != null && fstab.Contains(root.FsUuid), "fstab monta a raiz pelo UUID novo");
+                Check(File.Exists(Path.Combine(mp, "usr/bin/env")) && File.Exists(Path.Combine(mp, "etc/hostname")), "o sistema foi copiado");
+            }
+            finally { await Proc.Run("umount", [mp]); }
         });
     }
 }

@@ -308,3 +308,93 @@ public sealed partial class LinuxToolsViewModel : PageViewModel
         Load();
     }
 }
+
+// ───────────────────────── migrar o Linux para outro disco ─────────────────────────
+
+public sealed partial class MigratePieceRow(LinuxMigrate.Piece p, LinuxMigrateViewModel owner) : ObservableObject
+{
+    public LinuxMigrate.Piece P { get; } = p;
+    public string Title => P.Title;
+    public string Detail => P.FsType == "swap" ? $"swap · {Fmt.Size(P.Size)} · {P.SourceDev}"
+        : $"{P.FsType} · {Fmt.Size(P.Used)} usados de {Fmt.Size(P.Size)} · {P.SourceDev}" + (P.Subvols.Count > 1 ? $" · subvolumes {string.Join(", ", P.Subvols.Select(s => s.subvol))}" : "");
+    public string TargetText => P.Include ? $"→ {Fmt.Size(P.TargetSize)}" : "fica no disco antigo";
+    public bool Optional => !P.Required;
+    public bool Include
+    {
+        get => P.Include;
+        set { if (P.Include == value) return; P.Include = value; OnPropertyChanged(); owner.Replan(keepChoices: true); }
+    }
+}
+
+public sealed partial class LinuxMigrateViewModel : PageViewModel
+{
+    public override string Title => "Migrar sistema para SSD/HD";
+    public override string IconKey => "Migrate";
+    public string Description => "Leva o Linux em uso — sistema, programas, configurações e arquivos — para um disco novo, pronto para dar boot. Cria as partições do zero (do tamanho certo para o disco novo), copia tudo preservando dono, permissões e atributos, ajusta fstab e GRUB e reinstala o boot.";
+    public PickerViewModel Target { get; }
+    public ObservableCollection<MigratePieceRow> Pieces { get; } = [];
+    public ObservableCollection<string> Notes { get; } = [];
+    [ObservableProperty] private string? _problem;
+    [ObservableProperty] private bool _canRun;
+    [ObservableProperty] private bool _hasPlan;
+    [ObservableProperty] private string _summary = "";
+    private LinuxMigrate.Plan? _plan;
+
+    public LinuxMigrateViewModel()
+    {
+        Target = new PickerViewModel
+        {
+            ShowPartitions = false,
+            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.IsImage ? "Escolha um disco de verdade." : d.IsVirtual ? "Volume lógico: escolha um disco físico." : d.ReadOnly ? "Disco protegido contra gravação." : null,
+        };
+        Target.Changed += _ => Replan(false);
+    }
+
+    public override void OnDisksChanged() => Target.Load(Main.Disks);
+    public override void OnShown(object? arg) { if (Target.Groups.Count == 0) Target.Load(Main.Disks); Replan(true); }
+
+    public void Replan(bool keepChoices)
+    {
+        var t = Target.Selected?.Disk;
+        var keep = keepChoices && _plan != null ? _plan.Pieces.ToDictionary(p => p.SourceDev + p.MountPoint, p => p.Include) : null;
+        Pieces.Clear(); Notes.Clear(); Problem = null; CanRun = false; HasPlan = false;
+        if (t == null) { Summary = "Escolha o disco novo."; return; }
+        _plan = LinuxMigrate.Analyze(t);
+        if (keep != null)
+        {
+            foreach (var p in _plan.Pieces) if (!p.Required && keep.TryGetValue(p.SourceDev + p.MountPoint, out var inc)) p.Include = inc;
+            _plan = Recompute(_plan, t);
+        }
+        HasPlan = true;
+        foreach (var p in _plan.Pieces) Pieces.Add(new MigratePieceRow(p, this));
+        foreach (var n in _plan.Notes) Notes.Add(n);
+        Notes.Add($"{(_plan.Uefi ? "UEFI" : "BIOS")} · carregador {_plan.Loader} · tabela GPT nova.");
+        if (t.Partitions.Any(p => !p.IsUnallocated)) Notes.Add($"TUDO que existe hoje em {t.Title} ({t.Model}) será apagado.");
+        Notes.Add("Feche os programas que estiverem gravando muito (navegador baixando, máquinas virtuais): o sistema é copiado com ele rodando, em duas passadas.");
+        Problem = _plan.Problem;
+        Summary = $"Copiar {Fmt.Size(_plan.Need)} para {t.Title} ({Fmt.Size(t.Size)})";
+        CanRun = _plan.Problem == null;
+    }
+
+    private static LinuxMigrate.Plan Recompute(LinuxMigrate.Plan old, DiskInfo t)
+    {
+        var fresh = LinuxMigrate.Analyze(t);
+        foreach (var p in fresh.Pieces) { var o = old.Pieces.FirstOrDefault(x => x.SourceDev == p.SourceDev && x.MountPoint == p.MountPoint); if (o != null && !p.Required) p.Include = o.Include; }
+        return LinuxMigrate.Resize(fresh);
+    }
+
+    [RelayCommand]
+    private async Task Run()
+    {
+        var plan = _plan; if (plan == null || plan.Problem != null) return;
+        if (!await Main.RequirePremium("Migrar sistema", "Levar o Linux inteiro para outro SSD ou HD, pronto para dar boot, é do Premium.")) return;
+        var t = plan.Target;
+        if (!await Main.Confirm("Migrar o sistema", $"O Linux em uso vai para {t.Title} ({t.Model}, {Fmt.Size(t.Size)}).\n\nTUDO que existe hoje nesse disco será apagado. O disco atual não é alterado.", "Adicionar", true, phrase: "MIGRAR")) return;
+        Main.Queue("Migrar sistema", $"Linux em uso → {t.Title} ({t.Model}) — apaga o conteúdo atual do destino", "Migrate", async s =>
+        {
+            var fresh = LinuxMigrate.Analyze(MainViewModel.Fresh(t));
+            foreach (var p in fresh.Pieces) { var o = plan.Pieces.FirstOrDefault(x => x.SourceDev == p.SourceDev && x.MountPoint == p.MountPoint); if (o != null && !p.Required) p.Include = o.Include; }
+            await LinuxMigrate.Run(LinuxMigrate.Resize(fresh), s);
+        }, t, dangerous: true, canPause: true);
+    }
+}

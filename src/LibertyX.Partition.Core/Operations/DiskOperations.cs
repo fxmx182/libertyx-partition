@@ -244,6 +244,21 @@ public static class DiskOperations
     {
         if (p == null) RequireModifiable(d); else RequirePartition(p);
         if (p is { IsSystemCritical: true }) throw new InvalidOperationException("Partição do sistema em uso.");
+        if (method is WipeMethod.Discard or WipeMethod.Sanitize)
+        {
+            if (!OperatingSystem.IsLinux() || d.IsImage) throw new InvalidOperationException("Disponível no Linux, em discos físicos.");
+            using (DiskSystem.Native.LockVolumes(d, p == null ? null : [p]))
+            {
+                if (method == WipeMethod.Discard) Platform.Linux.LinuxErase.Discard(d, p, sink);
+                else
+                {
+                    if (p != null) throw new InvalidOperationException("O apagamento do fabricante é sempre do disco inteiro.");
+                    Platform.Linux.LinuxErase.Sanitize(d, sink).GetAwaiter().GetResult();
+                }
+            }
+            DiskSystem.Native.Rescan(d);
+            return;
+        }
         using var dev = DiskSystem.OpenDisk(d, true);
         long start = p?.Offset ?? 0, len = p?.Length ?? dev.Length;
         using (DiskSystem.Native.LockVolumes(d, p == null ? null : [p]))

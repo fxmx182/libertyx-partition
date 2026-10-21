@@ -128,7 +128,8 @@
               </StackPanel>
             </Border>
             <!-- Linux sem root: o pkexec pede a senha numa janela do sistema e o app reabre com acesso aos discos -->
-            <Border Classes="notice warn wide" Padding="12,10" IsVisible="{Binding CanElevate}">
+            <Panel Classes="wide">
+            <Border Classes="notice warn" Padding="12,10" IsVisible="{Binding CanElevate}">
               <StackPanel Spacing="8">
                 <TextBlock Text="Sem acesso aos discos" FontSize="12.5" FontWeight="Bold" />
                 <TextBlock Text="Para ler e alterar discos, o LibertyX precisa de permissão de administrador. Imagens anexadas funcionam sem ela." FontSize="11" Foreground="{StaticResource Tenue}" TextWrapping="Wrap" />
@@ -137,9 +138,12 @@
                 </Button>
               </StackPanel>
             </Border>
-            <Button Classes="primary slim" Command="{Binding ElevateCommand}" IsVisible="{Binding CanElevate}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="0,9" ToolTip.Tip="Entrar como administrador">
-              <PathIcon Data="{StaticResource IcShield}" Width="15" Height="15" />
-            </Button>
+            </Panel>
+            <Panel Classes="slim">
+              <Button Classes="primary" Command="{Binding ElevateCommand}" IsVisible="{Binding CanElevate}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="0,9" ToolTip.Tip="Entrar como administrador">
+                <PathIcon Data="{StaticResource IcShield}" Width="15" Height="15" />
+              </Button>
+            </Panel>
             <StackPanel Orientation="Horizontal" Spacing="7" Margin="6,0,0,0">
               <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Verde}" IsVisible="{Binding IsAdmin}" />
               <PathIcon Data="{StaticResource IcAlert}" Classes="small" Foreground="{StaticResource Laranja}" IsVisible="{Binding !IsAdmin}" />

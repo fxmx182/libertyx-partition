@@ -298,8 +298,9 @@ public sealed class LinuxDiskSystem : IDiskSystem
                 var mp = p.MountPoints.FirstOrDefault();
                 if (mp != null && holders.Count == 0)
                     try { var di = new DriveInfo(mp); if (di.TotalSize > 0) { p.Free = di.AvailableFreeSpace; p.Used = di.TotalSize - di.TotalFreeSpace; } } catch { }
-                if (p.FsUuid == null && p.FileSystem == FsKind.Ext)
-                    try { using var v = OpenPartition(p); p.FsUuid = FsDetect.ParseExt(v.ReadBytes(1024, 1024))?.Uuid.ToString(); } catch { }
+                // o superbloco manda: o banco do udev só se atualiza quando ele processa o evento (às vezes, segundos depois)
+                if (p.FileSystem == FsKind.Ext)
+                    try { using var v = OpenPartition(p); if (FsDetect.ParseExt(v.ReadBytes(1024, 1024)) is { } sb) p.FsUuid = sb.Uuid.ToString(); } catch { }
                 if (p.Used == null && p.FileSystem is FsKind.Xfs or FsKind.Btrfs or FsKind.F2fs or FsKind.Luks or FsKind.LinuxSwap or FsKind.LvmPv)
                     FillSuper(d, p);
                 else if (p.FileSystem is FsKind.Xfs or FsKind.Btrfs or FsKind.F2fs or FsKind.Luks or FsKind.LvmPv) FillSuper(d, p, usage: false);
@@ -322,7 +323,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
             if (s == null) return;
             p.FsVariant ??= s.Variant;
             if (string.IsNullOrEmpty(p.Label) && !string.IsNullOrEmpty(s.Label)) p.Label = s.Label;
-            p.FsUuid ??= s.Uuid;
+            if (s.Uuid != null) p.FsUuid = s.Uuid;
             if (usage && s.Total is { } t && s.Free is { } f) { p.Used = t - f; p.Free = f; }
         }
         catch { }

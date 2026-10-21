@@ -206,7 +206,7 @@ public sealed partial class MainViewModel : ViewModelBase
             ["imagem"] = () => new BackupViewModel(),
             ["superficie"] = () => new SurfaceViewModel(),
             ["saude"] = () => new HealthViewModel(),
-            ["migrar"] = () => new CloneViewModel(migrate: true),
+            ["migrar"] = () => OperatingSystem.IsLinux() ? new LinuxMigrateViewModel() : new CloneViewModel(migrate: true),
             ["copiar-disco"] = () => new CloneViewModel(migrate: false),
             ["copiar-particao"] = () => new CopyPartitionViewModel(),
             ["converter"] = () => new ConvertViewModel(),
@@ -391,10 +391,17 @@ public sealed partial class MainViewModel : ViewModelBase
 
     public static TopLevel? Top => (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
+    /// <summary>Linux como root: os seletores começam na pasta pessoal de quem usa, não em / nem em /root.</summary>
+    private static async Task<IStorageFolder?> StartFolder()
+    {
+        if (!OperatingSystem.IsLinux() || Top == null) return null;
+        try { return await Top.StorageProvider.TryGetFolderFromPathAsync(Core.Platform.Linux.LinuxSession.Home); } catch { return null; }
+    }
+
     public static async Task<string?> PickFolder(string title)
     {
         if (Top == null) return null;
-        var r = await Top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title, AllowMultiple = false });
+        var r = await Top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title, AllowMultiple = false, SuggestedStartLocation = await StartFolder() });
         return r.FirstOrDefault()?.TryGetLocalPath();
     }
 
@@ -403,7 +410,7 @@ public sealed partial class MainViewModel : ViewModelBase
         if (Top == null) return null;
         var r = await Top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = title, AllowMultiple = false,
+            Title = title, AllowMultiple = false, SuggestedStartLocation = await StartFolder(),
             FileTypeFilter = types.Select(t => new FilePickerFileType(t.name) { Patterns = t.patterns }).Append(FilePickerFileTypes.All).ToList(),
         });
         return r.FirstOrDefault()?.TryGetLocalPath();
@@ -414,7 +421,7 @@ public sealed partial class MainViewModel : ViewModelBase
         if (Top == null) return null;
         var r = await Top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = title, SuggestedFileName = suggested, DefaultExtension = ext,
+            Title = title, SuggestedFileName = suggested, DefaultExtension = ext, SuggestedStartLocation = await StartFolder(),
             FileTypeChoices = [new FilePickerFileType(typeName) { Patterns = [$"*.{ext}"] }],
         });
         return r?.TryGetLocalPath();
