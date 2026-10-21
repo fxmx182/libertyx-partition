@@ -27,6 +27,9 @@ public sealed class NavGroup(string title, params NavItem[] items)
     public List<NavItem> Items { get; } = [.. items];
 }
 
+/// <summary>Uma opção do menu "Tamanho da interface" (Linux).</summary>
+public sealed record ScaleItem(string Header, double? Value, bool Checked, IRelayCommand Choose);
+
 public sealed partial class MainViewModel : ViewModelBase
 {
     public static MainViewModel Instance { get; private set; } = null!;
@@ -70,6 +73,41 @@ public sealed partial class MainViewModel : ViewModelBase
         bool ok = await Task.Run(() => Core.Platform.Linux.LinuxSession.RelaunchAsRoot(args));
         if (ok) { if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime l) l.Shutdown(); }
         else await Alert("Sem permissão de administrador", "A senha foi cancelada ou o sistema não tem o pkexec (polkit). Também dá para abrir pelo terminal:\n\nsudo libertyx-partition", "warn");
+    }
+
+    // ───────── tamanho da interface (Linux) ─────────
+
+    public bool IsLinux { get; } = OperatingSystem.IsLinux();
+
+    /// <summary>Automático (com o valor detectado) e os tamanhos fixos; o atual vem marcado.</summary>
+    public List<ScaleItem> ScaleItems
+    {
+        get
+        {
+            if (!OperatingSystem.IsLinux()) return [];
+            var auto = Core.Platform.Linux.LinuxDisplay.Auto;
+            double? saved = Core.Platform.Linux.LinuxDisplay.Saved;
+            var cmd = new AsyncRelayCommand<double?>(ChooseScale);
+            var l = new List<ScaleItem> { new($"Automático ({auto?.Percent ?? "100%"})", null, saved == null, cmd) };
+            foreach (var v in Core.Platform.Linux.LinuxDisplay.Choices)
+                l.Add(new(Core.Platform.Linux.LinuxDisplay.Pct(v), v, saved is { } sv && Math.Abs(sv - v) < 0.01, cmd));
+            return l;
+        }
+    }
+
+    private async Task ChooseScale(double? value)
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        if (value == Core.Platform.Linux.LinuxDisplay.Saved) return;
+        if (HasPending) { await Alert("Alterações pendentes", "Confirme ou cancele as alterações da fila antes — o app reabre para mudar o tamanho."); return; }
+        try { Core.Platform.Linux.LinuxDisplay.Save(value); }
+        catch (Exception ex) { await Alert("Não deu para salvar", ex.Message, "warn"); return; }
+        var args = Environment.GetCommandLineArgs().Skip(1).Concat(DiskSystem.AttachedImages).Distinct();
+        if (Core.Platform.Linux.LinuxSession.Restart(args))
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime l) l.Shutdown();
+        }
+        else await Alert("Tamanho salvo", "Feche e abra o LibertyX de novo para ver o novo tamanho.");
     }
 
     // ───────── licença ─────────
@@ -189,6 +227,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 new NavItem("excluir-todas", "Excluir todas as partições", "DeleteAll")),
             new("Utilidades",
                 OperatingSystem.IsWindows() ? new NavItem("bitlocker", "BitLocker", "BitLocker") : new NavItem("bitlocker", "Criptografia (LUKS, BitLocker)", "BitLocker"),
+                new NavItem("luks", "Detector de LUKS", "Lock"),
                 new NavItem("benchmark", "Benchmark de disco", "Benchmark"),
                 new NavItem("espaco", "Analisador de espaço", "Space"),
                 new NavItem("duplicados", "Limpador de duplicados", "Duplicates"),
@@ -216,6 +255,7 @@ public sealed partial class MainViewModel : ViewModelBase
             ["bitlocker"] = () => OperatingSystem.IsWindows() ? new BitLockerViewModel() : new LinuxCryptoViewModel(),
             ["lvm"] = () => new LinuxVolumesViewModel(),
             ["ferramentas"] = () => new LinuxToolsViewModel(),
+            ["luks"] = () => new LuksViewModel(),
             ["benchmark"] = () => new BenchmarkViewModel(),
             ["espaco"] = () => new SpaceViewModel(),
             ["duplicados"] = () => new DuplicatesViewModel(),

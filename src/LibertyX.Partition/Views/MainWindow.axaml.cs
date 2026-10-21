@@ -10,6 +10,23 @@ public partial class MainWindow : Window
 
     public MainWindow() => InitializeComponent();
 
+    /// <summary>
+    /// Com a interface ampliada (4K em 200–300%) a janela de 1440×900 pode não caber na tela:
+    /// encolhe para a área útil e centraliza.
+    /// </summary>
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        if (Screens.ScreenFromWindow(this) is not { } sc) return;
+        var area = sc.WorkingArea.Size.ToSize(sc.Scaling);
+        if (Width <= area.Width * 0.96 && Height <= area.Height * 0.94) return;
+        Width = Math.Max(MinWidth, Math.Min(Width, area.Width * 0.96));
+        Height = Math.Max(MinHeight, Math.Min(Height, area.Height * 0.94));
+        if (Width > area.Width || Height > area.Height) WindowState = WindowState.Maximized;
+        else Position = new PixelPoint(sc.WorkingArea.X + (int)((sc.WorkingArea.Width - Width * sc.Scaling) / 2),
+                                       sc.WorkingArea.Y + (int)((sc.WorkingArea.Height - Height * sc.Scaling) / 2));
+    }
+
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);

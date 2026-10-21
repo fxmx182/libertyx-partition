@@ -26,6 +26,17 @@ internal static class Program
             Environment.Exit(SelfTest.Run(outPath, args.Contains("--vhd") || args.Contains("--loop")));
             return;
         }
+        // diagnóstico do tamanho da interface: o que a área de trabalho e os monitores dizem
+        if (OperatingSystem.IsLinux() && args.Contains("--escala-info"))
+        {
+            Console.WriteLine(LibertyX.Partition.Core.Platform.Linux.LinuxDisplay.Report());
+            return;
+        }
+        // Linux: a escala da interface (monitor 4K, "tamanho do texto" do desktop, escolha no app)
+        // precisa estar decidida antes de o Avalonia abrir — e vai junto quando o app reabre como root
+        string? escala = args.FirstOrDefault(a => a.StartsWith("--escala="))?["--escala=".Length..];
+        args = args.Where(a => !a.StartsWith("--escala=")).ToArray();
+        if (OperatingSystem.IsLinux()) LibertyX.Partition.Core.Platform.Linux.LinuxDisplay.Apply(escala);
         // Linux: discos só com root. Pede a senha logo na abertura (como o UAC do Windows faz pelo
         // manifesto); se a pessoa cancelar, o app abre mesmo assim, com imagens e o botão para tentar de novo.
         if (OperatingSystem.IsLinux() && !args.Contains("--sem-root") && Environment.GetEnvironmentVariable("LIBERTYX_NO_ELEVATE") != "1"

@@ -140,6 +140,7 @@ public static class LinuxSession
     public static bool RelaunchAsRoot(string[] args)
     {
         if (LinuxNative.GetEuid() == 0) return false;
+        args = LinuxDisplay.RelaunchArgs(args.Where(a => !a.StartsWith("--pronto="))).ToArray();
         string? pkexec = LinuxTools.Find("pkexec");
         if (pkexec == null) return false;
         string self = Environment.GetEnvironmentVariable("APPIMAGE") is { Length: > 0 } ai ? ai : Environment.ProcessPath ?? "";
@@ -170,6 +171,22 @@ public static class LinuxSession
         psi.ArgumentList.Add(self);
         foreach (var a in args) psi.ArgumentList.Add(a);
         return WaitElevated(psi, ready);
+    }
+
+    /// <summary>
+    /// Reabre o app do mesmo jeito (root continua root, sem perguntar a senha de novo) — para valer
+    /// uma escala nova da interface, que o Avalonia só lê na abertura.
+    /// </summary>
+    public static bool Restart(IEnumerable<string> args)
+    {
+        string self = Environment.GetEnvironmentVariable("APPIMAGE") is { Length: > 0 } ai ? ai : Environment.ProcessPath ?? "";
+        if (self.Length == 0) return false;
+        var psi = new ProcessStartInfo(self) { UseShellExecute = false };
+        foreach (var a in LinuxDisplay.RelaunchArgs(args.Where(a => !a.StartsWith("--pronto=")))) psi.ArgumentList.Add(a);
+        if (!IsRoot && !psi.ArgumentList.Contains("--sem-root")) psi.ArgumentList.Add("--sem-root");
+        psi.Environment.Remove("LIBERTYX_READY");
+        try { return Process.Start(psi) != null; }
+        catch { return false; }
     }
 
     public const string PackagedExe = "/opt/libertyx-partition/LibertyXPartition";

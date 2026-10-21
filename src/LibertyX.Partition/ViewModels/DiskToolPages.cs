@@ -344,6 +344,146 @@ public sealed partial class WipeViewModel : PageViewModel
     }
 }
 
+// ───────────────────────── detector de LUKS ─────────────────────────
+
+public sealed class LuksRow(LuksFinding f, DiskInfo disk, LuksViewModel page)
+{
+    public LuksFinding F { get; } = f;
+    public string Title => F.Title;
+    public string StateText => F.StateText;
+    public string Where => "Onde: " + F.Where;
+    public string Explain => F.Explain();
+    public string Details => $"Posição: {Fmt.Size(F.Start)} ({F.Start / disk.SectorSize:N0} setores) · cópias do cabeçalho em " + string.Join(", ", F.Headers.Keys.Select(h => h == F.Start ? "0" : "+" + Fmt.Size(h - F.Start)))
+                             + (F.Uuid is { Length: > 0 } u ? $" · UUID {u}" : "");
+    public bool IsActive => F.State == LuksState.Active;
+    public bool IsOpenable => F.State == LuksState.Openable;
+    public bool IsDead => F.State == LuksState.Dead;
+    public bool IsInFile => F.State == LuksState.InFile;
+    public bool CanErase => !IsInFile && !disk.ReadOnly;
+    public string EraseText => IsActive ? "Destruir este contêiner" : "Apagar este resto";
+    public IAsyncRelayCommand Erase => new AsyncRelayCommand(() => page.Erase(this));
+}
+
+public sealed partial class LuksViewModel : PageViewModel
+{
+    public override string Title => "Detector de LUKS";
+    public override string IconKey => "Lock";
+    public PickerViewModel Picker { get; } = new() { AllowUnallocated = true };
+    [ObservableProperty] private bool _deep = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanStart), nameof(CanSaveReport))] private bool _running;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanSaveReport))] private bool _hasRun;
+    public bool CanSaveReport => HasRun && !Running;
+    public bool CanStart => Picker.Selected != null && !Running;
+    [ObservableProperty] private double _fraction;
+    [ObservableProperty] private string _speed = "—";
+    [ObservableProperty] private string _elapsed = "";
+    [ObservableProperty] private string _targetText = "";
+    [ObservableProperty] private string _verdict = "";
+    [ObservableProperty] private string _verdictClass = "gold";
+    [ObservableProperty] private int _found;
+    public ObservableCollection<LuksRow> Results { get; } = [];
+    private CancellationTokenSource? _cts;
+    private PickItem? _last;
+    private bool _recheck;
+
+    public LuksViewModel() { Picker.Changed += _ => OnPropertyChanged(nameof(CanStart)); }
+    public override void OnDisksChanged()
+    {
+        if (Running) return;
+        Picker.Load(Main.Disks);
+        // depois de apagar pela fila: confere de novo no mesmo lugar
+        if (_recheck && _last != null)
+        {
+            _recheck = false;
+            var d = Main.Disks.FirstOrDefault(x => x.Number == _last.Disk.Number && x.IsImage == _last.Disk.IsImage);
+            if (d != null) { Picker.Select(d, _last.Partition == null ? null : d.Partitions.FirstOrDefault(p => p.Offset == _last.Partition.Offset)); _ = Start(); }
+        }
+    }
+    public override void OnShown(object? arg)
+    {
+        if (Picker.Groups.Count == 0) Picker.Load(Main.Disks);
+        if (arg is DiskInfo d) Picker.Select(d, null);
+        if (arg is PartitionInfo p) Picker.Select(p.Disk, p);
+    }
+
+    [RelayCommand]
+    private async Task Start()
+    {
+        var sel = Picker.Selected;
+        if (sel == null) return;
+        _last = sel;
+        _cts = new CancellationTokenSource();
+        Results.Clear();
+        Found = 0; Fraction = 0; Speed = "—"; Verdict = "";
+        Running = true; HasRun = true;
+        var mode = Deep ? LuksScanMode.Full : LuksScanMode.Quick;
+        TargetText = (sel.Partition == null ? $"{sel.Disk.Title} · {sel.Disk.Model}" : $"{sel.Title} · {sel.Disk.Title}") + (Deep ? " · completa" : " · rápida");
+        var sw = Stopwatch.StartNew();
+        var prog = new Progress<LuksProgress>(p =>
+        {
+            Fraction = p.Total == 0 ? 1 : (double)p.Done / p.Total;
+            Found = p.Found;
+            if (p.BytesPerSecond > 0) Speed = Fmt.Speed(p.BytesPerSecond);
+            Elapsed = Fmt.Duration(sw.Elapsed) + (Deep && Fraction is > 0.01 and < 1 ? $" · faltam ~{Fmt.Duration(TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * (1 - Fraction) / Fraction))}" : "");
+        });
+        try
+        {
+            var disk = sel.Disk;
+            var res = await Task.Run(() =>
+            {
+                using var dev = DiskSystem.OpenDisk(disk, false);
+                var layout = LuksFinder.Layout(disk, dev.Length);
+                long start = sel.Partition?.Offset ?? 0, len = sel.Partition?.Length ?? dev.Length;
+                return LuksFinder.Find(dev, layout, start, len, mode, prog, _cts.Token, a => LuksFinder.UsedRanges(dev.Slice(a.Offset, a.Length)));
+            });
+            foreach (var f in res.OrderBy(f => f.Start)) Results.Add(new LuksRow(f, disk, this));
+            Found = res.Count;
+            Fraction = 1;
+            Elapsed = Fmt.Duration(sw.Elapsed);
+            int open = res.Count(f => f.State == LuksState.Openable), active = res.Count(f => f.State == LuksState.Active), files = res.Count(f => f.State == LuksState.InFile);
+            (Verdict, VerdictClass) = res.Count == 0
+                ? (Deep ? "Nenhum LUKS aqui: nem cabeçalho, nem a cópia reserva, em nenhum setor." : "Nada no começo das partições e dos espaços livres. Para ter certeza de que não sobrou nenhum pedaço, faça a busca completa.", "green")
+                : open > 0 ? ($"{open} {(open == 1 ? "resto ainda abre" : "restos ainda abrem")} com a senha: os dados antigos continuam acessíveis para quem a tiver. Apague se a ideia era sumir com eles.", "danger")
+                : active > 0 && res.Count == active ? ($"{(active == 1 ? "Um contêiner LUKS em uso" : $"{active} contêineres LUKS em uso")} e nenhum resto solto.", "gold")
+                : files > 0 && res.Count == files ? ("Só há LUKS dentro de arquivos de hoje (contêineres ou backups de cabeçalho). Apague esses arquivos pelo sistema, se não precisar deles.", "gold")
+                : ("Sobraram restos de LUKS que não abrem mais (sem chave inteira). Não dão acesso aos dados, mas revelam que o disco foi criptografado — apague se quiser o disco limpo.", "gold");
+        }
+        catch (OperationCanceledException) { Verdict = "Busca interrompida."; VerdictClass = "gold"; }
+        catch (Exception ex) { Verdict = "Erro: " + ex.Message; VerdictClass = "danger"; }
+        finally { Running = false; }
+    }
+
+    [RelayCommand] private void Stop() => _cts?.Cancel();
+
+    internal async Task Erase(LuksRow r)
+    {
+        var d = Main.Disks.FirstOrDefault(x => x.Number == _last?.Disk.Number && x.IsImage == _last.Disk.IsImage) ?? _last?.Disk;
+        if (d == null) return;
+        if (r.F.Area is { Critical: true } && r.F.Area.Offset == r.F.Start) { await Main.Alert("Em uso pelo sistema", "Esse contêiner é o do sistema que está rodando. Para destruí-lo, inicie por um pendrive.", "warn"); return; }
+        string detail = r.IsActive
+            ? $"{r.Title} em {r.F.Where}: o cabeçalho e as chaves são zerados — o volume e tudo o que há nele ficam ilegíveis para sempre, mesmo com a senha."
+            : $"{r.Title} em {r.F.Where}: zera as cópias do cabeçalho e as áreas das chaves. Só escreve onde não há nada de hoje (espaço livre); o que estiver em uso fica como está.";
+        var f = r.F;
+        _recheck = true;
+        Main.Queue(r.IsActive ? "Destruir contêiner LUKS" : "Apagar resto de LUKS", detail, "Lock", s => DiskOperations.EraseLuks(MainViewModel.Fresh(d), f, s), d, dangerous: true);
+        Main.ShowToast("Na fila. Aplique as alterações pendentes; depois a busca roda de novo sozinha para conferir.");
+    }
+
+    [RelayCommand]
+    private async Task SaveReport()
+    {
+        var file = await MainViewModel.SaveFile("Salvar relatório", $"Detector de LUKS {DateTime.Now:yyyy-MM-dd HH-mm}.txt", "txt", "Texto");
+        if (file == null) return;
+        var sb = new StringBuilder();
+        sb.AppendLine($"LibertyX Partition — detector de LUKS — {DateTime.Now:dd/MM/yyyy HH:mm}");
+        sb.AppendLine(TargetText);
+        sb.AppendLine(Verdict);
+        foreach (var r in Results) { sb.AppendLine(); sb.AppendLine($"{r.Title} — {r.StateText}"); sb.AppendLine(r.Where); sb.AppendLine(r.Details); sb.AppendLine(r.Explain); }
+        await File.WriteAllTextAsync(file, sb.ToString(), Encoding.UTF8);
+        Main.ShowToast("Relatório salvo.");
+    }
+}
+
 // ───────────────────────── excluir todas ─────────────────────────
 
 public sealed partial class DeleteAllViewModel : PageViewModel

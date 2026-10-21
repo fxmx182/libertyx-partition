@@ -35,6 +35,26 @@ public static class LinuxFsTests
         return string.Join('/', parts);
     }
 
+    /// <summary>O palpite de escala pelo tamanho físico do monitor (o que o EDID informa).</summary>
+    public static int Scale()
+    {
+        Console.WriteLine("== escala da interface pelo monitor");
+        static double S(int w, int h, int mw, int mh) => LibertyX.Partition.Core.Platform.Linux.LinuxDisplay.Physical(new("m", w, h, mw, mh));
+        Check(S(3840, 2160, 597, 336) == 1.5, "4K de 27″ → 150%");
+        Check(S(3840, 2160, 527, 296) == 1.75, "4K de 24″ → 175%");
+        Check(S(3840, 2160, 698, 393) == 1.25, "4K de 32″ → 125%");
+        Check(S(3840, 2160, 344, 194) == 2.5, "notebook 4K de 15,6″ → 250%");
+        Check(S(2560, 1440, 597, 336) == 1, "1440p de 27″ → 100%");
+        Check(S(1920, 1080, 527, 296) == 1, "1080p de 24″ → 100%");
+        Check(S(1920, 1080, 597, 336) == 1, "4K já ampliado 200% pelo compositor (XWayland vê 1920) → 100%");
+        Check(S(3840, 2160, 1600, 900) == 1, "TV 4K de 72″ → 100%");
+        Check(S(3840, 2160, 0, 0) == 1, "sem tamanho (projetor) → 100%");
+        Check(S(3840, 2160, 160, 90) == 1, "tamanho inventado (16×9 cm) → 100%");
+        Check(S(2160, 3840, 597, 336) == 1, "girado sem girar os mm → 100%");
+        Console.WriteLine(fails == 0 ? "RESULTADO: TUDO OK" : $"RESULTADO: {fails} FALHA(S)");
+        return fails == 0 ? 0 : 1;
+    }
+
     public static int Run(string dir)
     {
         foreach (var (img, kind) in new[] { ("xfs.img", FsKind.Xfs), ("btrfs.img", FsKind.Btrfs) })

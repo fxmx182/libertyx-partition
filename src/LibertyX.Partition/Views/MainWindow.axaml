@@ -144,13 +144,33 @@
                 <PathIcon Data="{StaticResource IcShield}" Width="15" Height="15" />
               </Button>
             </Panel>
+            <Grid ColumnDefinitions="*,Auto">
             <StackPanel Orientation="Horizontal" Spacing="7" Margin="6,0,0,0">
               <PathIcon Data="{StaticResource IcShield}" Classes="small" Foreground="{StaticResource Verde}" IsVisible="{Binding IsAdmin}" />
               <PathIcon Data="{StaticResource IcAlert}" Classes="small" Foreground="{StaticResource Laranja}" IsVisible="{Binding !IsAdmin}" />
-              <TextBlock Classes="wide" FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="196">
+              <TextBlock Classes="wide" FontSize="11" Foreground="{StaticResource Tenue}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="170">
                 <Run Text="{Binding AdminText}" /><Run Text=" · " /><Run Text="{Binding Version}" />
               </TextBlock>
             </StackPanel>
+            <!-- Linux: tamanho da interface (monitor 4K); o app reabre no tamanho escolhido -->
+            <Button Grid.Column="1" IsVisible="{Binding IsLinux}" Padding="6,2" MinHeight="0" Background="Transparent" BorderThickness="0"
+                    ToolTip.Tip="Tamanho da interface" VerticalAlignment="Center">
+              <TextBlock Text="Aa" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Tenue}" />
+              <Button.Flyout>
+                <MenuFlyout ItemsSource="{Binding ScaleItems}" Placement="TopEdgeAlignedLeft">
+                  <MenuFlyout.ItemContainerTheme>
+                    <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:ScaleItem">
+                      <Setter Property="Header" Value="{Binding Header}" />
+                      <Setter Property="ToggleType" Value="Radio" />
+                      <Setter Property="IsChecked" Value="{Binding Checked}" />
+                      <Setter Property="Command" Value="{Binding Choose}" />
+                      <Setter Property="CommandParameter" Value="{Binding Value}" />
+                    </ControlTheme>
+                  </MenuFlyout.ItemContainerTheme>
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+            </Grid>
           </StackPanel>
 
           <ScrollViewer VerticalScrollBarVisibility="Auto">

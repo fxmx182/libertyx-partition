@@ -240,6 +240,30 @@ public static class DiskOperations
 
     // ───────────── limpeza ─────────────
 
+    /// <summary>Apaga um LUKS achado pelo detector: cabeçalhos e chaves, sem tocar no que é de hoje.</summary>
+    public static void EraseLuks(DiskInfo d, LuksFinding f, OpSink sink)
+    {
+        if (d.ReadOnly) throw new InvalidOperationException("Imagem só para leitura.");
+        using var dev = DiskSystem.OpenDisk(d, true);
+        var layout = LuksFinder.Layout(d, dev.Length);
+        var touched = d.Partitions.Where(p => !p.IsUnallocated && f.Regions().Any(r => r.off < p.Offset + p.Length && r.off + r.len > p.Offset)).ToList();
+        if (touched.FirstOrDefault(p => p.IsSystemCritical) is { } crit && crit.Offset == f.Start)
+            throw new InvalidOperationException($"{crit.DisplayName} está em uso pelo sistema.");
+        sink.Progress(-1, "Apagando o LUKS", f.Where);
+        LuksEraseResult res;
+        using (DiskSystem.Native.LockVolumes(d, touched.Where(p => !p.IsSystemCritical)))
+        {
+            res = LuksFinder.Erase(dev, layout, f, a => LuksFinder.UsedRanges(dev.Slice(a.Offset, a.Length)), sink.Log, sink.Token);
+        }
+        DiskSystem.Native.Rescan(d);
+        sink.Log($"Zerados {Size(res.Written)} (cabeçalhos e áreas das chaves).");
+        foreach (var s in res.Skipped) sink.Log("Não tocado: " + s);
+        if (res.After == null) sink.Log("Conferido: não sobrou cabeçalho nem material de chave nesse lugar.");
+        else if (res.After.State == LuksState.Openable || res.After.IntactSlots > 0)
+            throw new InvalidOperationException($"Ainda sobrou LUKS ({res.After.Explain()}). O que restou está em área usada pelo sistema de arquivos atual: para sumir com tudo, use Limpar disco nessa partição.");
+        else sink.Log("Conferido: " + res.After.Explain());
+    }
+
     public static void Wipe(DiskInfo d, PartitionInfo? p, WipeMethod method, OpSink sink)
     {
         if (p == null) RequireModifiable(d); else RequirePartition(p);
