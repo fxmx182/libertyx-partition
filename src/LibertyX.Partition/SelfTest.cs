@@ -468,11 +468,34 @@ public static partial class SelfTest
             d = await Settle(n, x => x.Partitions.Any(p => p.Offset == mb && p.FileSystem == FsKind.Ntfs && p.Letter != null));
             var after = Scan(d);
             W($"   depois da formatação rápida (Format-Volume NTFS): {(after.Count == 0 ? "nenhum LUKS" : string.Join(" | ", after.Select(f => $"{f.StateText} — {f.Explain()}")))}");
+            // a formatação do Windows não deixa nada: para provar o apagamento no Windows, um resto de LUKS2
+            // (cabeçalhos + chave) no espaço livre do NTFS novo, como fica de um contêiner antigo
+            if (after.Count == 0)
+            {
+                var np = d.Partitions.First(p => p.Offset == mb);
+                var blob = FakeLuks2("LXRESTO");
+                long spot = -1;
+                using (var dev = DiskSystem.OpenDisk(d, false))
+                {
+                    var used = LuksFinder.UsedRanges(dev.Slice(np.Offset, np.Length)) ?? [];
+                    for (long o = 64 * mb; o + 2 * mb <= np.Length && spot < 0; o += mb)
+                        if (!used.Any(u => u.off < o + 2 * mb && u.off + u.len > o)) spot = np.Offset + o;
+                }
+                Check(spot > 0, $"espaço livre no NTFS novo para o teste ({(spot > 0 ? DiskOperations.Size(spot - np.Offset) : "—")} do começo)");
+                if (spot > 0)
+                {
+                    using (DiskSystem.Native.LockVolumes(d, [np]))
+                    using (var dev = DiskSystem.OpenDisk(d, true)) { dev.Write(spot, blob); dev.Flush(); }
+                    d = await Settle(n, x => x.Partitions.Any(p => p.Offset == mb && p.FileSystem == FsKind.Ntfs && p.Letter != null));
+                    after = Scan(d);
+                    Check(after.Count == 1 && after[0].State == LuksState.Openable && after[0].Where.Contains("NTFS"), $"resto no espaço livre do NTFS: achado ({string.Join("; ", after.Select(f => $"{f.StateText} — {f.Where}"))})");
+                }
+            }
             foreach (var f in after.Where(f => f.State != LuksState.InFile))
                 DiskOperations.EraseLuks(DiskSystem.Enumerate().First(x => x.Number == n), f, sink);
             d = await Settle(n, x => x.Partitions.Any(p => p.Offset == mb && p.FileSystem == FsKind.Ntfs && p.Letter != null));
             var rest = Scan(d);
-            Check(rest.Count == 0, after.Count == 0 ? "nada para apagar" : $"resto apagado: a varredura completa não acha mais nada ({rest.Count})");
+            Check(rest.Count == 0 && after.Count > 0, $"resto apagado com o NTFS trancado: a varredura completa não acha mais nada ({rest.Count})");
             string l = d.Partitions.First(p => p.Offset == mb).Letter ?? "";
             try { File.WriteAllText($@"{l}\ok.txt", "ok"); Check(File.ReadAllText($@"{l}\ok.txt") == "ok", $"o NTFS de hoje continua montando e gravando ({l})"); }
             catch (Exception ex) { Check(false, $"NTFS depois de apagar: {ex.Message}"); }
