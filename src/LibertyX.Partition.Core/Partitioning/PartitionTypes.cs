@@ -16,6 +16,38 @@ public static class PartitionTypes
     public static readonly Guid BiosBoot = new("21686148-6449-6E6F-744E-656564454649");
     public static readonly Guid AppleHfs = new("48465300-0000-11AA-AA11-00306543ECAC");
     public static readonly Guid AppleApfs = new("7C3457EF-0000-11AA-AA11-00306543ECAC");
+    // tipos da especificação de partições detectáveis (systemd/UAPI): o systemd monta sozinho pelo tipo
+    public static readonly Guid LinuxLuks = new("CA7D7CCB-63ED-4C53-861C-1742536059CC");
+    public static readonly Guid LinuxRootX64 = new("4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709");
+    public static readonly Guid LinuxRootArm64 = new("B921B045-1DF0-41C3-AF44-4C6F280D3FAE");
+    public static readonly Guid LinuxHome = new("933AC7E1-2EB4-4F13-B844-0E14E2AEF915");
+    public static readonly Guid LinuxSrv = new("3B8F8425-20E0-4F3B-907F-1A25A76F98E8");
+    public static readonly Guid LinuxVar = new("4D21B016-B534-45C2-A9FB-5C16E091FD2D");
+    public static readonly Guid LinuxXbootldr = new("BC13C2FF-59E6-4262-A352-B275FD6F7172");
+    public static readonly Guid LinuxReserved = new("8DA63339-0007-60C0-C436-083AC8230908");
+    public static readonly Guid ChromeOsKernel = new("FE3A2A5D-4F32-41A7-B725-ACCC3285A309");
+    public static readonly Guid FreeBsdData = new("516E7CB4-6ECF-11D6-8FF8-00022D09712B");
+    public static readonly Guid FreeBsdUfs = new("516E7CB6-6ECF-11D6-8FF8-00022D09712B");
+    public static readonly Guid FreeBsdZfs = new("516E7CBA-6ECF-11D6-8FF8-00022D09712B");
+    public static readonly Guid SolarisZfs = new("6A898CC3-1DD2-11B2-99A6-080020736631");
+
+    /// <summary>Bits de atributo GPT com significado (os de 48 a 63 dependem do tipo).</summary>
+    public const ulong AttrRequired = 1UL << 0, AttrNoBlockIo = 1UL << 1, AttrLegacyBoot = 1UL << 2,
+        AttrReadOnly = 1UL << 60, AttrShadow = 1UL << 61, AttrHidden = 1UL << 62, AttrNoAutomount = 1UL << 63;
+
+    /// <summary>Tipo GPT/MBR certo para o sistema de arquivos recém-criado (no Linux).</summary>
+    public static (Guid gpt, byte mbr) ForFileSystem(FileSystems.FsKind fs, bool esp = false) => fs switch
+    {
+        _ when esp => (Esp, 0xEF),
+        FileSystems.FsKind.Ntfs or FileSystems.FsKind.ExFat => (BasicData, 0x07),
+        FileSystems.FsKind.Fat32 => (BasicData, 0x0C),
+        FileSystems.FsKind.Fat16 or FileSystems.FsKind.Fat12 => (BasicData, 0x0E),
+        FileSystems.FsKind.LinuxSwap => (LinuxSwap, 0x82),
+        FileSystems.FsKind.Luks => (LinuxLuks, 0x83),
+        FileSystems.FsKind.LvmPv => (LinuxLvm, 0x8E),
+        FileSystems.FsKind.MdRaid => (LinuxRaid, 0xFD),
+        _ => (LinuxFs, 0x83),
+    };
 
     /// <summary>Atributo GPT "requerido pela plataforma" + "sem letra" — o que o Windows põe na partição de recuperação.</summary>
     public const ulong RecoveryAttributes = 0x8000000000000001UL;
@@ -34,6 +66,19 @@ public static class PartitionTypes
         if (g == LinuxLvm) return "Linux LVM";
         if (g == LinuxRaid) return "Linux RAID";
         if (g == BiosBoot) return "BIOS boot";
+        if (g == LinuxLuks) return "Linux LUKS";
+        if (g == LinuxRootX64) return "Linux raiz (x86-64)";
+        if (g == LinuxRootArm64) return "Linux raiz (ARM64)";
+        if (g == LinuxHome) return "Linux /home";
+        if (g == LinuxSrv) return "Linux /srv";
+        if (g == LinuxVar) return "Linux /var";
+        if (g == LinuxXbootldr) return "Linux /boot (XBOOTLDR)";
+        if (g == LinuxReserved) return "Linux reservada";
+        if (g == ChromeOsKernel) return "ChromeOS kernel";
+        if (g == FreeBsdData) return "FreeBSD";
+        if (g == FreeBsdUfs) return "FreeBSD UFS";
+        if (g == FreeBsdZfs) return "FreeBSD ZFS";
+        if (g == SolarisZfs) return "ZFS (Solaris/Apple)";
         if (g == AppleHfs) return "Apple HFS+";
         if (g == AppleApfs) return "Apple APFS";
         return "Tipo " + g.ToString().ToUpperInvariant();
@@ -93,7 +138,11 @@ public static class PartitionTypes
             FileSystems.FsKind.Fat12 => 0x01,
             FileSystems.FsKind.Fat16 => 0x0E,
             FileSystems.FsKind.Fat32 => 0x0C,
-            FileSystems.FsKind.Ext => 0x83,
+            FileSystems.FsKind.Ext or FileSystems.FsKind.Xfs or FileSystems.FsKind.Btrfs or FileSystems.FsKind.F2fs or FileSystems.FsKind.Luks
+                or FileSystems.FsKind.ReiserFs or FileSystems.FsKind.Jfs or FileSystems.FsKind.Bcachefs => 0x83,
+            FileSystems.FsKind.LinuxSwap => 0x82,
+            FileSystems.FsKind.LvmPv => 0x8E,
+            FileSystems.FsKind.MdRaid => 0xFD,
             _ => 0x07,
         };
     }
@@ -102,8 +151,10 @@ public static class PartitionTypes
     public static readonly (Guid id, string name)[] CommonGpt =
     [
         (BasicData, GptName(BasicData)), (Esp, GptName(Esp)), (Msr, GptName(Msr)), (WinRecovery, GptName(WinRecovery)),
-        (LinuxFs, GptName(LinuxFs)), (LinuxSwap, GptName(LinuxSwap)), (LinuxLvm, GptName(LinuxLvm)),
-        (BiosBoot, GptName(BiosBoot)), (AppleHfs, GptName(AppleHfs)), (AppleApfs, GptName(AppleApfs)),
+        (LinuxFs, GptName(LinuxFs)), (LinuxSwap, GptName(LinuxSwap)), (LinuxLvm, GptName(LinuxLvm)), (LinuxRaid, GptName(LinuxRaid)),
+        (LinuxLuks, GptName(LinuxLuks)), (LinuxRootX64, GptName(LinuxRootX64)), (LinuxRootArm64, GptName(LinuxRootArm64)), (LinuxHome, GptName(LinuxHome)),
+        (LinuxVar, GptName(LinuxVar)), (LinuxSrv, GptName(LinuxSrv)), (LinuxXbootldr, GptName(LinuxXbootldr)),
+        (BiosBoot, GptName(BiosBoot)), (AppleHfs, GptName(AppleHfs)), (AppleApfs, GptName(AppleApfs)), (SolarisZfs, GptName(SolarisZfs)), (FreeBsdData, GptName(FreeBsdData)),
     ];
 
     public static readonly byte[] CommonMbr = [0x07, 0x0C, 0x0B, 0x0E, 0x06, 0x01, 0x27, 0xEF, 0x17, 0x1C, 0x83, 0x82, 0x8E, 0xFD, 0xAF];

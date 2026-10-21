@@ -1,7 +1,8 @@
 # LibertyX Partition
 
-Ferramenta de discos para Windows, da família LibertyX (Player, Folder), com foco em
-**recuperação de dados**. Interface em Avalonia (.NET 10), ouro sobre preto, Manrope.
+Ferramenta de discos para **Windows e Linux**, da família LibertyX (Player, Folder), com foco em
+**recuperação de dados**. Interface em Avalonia (.NET 10), ouro sobre preto, Manrope. O mesmo
+código nos dois sistemas: o motor de recuperação é próprio; muda só a camada nativa.
 
 ## O que faz
 
@@ -27,6 +28,39 @@ recuperação), benchmark (estilo CrystalDiskMark + curva de leitura), analisado
 (treemap), duplicados (xxHash128, para a Lixeira), mídia inicializável (ISO do Windows em
 FAT32 UEFI+BIOS com install.wim dividido, ou gravação DD).
 
+## No Linux
+
+Tudo o que está acima (o motor é o mesmo), mais o que é do Linux:
+
+- **Sistemas de arquivos**: cria, formata, redimensiona, verifica, rotula e troca o UUID de ext2/3/4,
+  XFS, Btrfs, F2FS, NTFS, exFAT, FAT16/32 e swap, pelas ferramentas oficiais de cada um (as mesmas
+  do GParted). ext4, XFS e Btrfs **crescem montados**, inclusive o `/` — o kernel é avisado pelo BLKPG.
+- **Disco do sistema**: como no GParted, dá para criar e alterar partições no espaço livre do disco
+  onde está o `/`; só as partições em uso (`/`, `/boot`, `/home`, swap ativa…) ficam travadas.
+- **Criptografia**: LUKS1/LUKS2 e BitLocker (pelo cryptsetup) — desbloquear, montar, recuperar
+  arquivos de dentro, senhas (slots), cópia e restauração do cabeçalho; criar partição LUKS2.
+- **LVM e RAID**: volumes lógicos e RAID por software aparecem como discos (recuperar, verificar,
+  formatar); ativar e desativar grupos; montar e parar conjuntos.
+- **Sinalizadores e nomes**: esp, bios_grub, lvm, raid, swap, legacy_boot, oculta; nome GPT (PARTLABEL);
+  tipos da especificação de partições detectáveis (raiz, /home, /var, XBOOTLDR…).
+- **Busca de partições perdidas** também acha XFS, Btrfs, F2FS e LUKS (cópias de superbloco não viram fantasmas).
+- **S.M.A.R.T. sem programa externo**: NVMe pelo comando de administração e SATA/USB por SG_IO (ATA
+  PASS-THROUGH), com o smartctl de reserva para pontes USB difíceis.
+- **Montar / desmontar**, ligar/desligar swap, lixeira do padrão freedesktop, montagem automática do
+  ambiente gráfico suspensa durante as operações, quem está usando um volume que não desmonta.
+- **Ferramentas do sistema**: mostra o que falta e instala pelo gerenciador de pacotes da distribuição.
+- Abre pedindo a senha de administrador numa janela do sistema (pkexec/polkit); os arquivos
+  recuperados voltam com o dono certo e a pasta abre no gerenciador de arquivos de quem usa.
+
+Downloads (x64 e ARM64), sempre a última versão aprovada no autoteste:
+
+- Ubuntu, Debian, Mint, Pop!_OS: [`libertyx-partition_amd64.deb`](https://github.com/fxmx182/libertyx-partition/releases/download/linux-latest/libertyx-partition_amd64.deb)
+- Fedora, openSUSE, RHEL: [`libertyx-partition.x86_64.rpm`](https://github.com/fxmx182/libertyx-partition/releases/download/linux-latest/libertyx-partition.x86_64.rpm)
+- Qualquer distribuição: [`LibertyXPartition-x86_64.AppImage`](https://github.com/fxmx182/libertyx-partition/releases/download/linux-latest/LibertyXPartition-x86_64.AppImage)
+- ARM64 (Raspberry Pi 4/5, notebooks ARM): `libertyx-partition_arm64.deb`, `libertyx-partition.aarch64.rpm`, `LibertyXPartition-aarch64.AppImage`
+
+O app se atualiza sozinho: o AppImage troca o próprio arquivo; o .deb/.rpm atualiza pelo apt/dnf.
+
 ## Segurança
 
 - Nada destrutivo no disco do Windows em uso; operações perigosas pedem a palavra digitada.
@@ -38,9 +72,12 @@ FAT32 UEFI+BIOS com install.wim dividido, ou gravação DD).
 
 ## Estrutura
 
-- `src/LibertyX.Partition.Core` — motor (multiplataforma onde dá): leitura de setores, MBR/GPT,
-  NTFS/FAT/exFAT, recuperação, escavação, operações; `Platform/Windows` é a camada nativa.
-- `src/LibertyX.Partition` — interface Avalonia; `--selftest relatorio.txt [--vhd]` roda o autoteste.
+- `src/LibertyX.Partition.Core` — motor (multiplataforma): leitura de setores, MBR/GPT,
+  NTFS/FAT/exFAT/ext/HFS+/APFS, recuperação, escavação, operações; `Platform/Windows` e
+  `Platform/Linux` são as camadas nativas.
+- `src/LibertyX.Partition` — interface Avalonia; `--selftest relatorio.txt [--vhd]` roda o autoteste
+  (no Linux, `--loop`: opera só num disco loop que o próprio teste cria).
+- `packaging/linux` — atalho, política do polkit, AppStream, ícones e `empacotar.sh` (AppImage, .deb, .rpm, .tar.gz).
 - `tests/Probe` — testes do motor contra imagens de disco reais (geradas por `tests/scripts/make-images.sh`
   num contêiner Debian privilegiado).
 - `tests/Snap` — capturas de tela sem monitor (Avalonia.Headless).
@@ -63,6 +100,16 @@ instalador (Inno Setup, `installer/`), testa instalar e desinstalar em silêncio
 
 As artes do instalador saem de `Scripts/instalador.py`.
 
+No Linux: `.github/workflows/partition-linux.yml` compila em x64 e ARM64 (runners nativos), roda o
+autoteste num disco loop (cria GPT, formata em 8 sistemas de arquivos, apaga e recupera pelo
+journal, reduz, move, cresce montado, LUKS2, exclui tudo e acha de volta, GPT⇄MBR, grava imagem
+compactada, limpa), empacota, instala o .deb (Ubuntu) e o .rpm (Fedora) para provar, e publica no
+release `linux-latest`.
+
+    dotnet publish src/LibertyX.Partition -c Release -r linux-x64 --self-contained \
+      -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+    packaging/linux/empacotar.sh x64 1.0.0 <executável> pacotes
+
 ## Família LibertyX
 
 | App | Repositório |
@@ -71,4 +118,4 @@ As artes do instalador saem de `Scripts/instalador.py`.
 | LibertyX Player — Android e TV | [libertyx-player-android](https://github.com/fxmx182/libertyx-player-android) |
 | LibertyX Folder — iPhone | [libertyx-folder-ios](https://github.com/fxmx182/libertyx-folder-ios) |
 | LibertyX Folder — Android e TV | [libertyx-folder-android](https://github.com/fxmx182/libertyx-folder-android) |
-| LibertyX Partition — Windows | [libertyx-partition](https://github.com/fxmx182/libertyx-partition) |
+| LibertyX Partition — Windows e Linux | [libertyx-partition](https://github.com/fxmx182/libertyx-partition) |

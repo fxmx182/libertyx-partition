@@ -22,15 +22,30 @@ public sealed class DiskInfo
     public bool IsImage { get; init; }
     public string? ImagePath { get; init; }
     public bool ReadOnly { get; set; }
+    /// <summary>Linux: nome no kernel (sda, nvme0n1, dm-0).</summary>
+    public string KernelName { get; set; } = "";
+    /// <summary>Linux: volume lógico (LVM), LUKS aberto ou RAID — aparece como disco para recuperar e verificar.</summary>
+    public string? VirtualKind { get; set; }
+    public bool IsVirtual => VirtualKind != null;
     public PartitionTable Table { get; set; } = new();
     public List<PartitionInfo> Partitions { get; } = [];
     public SmartReport? Smart { get; set; }
     public string? Error { get; set; }
 
-    public string Title => IsImage ? $"Imagem · {Path.GetFileName(ImagePath)}" : $"Disco {Number}";
-    public string StyleText => Table.Style switch { TableStyle.Gpt => "GPT", TableStyle.Mbr => "MBR", _ => "Sem tabela" };
-    public string KindText => IsImage ? "Arquivo de imagem" : Bus is "USB" or "SD" or "MMC" ? $"{Bus} removível" : IsSsd == true ? (Bus == "NVMe" ? "SSD NVMe" : "SSD") : IsSsd == false ? "HD" : Bus;
-    public bool CanModify => !IsSystem && !ReadOnly;
+    public string Title => IsImage ? $"Imagem · {Path.GetFileName(ImagePath)}" : KernelName.Length > 0 ? DevicePath : $"Disco {Number}";
+    public string StyleText => IsVirtual ? VirtualKind! : Table.Style switch { TableStyle.Gpt => "GPT", TableStyle.Mbr => "MBR", _ => "Sem tabela" };
+    public string KindText => IsImage ? "Arquivo de imagem" : IsVirtual ? $"Volume {VirtualKind}" : Bus is "USB" or "SD" or "MMC" ? $"{Bus} removível" : IsSsd == true ? (Bus == "NVMe" ? "SSD NVMe" : "SSD") : IsSsd == false ? "HD" : Bus;
+    /// <summary>
+    /// Disco inteiro pode ser reescrito (limpar, converter, clonar por cima, excluir todas).
+    /// Nunca o do sistema em uso, nem um volume lógico (LVM/LUKS) — esse se altera pela partição.
+    /// </summary>
+    public bool CanModify => !IsSystem && !ReadOnly && !IsVirtual;
+    /// <summary>
+    /// Partições podem mudar (criar no espaço livre, excluir, formatar…) desde que a própria não
+    /// esteja em uso. No Linux vale também no disco do sistema, como no GParted: o kernel é
+    /// avisado partição por partição. No Windows, o disco do sistema fica travado inteiro.
+    /// </summary>
+    public bool PartitionsEditable => !ReadOnly && !IsVirtual && (!IsSystem || !OperatingSystem.IsWindows());
 }
 
 public sealed class PartitionInfo
@@ -49,21 +64,30 @@ public sealed class PartitionInfo
     public string? VolumePath { get; set; }
     public long? Used { get; set; }
     public long? Free { get; set; }
-    public bool IsWindowsVolume { get; set; }
+    public bool IsSystemVolume { get; set; }
     public bool HasPageFile { get; set; }
     public uint VolumeSerial { get; set; }
     public bool BitLocker { get; set; }
     /// <summary>ext2/ext3/ext4 quando o sistema é ext.</summary>
     public string? FsVariant { get; set; }
+    /// <summary>Linux: o nó do dispositivo (/dev/sda1) e o nome curto (sda1).</summary>
+    public string? DeviceNode { get; set; }
+    public string? KernelName => DeviceNode?.StartsWith("/dev/") == true ? DeviceNode[5..] : null;
+    public string? FsUuid { get; set; }
+    /// <summary>Linux: em uso pelo sistema (/boot, /boot/efi, /usr, /var… ou swap ativa).</summary>
+    public bool InUseBySystem { get; set; }
+    /// <summary>Linux: aberta como LUKS, membro de LVM ou de RAID ativo (nome do mapeamento).</summary>
+    public string? HeldBy { get; set; }
+    public bool IsMounted => MountPoints.Count > 0;
 
     public long StartLba => Offset / Disk.SectorSize;
     public long Sectors => Length / Disk.SectorSize;
     public bool IsEsp => Entry != null && (Entry.TypeGuid == PartitionTypes.Esp || (Disk.Table.Style == TableStyle.Mbr && Entry.MbrType == 0xEF));
     public bool IsMsr => Entry?.TypeGuid == PartitionTypes.Msr;
     public bool IsRecovery => Entry != null && (Entry.TypeGuid == PartitionTypes.WinRecovery || Entry.MbrType == 0x27);
-    public bool IsSystemCritical => IsWindowsVolume || HasPageFile || (Disk.IsSystem && (IsEsp || IsMsr));
+    public bool IsSystemCritical => IsSystemVolume || HasPageFile || InUseBySystem || (Disk.IsSystem && (IsEsp || IsMsr) && OperatingSystem.IsWindows());
 
-    public string DisplayName => IsUnallocated ? "Não alocado" : Letter ?? (Label is { Length: > 0 } ? Label : "*");
+    public string DisplayName => IsUnallocated ? "Não alocado" : Letter ?? KernelName ?? (Label is { Length: > 0 } ? Label : "*");
 
     public string TypeText => IsUnallocated ? "Espaço livre" : IsWholeDisk ? "Volume sem partição"
         : Disk.Table.Style == TableStyle.Gpt ? $"GPT · {PartitionTypes.GptName(Entry!.TypeGuid)}"
@@ -76,8 +100,10 @@ public sealed class PartitionInfo
             var s = new List<string>();
             if (IsEsp) s.Add("Sistema EFI");
             if (Entry?.Active == true) s.Add("Ativa");
-            if (IsWindowsVolume) s.Add("Windows");
-            if (HasPageFile) s.Add("Paginação");
+            if (IsSystemVolume) s.Add(OperatingSystem.IsWindows() ? "Windows" : "Sistema (/)");
+            if (HasPageFile) s.Add(OperatingSystem.IsWindows() ? "Paginação" : "Swap ativa");
+            if (!OperatingSystem.IsWindows() && !IsSystemVolume && MountPoints.Count > 0) s.Add("Montada em " + MountPoints[0]);
+            if (HeldBy != null) s.Add(HeldBy);
             if (IsRecovery) s.Add("Recuperação");
             if (BitLocker) s.Add("BitLocker");
             return s.Count == 0 ? "—" : string.Join(" · ", s);
@@ -115,7 +141,15 @@ public static class LayoutBuilder
             var fs = SafeDetect(dev);
             if (fs is not (FsKind.Empty or FsKind.Unknown))
             {
-                d.Partitions.Add(new PartitionInfo { Disk = d, IsWholeDisk = true, Offset = 0, Length = dev.Length, FileSystem = fs });
+                var whole = new PartitionInfo { Disk = d, IsWholeDisk = true, Offset = 0, Length = dev.Length, FileSystem = fs };
+                if (fs == FsKind.Ext)
+                    try
+                    {
+                        var x = FsDetect.ParseExt(dev.ReadBytes(1024, 1024));
+                        if (x != null) { whole.FsVariant = x.Variant; whole.Label = x.Label.Length > 0 ? x.Label : null; whole.Used = (x.Blocks - x.FreeBlocks) * x.BlockSize; whole.Free = x.FreeBlocks * x.BlockSize; }
+                    }
+                    catch { }
+                d.Partitions.Add(whole);
                 return;
             }
             d.Partitions.Add(new PartitionInfo { Disk = d, Offset = 0, Length = dev.Length });

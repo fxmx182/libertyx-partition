@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LinuxCryptoView" x:DataType="vm:LinuxCryptoViewModel">
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,18">
+      <StackPanel>
+        <TextBlock Classes="h1" Text="Criptografia" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Volumes LUKS do Linux e BitLocker do Windows: desbloquear, montar, recuperar arquivos de dentro, senhas e cópia do cabeçalho." />
+      </StackPanel>
+      <Button Grid.Column="1" Command="{Binding RefreshCommand}" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Text="Atualizar" /></StackPanel>
+      </Button>
+    </Grid>
+    <Border DockPanel.Dock="Top" Classes="notice warn" Margin="0,0,0,14" IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+    </Border>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Volumes}">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:CryptoRow">
+            <Border Classes="card" Width="400" Margin="0,0,14,14">
+              <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Border Width="46" Height="46" CornerRadius="14" Background="#1AFBC501">
+                    <Panel>
+                      <PathIcon Data="{StaticResource IcLock}" Width="22" Height="22" Foreground="{StaticResource Ouro}" IsVisible="{Binding Closed}" />
+                      <PathIcon Data="{StaticResource IcUnlock}" Width="22" Height="22" Foreground="{StaticResource Ouro}" IsVisible="{Binding Open}" />
+                    </Panel>
+                  </Border>
+                  <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" Classes="h2" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Kind}" Classes="muted" />
+                  </StackPanel>
+                  <Border Grid.Column="2" Classes="chip" Classes.red="{Binding Closed}" Classes.green="{Binding Open}"><TextBlock Text="{Binding StateText}" /></Border>
+                </Grid>
+                <TextBlock Text="{Binding Detail}" Classes="faint" TextWrapping="Wrap" />
+                <WrapPanel>
+                  <Button Content="Desbloquear" Command="{Binding UnlockCmd}" IsVisible="{Binding Closed}" Classes="primary" Margin="0,0,8,8" />
+                  <Button Content="Abrir pasta" Command="{Binding BrowseCmd}" IsVisible="{Binding Mounted}" Classes="primary" Margin="0,0,8,8" />
+                  <Button Content="Montar" Command="{Binding MountCmd}" IsVisible="{Binding OpenNotMounted}" Classes="primary" Margin="0,0,8,8" />
+                  <Button Content="Recuperar arquivos" Command="{Binding RecoverCmd}" IsVisible="{Binding Open}" Margin="0,0,8,8" />
+                  <Button Content="Trancar" Command="{Binding CloseCmd}" IsVisible="{Binding Open}" Margin="0,0,8,8" />
+                  <Button Content="Senhas" Command="{Binding KeysCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
+                  <Button Content="Salvar cabeçalho" Command="{Binding BackupCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
+                  <Button Content="Restaurar cabeçalho" Command="{Binding RestoreCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
+                  <Button Content="Detalhes" Command="{Binding InfoCmd}" Margin="0,0,8,8" />
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

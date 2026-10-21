@@ -114,7 +114,7 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
     {
         if (_disk == null) return;
         var chosen = Found.Where(f => f.IsChecked).Select(f => f.F).ToList();
-        RestoreBlock = _disk.IsSystem ? "Disco do Windows em uso: restaure a tabela pela mídia inicializável." : _disk.ReadOnly ? "Imagem anexada só para leitura — use Explorar para tirar os arquivos." : null;
+        RestoreBlock = _disk.IsSystem && Ui.IsWin ? "Disco do Windows em uso: restaure a tabela pela mídia inicializável." : _disk.IsVirtual ? $"Volume {_disk.VirtualKind}: não tem tabela de partições — use Explorar para tirar os arquivos." : _disk.ReadOnly ? "Imagem anexada só para leitura — use Explorar para tirar os arquivos." : null;
         // prévia: como o disco ficará
         Preview.Clear();
         try

@@ -18,7 +18,9 @@ public static partial class ActionsBuilder
     private const long MB = 1024 * 1024;
 
     private static string? DiskLock(DiskInfo d) =>
-        d.IsSystem ? "Disco do Windows em uso — use a mídia inicializável para isso." : d.ReadOnly ? "Imagem anexada só para leitura." : null;
+        d.IsSystem ? (Win ? "Disco do Windows em uso — use a mídia inicializável para isso." : "Disco do sistema em uso — para alterá-lo inteiro, inicie por um pendrive Linux.")
+        : d.IsVirtual ? $"Volume {d.VirtualKind}: altere pela partição física de origem."
+        : d.ReadOnly ? (d.IsImage ? "Imagem anexada só para leitura." : "Mídia protegida contra gravação (trava do cartão ou disco só leitura).") : null;
 
     private static string? PartLock(PartitionInfo p) =>
         p.IsSystemCritical ? "Partição do sistema em uso." : p.Disk.ReadOnly ? "Imagem anexada só para leitura." : null;
@@ -31,8 +33,8 @@ public static partial class ActionsBuilder
         var D = d.D;
         string? lockR = DiskLock(D);
         var g1 = new List<ActionItem>();
-        if (D.Table.Style == TableStyle.None && !D.IsImage)
-            g1.Add(ActionItem.Of("Inicializar disco (GPT/MBR)", "Create", () => InitializeDisk(D), lockR));
+        if (D.Table.Style == TableStyle.None && !D.IsImage && !D.IsVirtual)
+            g1.Add(ActionItem.Of("Inicializar disco (GPT/MBR)", "Create", () => InitializeDisk(D), lockR ?? (D.Partitions.Any(p => p.IsWholeDisk && (p.IsMounted || p.HeldBy != null)) ? "O volume deste disco está em uso — desmonte antes." : null)));
         g1.Add(ActionItem.Of("Recuperar dados do disco", "RecoverFiles", () => { Main.Navigate("recuperar", d.D); return Task.CompletedTask; }));
         g1.Add(ActionItem.Of("Recuperar partição perdida", "RecoverPartition", () => { Main.Navigate("particoes", d.D); return Task.CompletedTask; }));
         g1.Add(ActionItem.Of("Criar imagem do disco", "Backup", () => { Main.Navigate("imagem", d.D); return Task.CompletedTask; }));
@@ -46,6 +48,12 @@ public static partial class ActionsBuilder
         g2.Add(ActionItem.Of(D.Table.Style == TableStyle.Gpt ? "Converter para MBR" : "Converter para GPT", "Convert", () => { Main.Navigate("converter", d.D); return Task.CompletedTask; }, D.Table.Style == TableStyle.None ? "Disco sem tabela." : null));
         g2.Add(ActionItem.Of("Alinhar todas as partições", "Align", () => { Main.Navigate("alinhar", d.D); return Task.CompletedTask; }, lockR));
         g2.Add(ActionItem.Of("Restaurar backup de tabela", "Restore", () => RestoreTableBackup(D), lockR));
+        if (Lin && !D.IsImage && !D.IsVirtual)
+            g2.Add(ActionItem.Of("Reler tabela (avisar o kernel)", "Refresh", () => Main.Run($"Relendo a tabela de {D.Title}", s =>
+            {
+                DiskSystem.Native.Rescan(MainViewModel.Fresh(D));
+                s.Log("O kernel foi avisado. Partições em uso continuam como estavam até serem desmontadas.");
+            }, success: "Tabela relida")));
         yield return new ActionGroup("Disco", g2);
 
         yield return new ActionGroup("Apagar", [
@@ -57,6 +65,11 @@ public static partial class ActionsBuilder
     public static IEnumerable<ActionGroup> ForPartition(PartitionVM pv)
     {
         var p = pv.P;
+        if (Lin && !p.Disk.IsImage)
+        {
+            foreach (var g in ForPartitionLinux(pv)) yield return g;
+            yield break;
+        }
         if (p.IsUnallocated)
         {
             yield return new ActionGroup("Espaço livre", [

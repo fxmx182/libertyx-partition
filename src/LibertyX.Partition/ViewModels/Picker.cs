@@ -57,7 +57,7 @@ public sealed partial class PickerViewModel : ViewModelBase
             {
                 Owner = this, Disk = d, Title = d.Title, Subtitle = $"{d.Model} · {d.KindText} · {Fmt.Size(d.Size)}",
                 Icon = Ui.Icon(d.IsImage ? "Disc" : d.Bus == "USB" ? "Usb" : "Disk"), Enabled = dr == null, Reason = dr,
-                Badge = d.IsSystem ? "Windows" : d.IsImage ? "Imagem" : null,
+                Badge = d.IsSystem ? Ui.SystemBadge : d.IsImage ? "Imagem" : d.IsVirtual ? d.VirtualKind : null,
             };
             var g = new PickGroup { Header = head };
             if (ShowPartitions)

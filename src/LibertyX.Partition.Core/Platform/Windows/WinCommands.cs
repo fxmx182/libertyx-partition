@@ -3,12 +3,6 @@ using System.Text;
 
 namespace LibertyX.Partition.Core.Platform.Windows;
 
-public sealed record CommandResult(int ExitCode, string Output, string Error)
-{
-    public bool Ok => ExitCode == 0;
-    public string Message => (Error.Trim().Length > 0 ? Error : Output).Trim();
-}
-
 /// <summary>
 /// Operações que o próprio Windows faz melhor e com mais segurança que qualquer código de
 /// terceiro: redimensionar NTFS com volume montado, formatar, chkdsk, BitLocker, VSS, bcdboot.

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.fxmx182.libertyx-partition</id>
+  <name>LibertyX Partition</name>
+  <summary>Recover files and partitions, and manage disks</summary>
+  <summary xml:lang="pt-BR">Recuperar arquivos e partições, e cuidar dos discos</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer id="io.github.fxmx182"><name>LibertyX</name></developer>
+  <description>
+    <p>Disk tool focused on data recovery: deleted files (NTFS, FAT, exFAT, ext2/3/4, HFS+, APFS), lost partitions, deep scan by file signature, disk imaging with bad-sector handling, surface test and S.M.A.R.T.</p>
+    <p>Also partitions: create, resize (online grow of ext4, XFS and Btrfs), move, format (ext4, XFS, Btrfs, F2FS, NTFS, exFAT, FAT32, swap, LUKS2), check, label and UUID, flags, GPT/MBR conversion without data loss, clone and copy, LUKS and BitLocker unlock, LVM and RAID.</p>
+    <p xml:lang="pt-BR">Ferramenta de discos com foco em recuperação de dados: arquivos apagados, partições perdidas, varredura profunda, imagem de disco, teste de superfície e S.M.A.R.T. — e o gerenciamento completo das partições.</p>
+  </description>
+  <launchable type="desktop-id">libertyx-partition.desktop</launchable>
+  <url type="homepage">https://github.com/fxmx182/libertyx-partition</url>
+  <categories><category>System</category><category>Filesystem</category></categories>
+  <content_rating type="oars-1.1" />
+  <requires><control>pointing</control></requires>
+</component>

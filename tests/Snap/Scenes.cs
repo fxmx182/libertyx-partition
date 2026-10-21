@@ -137,6 +137,56 @@ public static class Scenes
                 vm.Pending.Clear();
                 pump(100);
                 break;
+            case "linux":
+                {
+                    // disco loop preparado pelo script do teste (LX_SNAP_REAL=1, LIBERTYX_LOOPS=1)
+                    vm.Navigate("discos");
+                    var lp = disks.Disks.FirstOrDefault(x => x.D.KernelName.StartsWith("loop") && x.D.Model.Contains("snap.img")) ?? disks.Disks.FirstOrDefault(x => x.D.KernelName.StartsWith("loop"));
+                    if (lp == null) { Console.WriteLine("sem disco loop"); break; }
+                    disks.Select(lp);
+                    pump(400);
+                    snap("40-linux-disco");
+                    foreach (var (fs, name) in new[] { (FsKind.Ext, "41-linux-ext4"), (FsKind.Ntfs, "42-linux-ntfs"), (FsKind.Luks, "43-linux-luks"), (FsKind.LinuxSwap, "44-linux-swap") })
+                    {
+                        var pv = lp.Partitions.FirstOrDefault(x => x.P.FileSystem == fs);
+                        if (pv == null) continue;
+                        disks.Select(pv);
+                        pump(300);
+                        snap(name);
+                    }
+                    var ext = lp.Partitions.FirstOrDefault(x => x.P.FileSystem == FsKind.Ext);
+                    if (ext != null)
+                    {
+                        disks.Select(ext);
+                        pump(200);
+                        foreach (var (title, shot) in new[] { ("Formatar", "45-linux-formatar"), ("Mover / redimensionar", "46-linux-redimensionar"), ("Verificar sistema de arquivos", "47-linux-verificar"), ("Sinalizadores (boot, esp, oculta…)", "48-linux-sinalizadores") })
+                        {
+                            var a = disks.Actions.SelectMany(g => g.Items).FirstOrDefault(i => i.Title == title);
+                            if (a == null || !a.Enabled) { Console.WriteLine($"ação {title} indisponível: {a?.Reason}"); continue; }
+                            _ = a.Command.ExecuteAsync(null);
+                            for (int i = 0; i < 40 && vm.Dialog == null; i++) pump(100);
+                            pump(500);
+                            snap(shot);
+                            vm.Dialog?.Close(false);
+                            pump(200);
+                        }
+                    }
+                    var free = lp.Partitions.FirstOrDefault(x => x.IsUnallocated);
+                    if (free != null)
+                    {
+                        disks.Select(free);
+                        pump(200);
+                        var a = disks.Actions.SelectMany(g => g.Items).FirstOrDefault(i => i.Title == "Criar partição");
+                        if (a != null) { _ = a.Command.ExecuteAsync(null); for (int i = 0; i < 40 && vm.Dialog == null; i++) pump(100); pump(400); snap("49-linux-criar"); vm.Dialog?.Close(false); pump(200); }
+                    }
+                    foreach (var (key, shot) in new[] { ("bitlocker", "50-linux-criptografia"), ("lvm", "51-linux-lvm"), ("ferramentas", "52-linux-ferramentas"), ("saude", "53-linux-saude"), ("benchmark", "54-linux-benchmark"), ("boot", "55-linux-boot") })
+                    {
+                        vm.Navigate(key, lp.D);
+                        pump(1200);
+                        snap(shot);
+                    }
+                    break;
+                }
             default:
                 vm.Navigate(scene);
                 pump(500);

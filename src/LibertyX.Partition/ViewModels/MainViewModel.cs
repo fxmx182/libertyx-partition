@@ -56,7 +56,21 @@ public sealed partial class MainViewModel : ViewModelBase
             return "v" + parts[0] + (parts.Length > 1 && parts[1].Length >= 7 ? " · " + parts[1][..7] : "");
         }
     }
-    public string AdminText => IsAdmin ? "Administrador" : "Sem privilégio de administrador";
+    public string AdminText => IsAdmin ? (OperatingSystem.IsWindows() ? "Administrador" : "Administrador (root)") : "Sem privilégio de administrador";
+    /// <summary>Linux sem root: só imagens anexadas e leitura do que der — com o botão para pedir a senha.</summary>
+    public bool CanElevate => !IsAdmin && OperatingSystem.IsLinux();
+
+    [RelayCommand]
+    private async Task Elevate()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        if (HasPending) { await Alert("Alterações pendentes", "Confirme ou cancele as alterações da fila antes."); return; }
+        ShowToast("Digite a senha de administrador na janela do sistema…");
+        var args = Environment.GetCommandLineArgs().Skip(1).Concat(DiskSystem.AttachedImages).Distinct().ToArray();
+        bool ok = await Task.Run(() => Core.Platform.Linux.LinuxSession.RelaunchAsRoot(args));
+        if (ok) { if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime l) l.Shutdown(); }
+        else await Alert("Sem permissão de administrador", "A senha foi cancelada ou o sistema não tem o pkexec (polkit). Também dá para abrir pelo terminal:\n\nsudo libertyx-partition", "warn");
+    }
 
     // ───────── licença ─────────
 
@@ -108,7 +122,7 @@ public sealed partial class MainViewModel : ViewModelBase
         if (i.Notes.Length > 0) f.Note("O que mudou: " + i.Notes, "gold");
         f.Note(Updater.IsInstalled
             ? "O app baixa a versão nova, atualiza por cima e abre de novo sozinho. Licença, backups e configurações continuam."
-            : "Esta é a versão portátil: o navegador baixa o .exe novo para você substituir este.", "");
+            : OperatingSystem.IsLinux() ? "Esta é a versão em pasta (tar.gz): o navegador baixa a nova para você substituir esta." : "Esta é a versão portátil: o navegador baixa o .exe novo para você substituir este.", "");
         if (await ShowDialog(f)) await UpdateNow();
     }
 
@@ -119,7 +133,9 @@ public sealed partial class MainViewModel : ViewModelBase
         if (!Updater.IsInstalled)
         {
             // versão portátil: não há o que atualizar no lugar — baixa o .exe novo pelo navegador
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(i.PortableUrl.Length > 0 ? i.PortableUrl : $"https://github.com/{Updater.Repo}/releases/latest") { UseShellExecute = true }); } catch { }
+            string url = i.PortableUrl.Length > 0 ? i.PortableUrl : $"https://github.com/{Updater.Repo}/releases/{Updater.Tag}";
+            if (OperatingSystem.IsLinux()) Core.Platform.Linux.LinuxSession.OpenAsUser(url);
+            else try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
             return;
         }
         if (HasPending) { await Alert("Alterações pendentes", "Confirme ou cancele as alterações da fila antes de atualizar."); return; }
@@ -127,7 +143,13 @@ public sealed partial class MainViewModel : ViewModelBase
         bool ok = await Run($"Baixando a versão {i.Version}", async s =>
         {
             setup = await Updater.Download(i, new Progress<double>(x => s.Progress(x, "Baixando o instalador")), s.Token);
-            s.Log("Download conferido. O instalador vai fechar o app, atualizar e abrir de novo.");
+            if (OperatingSystem.IsLinux())
+            {
+                s.Progress(-1, "Instalando");
+                await Updater.InstallLinux(setup, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); }, s.Token);
+                s.Log("Instalado. O app vai abrir de novo na versão nova.");
+            }
+            else s.Log("Download conferido. O instalador vai fechar o app, atualizar e abrir de novo.");
         }, refresh: false, success: "Pronto para atualizar");
         if (!ok || setup == null) return;
         Operation = null;
@@ -166,12 +188,16 @@ public sealed partial class MainViewModel : ViewModelBase
                 new NavItem("limpar", "Limpar disco", "Wipe"),
                 new NavItem("excluir-todas", "Excluir todas as partições", "DeleteAll")),
             new("Utilidades",
-                new NavItem("bitlocker", "BitLocker", "BitLocker"),
+                OperatingSystem.IsWindows() ? new NavItem("bitlocker", "BitLocker", "BitLocker") : new NavItem("bitlocker", "Criptografia (LUKS, BitLocker)", "BitLocker"),
                 new NavItem("benchmark", "Benchmark de disco", "Benchmark"),
                 new NavItem("espaco", "Analisador de espaço", "Space"),
                 new NavItem("duplicados", "Limpador de duplicados", "Duplicates"),
                 new NavItem("boot", "Pendrive de boot e imagens", "Boot", premium: true)),
         ];
+        if (OperatingSystem.IsLinux())
+            Nav.Add(new("Linux",
+                new NavItem("lvm", "LVM e RAID", "Layers"),
+                new NavItem("ferramentas", "Ferramentas do sistema", "Terminal")));
         _factories = new()
         {
             ["discos"] = () => new DisksPageViewModel(),
@@ -187,7 +213,9 @@ public sealed partial class MainViewModel : ViewModelBase
             ["alinhar"] = () => new AlignViewModel(),
             ["limpar"] = () => new WipeViewModel(),
             ["excluir-todas"] = () => new DeleteAllViewModel(),
-            ["bitlocker"] = () => new BitLockerViewModel(),
+            ["bitlocker"] = () => OperatingSystem.IsWindows() ? new BitLockerViewModel() : new LinuxCryptoViewModel(),
+            ["lvm"] = () => new LinuxVolumesViewModel(),
+            ["ferramentas"] = () => new LinuxToolsViewModel(),
             ["benchmark"] = () => new BenchmarkViewModel(),
             ["espaco"] = () => new SpaceViewModel(),
             ["duplicados"] = () => new DuplicatesViewModel(),
@@ -408,8 +436,10 @@ public sealed partial class MainViewModel : ViewModelBase
         {
             if (OperatingSystem.IsWindows())
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", File.Exists(path) ? $"/select,\"{path}\"" : $"\"{path}\"") { UseShellExecute = true });
+            else if (OperatingSystem.IsLinux())
+                Core.Platform.Linux.LinuxSession.OpenAsUser(Directory.Exists(path) ? path : Path.GetDirectoryName(path)!);
             else
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("xdg-open", Directory.Exists(path) ? path : Path.GetDirectoryName(path)!) { UseShellExecute = true });
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("open", Directory.Exists(path) ? path : Path.GetDirectoryName(path)!) { UseShellExecute = true });
         }
         catch { }
     }

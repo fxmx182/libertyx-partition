@@ -63,13 +63,17 @@ public sealed partial class DisksPageViewModel : PageViewModel
         InspectorUsage = d.UsedFraction;
         InspectorHasUsage = true;
         InspectorUsageText = $"{d.UsedFraction * 100:0}%";
-        InspectorWarning = D.IsSystem ? "Disco do Windows em uso: operações destrutivas ficam bloqueadas." : D.Error;
+        InspectorWarning = D.IsSystem ? (Ui.IsWin ? "Disco do Windows em uso: operações destrutivas ficam bloqueadas."
+                                             : "Disco do sistema (onde está o /): as partições em uso ficam travadas; o espaço livre e as demais podem ser alteradas.")
+                         : D.IsVirtual ? $"Volume {D.VirtualKind}: recuperar, verificar e formatar valem aqui; a partição física fica no disco de origem." : D.Error;
         Details.Clear();
         Details.Add(new("Tipo", D.KindText));
         Details.Add(new("Capacidade", $"{Fmt.Size(D.Size)} ({D.Size:N0} bytes)"));
         Details.Add(new("Tabela", D.StyleText + (D.Table.Style == TableStyle.Gpt ? $" · {D.Table.DiskGuid.ToString().ToUpperInvariant()[..8]}…" : D.Table.Style == TableStyle.Mbr ? $" · assinatura {D.Table.DiskSignature:X8}" : "")));
         Details.Add(new("Setor", $"{D.SectorSize} B lógico · {D.PhysicalSectorSize} B físico"));
         if (!string.IsNullOrEmpty(D.Serial)) Details.Add(new("Nº de série", D.Serial));
+        if (!string.IsNullOrEmpty(D.Firmware)) Details.Add(new("Firmware", D.Firmware));
+        if (!Ui.IsWin && !D.IsImage) Details.Add(new("Dispositivo", D.DevicePath + (D.Bus.Length > 0 ? $" · {D.Bus}" : "")));
         if (D.Smart?.TemperatureC is { } t) Details.Add(new("Temperatura", $"{t} °C"));
         if (D.Smart?.PowerOnHours is { } h) Details.Add(new("Horas ligado", $"{h:N0} h"));
         foreach (var w in D.Table.Warnings) Details.Add(new("Aviso", w));
@@ -90,7 +94,9 @@ public sealed partial class DisksPageViewModel : PageViewModel
         InspectorHasUsage = p.HasUsage;
         InspectorUsage = p.UsedFraction;
         InspectorUsageText = p.UsagePercent;
-        InspectorWarning = P.IsWindowsVolume ? "Volume do Windows em uso: só redimensionar, rotular e verificar são permitidos aqui."
+        InspectorWarning = P.IsSystemVolume ? (Ui.IsWin ? "Volume do Windows em uso: só redimensionar, rotular e verificar são permitidos aqui."
+                                                        : "Raiz do sistema em uso (/): dá para crescer com ela montada, rotular e verificar sem corrigir.")
+                         : P.IsSystemCritical && !Ui.IsWin ? $"Em uso pelo sistema ({(P.MountPoints.Count > 0 ? string.Join(", ", P.MountPoints) : "swap")}): só crescer, rotular e verificar."
                          : P.BitLocker ? "Volume protegido por BitLocker." : null;
         Details.Clear();
         if (!P.IsUnallocated)
@@ -100,6 +106,11 @@ public sealed partial class DisksPageViewModel : PageViewModel
             Details.Add(new("Livre", p.FreeText));
             Details.Add(new("Tipo", P.TypeText));
             if (P.StatusText != "—") Details.Add(new("Status", P.StatusText));
+            if (P.DeviceNode != null) Details.Add(new("Dispositivo", P.DeviceNode));
+            if (!string.IsNullOrEmpty(P.FsUuid)) Details.Add(new("UUID", P.FsUuid!));
+            if (!Ui.IsWin && P.MountPoints.Count > 1) Details.Add(new("Montada em", string.Join(", ", P.MountPoints)));
+            if (P.HeldBy != null) Details.Add(new("Aberta como", P.HeldBy));
+            if (P.Entry is { Name.Length: > 0 } && P.Disk.Table.Style == TableStyle.Gpt && !Ui.IsWin) Details.Add(new("Nome GPT", P.Entry.Name));
         }
         Details.Add(new("Início", $"setor {P.StartLba:N0}{(Core.Operations.DiskOperations.IsAligned(P) ? " · alinhada" : " · DESALINHADA")}"));
         Details.Add(new("Tamanho", $"{P.Sectors:N0} setores"));

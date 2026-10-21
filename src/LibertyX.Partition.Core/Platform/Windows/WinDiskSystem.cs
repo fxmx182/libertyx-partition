@@ -168,7 +168,7 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
                         if (!string.IsNullOrEmpty(vol.Label)) p.Label = vol.Label;
                         p.VolumeSerial = vol.Serial;
                         if (vol.Total is { } t && vol.Free is { } f) { p.Used = t - f; p.Free = f; }
-                        p.IsWindowsVolume = vol == winVol;
+                        p.IsSystemVolume = vol == winVol;
                         p.HasPageFile = vol.Letter != null && pageFileDrives.Contains(vol.Letter[0]);
                         if (p.FileSystem == FsKind.BitLocker && vol.FileSystem is "NTFS" or "FAT32" or "exFAT") p.BitLocker = true;
                     }
@@ -337,18 +337,4 @@ public sealed unsafe class WinDiskSystem : IDiskSystem
         var data = outb[16..];
         return data.Skip(2).Take(360).Any(b => b != 0) ? data : null;
     }
-}
-
-/// <summary>Fatia que fecha o disco junto — para entregar uma partição como dispositivo independente.</summary>
-public sealed class OwnedSlice(IBlockDevice disk, long offset, long length) : IBlockDevice
-{
-    private readonly SubDevice _s = new(disk, offset, length);
-    public string Name => _s.Name;
-    public long Length => _s.Length;
-    public int SectorSize => _s.SectorSize;
-    public bool CanWrite => _s.CanWrite;
-    public int Read(long o, Span<byte> b) => _s.Read(o, b);
-    public void Write(long o, ReadOnlySpan<byte> b) => _s.Write(o, b);
-    public void Flush() => _s.Flush();
-    public void Dispose() => disk.Dispose();
 }

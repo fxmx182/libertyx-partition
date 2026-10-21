@@ -177,7 +177,8 @@ public sealed partial class BenchmarkViewModel : PageViewModel
         _drives = list;
         Drives.Clear();
         foreach (var d in list)
-            Drives.Add(OperatingSystem.IsWindows() ? $"{d.Root.TrimEnd('\\')} {d.Label} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? " · removível" : "")}" : d.Root);
+            Drives.Add(OperatingSystem.IsWindows() ? $"{d.Root.TrimEnd('\\')} {d.Label} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? " · removível" : "")}"
+                                                   : $"{d.Root}{(d.Label.Length > 0 ? $" ({d.Label})" : "")} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? " · removível" : "")}");
         DriveIndex = Drives.Count > 0 ? 0 : -1;
     }
 
@@ -337,7 +338,7 @@ public sealed partial class SpaceViewModel : PageViewModel
     private async Task Recycle()
     {
         var s = Selected;
-        if (s == null || !OperatingSystem.IsWindows()) return;
+        if (s == null || !(OperatingSystem.IsWindows() || OperatingSystem.IsLinux())) return;
         if (!await Main.Confirm("Mandar para a Lixeira", $"{s.FullPath}\n{Fmt.Size(s.Size)}", "Mover para a Lixeira", true)) return;
         if (WinShell.Recycle([s.FullPath])) { SpaceAnalyzer.Remove(s); Selected = null; Open(Current!); Main.ShowToast("Movido para a Lixeira."); }
         else Main.ShowToast("Não foi possível mover (arquivo em uso?).");
@@ -445,8 +446,7 @@ public sealed partial class DuplicatesViewModel : PageViewModel
             return;
         }
         if (!await Main.Confirm("Mover duplicados para a Lixeira", $"{sel.Count:N0} arquivos ({Fmt.Size(sel.Sum(f => f.F.Size))}) vão para a Lixeira — dá para restaurar de lá.", "Mover para a Lixeira")) return;
-        bool ok = OperatingSystem.IsWindows() ? WinShell.Recycle(sel.Select(s => s.F.Path)) : false;
-        if (!ok && !OperatingSystem.IsWindows()) foreach (var s in sel) { try { File.Delete(s.F.Path); ok = true; } catch { } }
+        bool ok = WinShell.Recycle(sel.Select(s => s.F.Path));
         Main.ShowToast(ok ? "Duplicados movidos para a Lixeira." : "Alguns arquivos não puderam ser movidos.");
         foreach (var g in Groups.ToList())
         {
@@ -497,7 +497,8 @@ public sealed partial class BootMediaViewModel : PageViewModel
     public bool IsRaw => Effective == 3;
     public string ModeNote => Effective switch
     {
-        1 => "Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo DISM. As opções abaixo valem para o Windows 11.",
+        1 => OperatingSystem.IsLinux() ? "Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo wimlib. As opções abaixo valem para o Windows 11."
+                                       : "Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo DISM. As opções abaixo valem para o Windows 11.",
         2 => "Tabela e FAT32 novos e os arquivos da ISO copiados — para ISOs de ferramentas UEFI que não são híbridas.",
         _ => "Setor a setor, como o balenaEtcher e o modo DD do Rufus: ISOs de Linux e imagens de disco (Raspberry Pi, Home Assistant…). Imagens compactadas são descompactadas durante a gravação.",
     };
@@ -508,7 +509,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
         Target = new PickerViewModel
         {
             ShowPartitions = false,
-            DiskFilter = d => d.IsSystem ? "Disco do Windows." : d.IsImage ? "Escolha um pendrive, cartão ou disco." :
+            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.IsVirtual ? "Volume lógico: escolha um disco físico." : d.IsImage ? "Escolha um pendrive, cartão ou disco." :
                 !ShowAllDisks && !d.Removable && d.Bus is not ("USB" or "SD" or "MMC") ? "Disco interno — marque “Mostrar todos os discos” se for mesmo este." : null,
         };
         Target.Changed += _ => OnPropertyChanged(nameof(CanWrite));
@@ -573,7 +574,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
         if (d == null || src == null) return;
         if (!await Main.RequirePremium("Pendrive de boot e imagens", "Gravar ISOs e imagens de disco em pendrive ou cartão é do Premium.")) return;
         int mode = Effective;
-        if (mode is 1 or 2 && !OperatingSystem.IsWindows()) { await Main.Alert("Só no Windows", "Copiar os arquivos da ISO exige montar a ISO pelo Windows."); return; }
+        if (mode is 1 or 2 && !OperatingSystem.IsWindows() && !OperatingSystem.IsLinux()) { await Main.Alert("Indisponível aqui", "Copiar os arquivos da ISO exige montar a ISO pelo sistema."); return; }
         if (mode is 1 or 2 && src.Compression != null) { await Main.Alert("ISO compactada", "Para copiar os arquivos, descompacte a ISO antes — ou use a gravação direta."); return; }
         if (IsWindows && WindowsSetupOptions.ValidateUser(UserName) is { } ue) { await Main.Alert("Nome da conta", ue); return; }
         if (src.Length is { } need && need > d.Size) { await Main.Alert("Não cabe", $"A imagem tem {Fmt.Size(need)} e {d.Title} tem {Fmt.Size(d.Size)}."); return; }
@@ -597,10 +598,12 @@ public sealed partial class BootMediaViewModel : PageViewModel
     }
 }
 
+/// <summary>Lixeira do sistema: a do Windows, ou a do padrão freedesktop no Linux (a do gerenciador de arquivos).</summary>
 public static class WinShell
 {
     public static bool Recycle(IEnumerable<string> paths)
     {
+        if (OperatingSystem.IsLinux()) return Core.Platform.Linux.LinuxTrash.Recycle(paths);
         if (!OperatingSystem.IsWindows()) return false;
         return Core.Platform.Windows.Shell.Recycle(paths);
     }

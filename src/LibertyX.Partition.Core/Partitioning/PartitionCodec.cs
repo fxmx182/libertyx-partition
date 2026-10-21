@@ -228,8 +228,20 @@ public static class PartitionCodec
         if (t.DiskGuid == Guid.Empty) t.DiskGuid = Guid.NewGuid();
 
         var arr = new byte[entSectors * ss];
-        int i = 0;
-        foreach (var e in t.Entries.OrderBy(x => x.Slot == 0 ? int.MaxValue : x.Slot).ThenBy(x => x.StartLba))
+        // cada partição fica na posição em que já estava (no Linux, a posição é o número: /dev/sda3);
+        // compactar renumeraria as vizinhas de uma excluída e quebraria montagens e o fstab
+        var taken = new HashSet<int>();
+        var placed = new List<(PartitionEntry e, int idx)>();
+        foreach (var e in t.Entries.Where(x => x.Slot >= 1 && x.Slot <= count).OrderBy(x => x.Slot))
+            if (taken.Add(e.Slot - 1)) placed.Add((e, e.Slot - 1));
+        int nextFree = 0;
+        foreach (var e in t.Entries.Where(x => !placed.Any(p => p.e == x)).OrderBy(x => x.StartLba))
+        {
+            while (taken.Contains(nextFree)) nextFree++;
+            taken.Add(nextFree);
+            placed.Add((e, nextFree));
+        }
+        foreach (var (e, i) in placed)
         {
             if (e.UniqueGuid == Guid.Empty) e.UniqueGuid = Guid.NewGuid();
             var s = arr.AsSpan(i * 128, 128);
@@ -240,7 +252,7 @@ public static class PartitionCodec
             W64(s, 48, e.Attributes);
             var name = Encoding.Unicode.GetBytes(e.Name.Length > 36 ? e.Name[..36] : e.Name);
             name.CopyTo(s[56..]);
-            e.Slot = ++i;
+            e.Slot = i + 1;
         }
         uint arrCrc = Crc32.Compute(arr.AsSpan(0, count * 128));
 
@@ -312,8 +324,18 @@ public static class PartitionCodec
 
         var prim = t.Entries.Where(e => !e.IsLogical).OrderBy(e => e.StartLba).ToList();
         var logi = t.Entries.Where(e => e.IsLogical).OrderBy(e => e.StartLba).ToList();
-        int slot = 0;
-        foreach (var e in prim) { PutMbrEntry(mbr, 446 + slot * 16, e.MbrType, e.StartLba, e.SectorCount, e.Active); e.Slot = ++slot; }
+        // primárias mantêm a posição (1–4) que tinham; as novas e a estendida ocupam as livres
+        var taken = new bool[4];
+        var slotOf = new Dictionary<PartitionEntry, int>();
+        foreach (var e in prim.Where(e => e.Slot is >= 1 and <= 4).OrderBy(e => e.Slot))
+            if (!taken[e.Slot - 1]) { taken[e.Slot - 1] = true; slotOf[e] = e.Slot - 1; }
+        int FreeSlot()
+        {
+            for (int k = 0; k < 4; k++) if (!taken[k]) { taken[k] = true; return k; }
+            throw new InvalidOperationException("MBR comporta só 4 entradas primárias (contando a estendida).");
+        }
+        foreach (var e in prim.Where(e => !slotOf.ContainsKey(e))) slotOf[e] = FreeSlot();
+        foreach (var e in prim) { PutMbrEntry(mbr, 446 + slotOf[e] * 16, e.MbrType, e.StartLba, e.SectorCount, e.Active); e.Slot = slotOf[e] + 1; }
 
         if (logi.Count > 0)
         {
@@ -328,8 +350,7 @@ public static class PartitionCodec
                 prevEnd = l.EndLba;
             }
             long extStart = logi[0].EbrLba, extEnd = logi[^1].EndLba;
-            PutMbrEntry(mbr, 446 + slot * 16, 0x0F, extStart, extEnd - extStart + 1, false);
-            slot++;
+            PutMbrEntry(mbr, 446 + FreeSlot() * 16, 0x0F, extStart, extEnd - extStart + 1, false);
             int ls = 5;
             for (int i = 0; i < logi.Count; i++)
             {

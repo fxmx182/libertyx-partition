@@ -1,4 +1,5 @@
 using LibertyX.Partition.Core.IO;
+using LibertyX.Partition.Core.Platform.Linux;
 using LibertyX.Partition.Core.Platform.Windows;
 
 namespace LibertyX.Partition.Core.Platform;
@@ -9,7 +10,7 @@ namespace LibertyX.Partition.Core.Platform;
 /// </summary>
 public static class DiskSystem
 {
-    public static IDiskSystem Native { get; } = OperatingSystem.IsWindows() ? new WinDiskSystem() : new LinuxDiskSystem();
+    public static IDiskSystem Native { get; } = OperatingSystem.IsWindows() ? new WinDiskSystem() : OperatingSystem.IsLinux() ? new LinuxDiskSystem() : new NoDiskSystem();
     public static List<string> AttachedImages { get; } = [];
 
     public static List<DiskInfo> Enumerate()
@@ -46,13 +47,12 @@ public static class DiskSystem
     public static string Signature()
     {
         var sb = new System.Text.StringBuilder();
-        if (OperatingSystem.IsWindows()) sb.Append(WinDiskSystem.QuickSignature());
-        else if (Directory.Exists("/sys/block"))
-            foreach (var dir in Directory.GetDirectories("/sys/block").OrderBy(x => x))
-            {
-                try { sb.Append(Path.GetFileName(dir)).Append(':').Append(File.ReadAllText(Path.Combine(dir, "size")).Trim()).Append(';'); } catch { }
-            }
-        try { sb.Append('|').Append(string.Join(",", Environment.GetLogicalDrives())); } catch { }
+        if (OperatingSystem.IsWindows())
+        {
+            sb.Append(WinDiskSystem.QuickSignature());
+            try { sb.Append('|').Append(string.Join(",", Environment.GetLogicalDrives())); } catch { }
+        }
+        else if (OperatingSystem.IsLinux() && Directory.Exists("/sys/block")) sb.Append(LinuxDiskSystem.QuickSignature());
         sb.Append('|').Append(string.Join(",", AttachedImages));
         return sb.ToString();
     }
@@ -67,46 +67,29 @@ public static class DiskSystem
     }
 }
 
-/// <summary>Usado só no desenvolvimento (Linux): discos de /sys/block, leitura direta se houver permissão.</summary>
-public sealed class LinuxDiskSystem : IDiskSystem
+/// <summary>Sistemas sem camada nativa (macOS no desenvolvimento): só imagens anexadas.</summary>
+public sealed class NoDiskSystem : IDiskSystem
 {
-    public bool IsElevated => Environment.UserName == "root";
-
-    public List<DiskInfo> Enumerate()
-    {
-        var res = new List<DiskInfo>();
-        if (!Directory.Exists("/sys/block")) return res;
-        int n = 0;
-        foreach (var dir in Directory.GetDirectories("/sys/block").OrderBy(x => x))
-        {
-            string name = Path.GetFileName(dir);
-            if (name.StartsWith("loop") || name.StartsWith("ram") || name.StartsWith("dm-") || name.StartsWith("zram") || name.StartsWith("sr")) continue;
-            string Read(string f) { try { return File.ReadAllText(Path.Combine(dir, f)).Trim(); } catch { return ""; } }
-            long.TryParse(Read("size"), out long sectors);
-            if (sectors == 0) continue;
-            var d = new DiskInfo
-            {
-                Number = n++, DevicePath = "/dev/" + name, Model = Read("device/model") is { Length: > 0 } m ? m : name,
-                Size = sectors * 512, SectorSize = int.TryParse(Read("queue/logical_block_size"), out var ls) ? ls : 512,
-                PhysicalSectorSize = int.TryParse(Read("queue/physical_block_size"), out var ps) ? ps : 512,
-                Removable = Read("removable") == "1", IsSsd = Read("queue/rotational") == "0",
-                Bus = name.StartsWith("nvme") ? "NVMe" : Read("removable") == "1" ? "USB" : "SATA", Serial = Read("device/serial"),
-            };
-            try
-            {
-                using var dev = OpenDisk(d, false);
-                LayoutBuilder.Build(d, dev);
-            }
-            catch (Exception ex) { d.Error = ex.Message; }
-            res.Add(d);
-        }
-        return res;
-    }
-
+    public bool IsElevated => false;
+    public List<DiskInfo> Enumerate() => [];
     public IBlockDevice OpenDisk(DiskInfo d, bool write) => new ImageFileDevice(d.DevicePath, write, d.SectorSize, d.Size);
     public IBlockDevice OpenPartition(PartitionInfo p, bool write = false) => new OwnedSlice(OpenDisk(p.Disk, write), p.Offset, p.Length);
     public IDisposable LockVolumes(DiskInfo d, IEnumerable<PartitionInfo>? only = null) => new Nothing();
     public void Rescan(DiskInfo d) { }
-    public SmartReport ReadSmart(DiskInfo d) => new() { Summary = "S.M.A.R.T. só é lido no Windows." };
+    public SmartReport ReadSmart(DiskInfo d) => new();
     private sealed class Nothing : IDisposable { public void Dispose() { } }
+}
+
+/// <summary>Fatia que fecha o disco junto — para entregar uma partição como dispositivo independente.</summary>
+public sealed class OwnedSlice(IBlockDevice disk, long offset, long length) : IBlockDevice
+{
+    private readonly SubDevice _s = new(disk, offset, length);
+    public string Name => _s.Name;
+    public long Length => _s.Length;
+    public int SectorSize => _s.SectorSize;
+    public bool CanWrite => _s.CanWrite;
+    public int Read(long o, Span<byte> b) => _s.Read(o, b);
+    public void Write(long o, ReadOnlySpan<byte> b) => _s.Write(o, b);
+    public void Flush() => _s.Flush();
+    public void Dispose() => disk.Dispose();
 }

@@ -24,10 +24,32 @@ public static class DiskOperations
         return i == 0 ? $"{b} B" : $"{v:0.##} {u[i]}";
     }
 
+    /// <summary>O disco inteiro vai ser reescrito: nunca o do sistema em uso.</summary>
     private static void RequireModifiable(DiskInfo d)
     {
-        if (d.IsSystem) throw new InvalidOperationException("Este é o disco do Windows em uso. Para alterá-lo, use a mídia inicializável.");
+        if (d.IsSystem) throw new InvalidOperationException(OperatingSystem.IsWindows()
+            ? "Este é o disco do Windows em uso. Para alterá-lo, use a mídia inicializável."
+            : "Este é o disco do sistema em uso (onde está o /). Para alterá-lo inteiro, inicie por um pendrive Linux.");
         if (d.ReadOnly) throw new InvalidOperationException("Disco aberto só para leitura.");
+        if (d.IsVirtual) throw new InvalidOperationException($"Volume {d.VirtualKind}: altere a partição física onde ele está.");
+    }
+
+    /// <summary>
+    /// Só uma partição vai mudar. No Windows o disco do sistema continua travado inteiro; no
+    /// Linux vale qualquer disco, desde que a própria partição não esteja em uso pelo sistema.
+    /// </summary>
+    private static void RequirePartition(PartitionInfo p)
+    {
+        if (OperatingSystem.IsWindows() || p.Disk.IsImage) { RequireModifiable(p.Disk); return; }
+        if (p.Disk.ReadOnly) throw new InvalidOperationException("Disco só para leitura (mídia protegida contra gravação).");
+        if (p.IsSystemCritical) throw new InvalidOperationException($"{p.KernelName ?? p.DisplayName} está em uso pelo sistema. Para alterá-la, inicie por um pendrive Linux.");
+    }
+
+    /// <summary>Linux: partições cuja entrada na tabela muda (são as únicas que precisam ser desmontadas).</summary>
+    private static List<PartitionInfo>? Affected(DiskInfo d, PartitionTable table)
+    {
+        if (OperatingSystem.IsWindows() || d.IsImage) return null;
+        return d.Partitions.Where(p => p.Entry != null && !table.Entries.Any(e => e.StartLba == p.Entry.StartLba && e.SectorCount == p.Entry.SectorCount)).ToList();
     }
 
     private static IProgress<CopyProgress> CopyReporter(OpSink sink, string label) => new Progress<CopyProgress>(p =>
@@ -36,9 +58,14 @@ public static class DiskOperations
 
     // ───────────── tabela ─────────────
 
-    public static void WriteTable(DiskInfo d, PartitionTable table, string reason, OpSink sink, bool allowSystem = false)
+    /// <param name="growInPlace">Linux: partição que só cresce para a direita e fica montada — o kernel ajusta o tamanho com ela em uso.</param>
+    public static void WriteTable(DiskInfo d, PartitionTable table, string reason, OpSink sink, bool allowSystem = false, PartitionInfo? growInPlace = null)
     {
-        if (!allowSystem) RequireModifiable(d);
+        if (!allowSystem)
+        {
+            if (OperatingSystem.IsWindows() || d.IsImage) RequireModifiable(d);
+            else if (!d.PartitionsEditable) throw new InvalidOperationException(d.IsVirtual ? $"Volume {d.VirtualKind}: não tem tabela de partições." : "Disco só para leitura.");
+        }
         var errs = PartitionCodec.Validate(table);
         if (errs.Count > 0) throw new InvalidOperationException(string.Join("\n", errs));
         using var dev = DiskSystem.OpenDisk(d, true);
@@ -46,7 +73,14 @@ public static class DiskOperations
         foreach (var (lba, _) in PartitionCodec.Build(table.Clone())) footprint.Add((lba, 1));
         string bak = TableBackup.Save(dev, footprint, $"{d.Model}-{d.Serial}", reason);
         sink.Log($"Backup dos setores da tabela salvo em {bak}");
-        using (DiskSystem.Native.LockVolumes(d))
+        var affected = Affected(d, table);
+        if (growInPlace != null && affected != null)
+        {
+            var e = table.Entries.FirstOrDefault(x => x.StartLba == growInPlace.Entry?.StartLba);
+            if (e == null || e.SectorCount < growInPlace.Entry!.SectorCount) throw new InvalidOperationException("Crescer no lugar só vale para aumentar a partição mantendo o início.");
+            affected.RemoveAll(x => x.Offset == growInPlace.Offset);
+        }
+        using (DiskSystem.Native.LockVolumes(d, affected))
         {
             PartitionCodec.Write(dev, table);
             sink.Log("Tabela de partições gravada.");
@@ -67,7 +101,7 @@ public static class DiskOperations
 
     public static void DeletePartitionRaw(PartitionInfo p, OpSink sink)
     {
-        RequireModifiable(p.Disk);
+        RequirePartition(p);
         var t = p.Disk.Table.Clone();
         t.Entries.RemoveAll(e => e.StartLba == p.Entry!.StartLba);
         WriteTable(p.Disk, t, "Excluir partição", sink);
@@ -132,7 +166,7 @@ public static class DiskOperations
 
     public static void MovePartition(PartitionInfo p, long newStartLba, OpSink sink)
     {
-        RequireModifiable(p.Disk);
+        RequirePartition(p);
         if (p.Entry == null) throw new InvalidOperationException("Escolha uma partição.");
         var d = p.Disk;
         var e = p.Entry;
@@ -188,7 +222,7 @@ public static class DiskOperations
 
     public static void ChangeSerial(PartitionInfo p, ulong serial, OpSink sink)
     {
-        RequireModifiable(p.Disk);
+        RequirePartition(p);
         using var dev = DiskSystem.OpenDisk(p.Disk, true);
         using (DiskSystem.Native.LockVolumes(p.Disk, [p]))
             BootSector.WriteSerial(new SubDevice(dev, p.Offset, p.Length), p.FileSystem, serial);
@@ -208,7 +242,7 @@ public static class DiskOperations
 
     public static void Wipe(DiskInfo d, PartitionInfo? p, WipeMethod method, OpSink sink)
     {
-        RequireModifiable(d);
+        if (p == null) RequireModifiable(d); else RequirePartition(p);
         if (p is { IsSystemCritical: true }) throw new InvalidOperationException("Partição do sistema em uso.");
         using var dev = DiskSystem.OpenDisk(d, true);
         long start = p?.Offset ?? 0, len = p?.Length ?? dev.Length;
@@ -271,7 +305,8 @@ public static class DiskOperations
 
     public static async Task CopyPartition(PartitionInfo src, DiskInfo target, long targetStartLba, bool usedOnly, bool useVss, OpSink sink)
     {
-        RequireModifiable(target);
+        if (OperatingSystem.IsWindows() || target.IsImage) RequireModifiable(target);
+        else if (!target.PartitionsEditable) throw new InvalidOperationException("O disco de destino não aceita partições novas.");
         if (target.SectorSize != src.Disk.SectorSize) throw new InvalidOperationException("Os discos têm tamanhos de setor diferentes (512 × 4096).");
         var t = target.Table.Clone();
         if (t.Style == TableStyle.None) throw new InvalidOperationException("Inicialize o disco de destino (GPT ou MBR) antes.");
@@ -294,7 +329,8 @@ public static class DiskOperations
             var ranges = usedOnly ? UsedRangesOf(sdev, src.FileSystem) : null;
             if (ranges != null) sink.Log($"Copiando só o espaço em uso: {Size(ranges.Sum(r => r.Item2))} de {Size(src.Length)}.");
             using var tdev = DiskSystem.OpenDisk(target, true);
-            using (DiskSystem.Native.LockVolumes(target))
+            // Linux: o espaço livre não pertence a nenhuma partição montada — nada a desmontar
+            using (DiskSystem.Native.LockVolumes(target, OperatingSystem.IsWindows() ? null : []))
             {
                 var r = SectorCopier.Copy(sdev, tdev, new CopyOptions { TargetOffset = targetStartLba * target.SectorSize, Ranges = ranges },
                     CopyReporter(sink, "Copiando partição"), sink.Token, sink.PauseGate);
@@ -304,7 +340,8 @@ public static class DiskOperations
         }
         finally { await release(); }
         WriteTable(target, t, "Copiar partição", sink);
-        sink.Log("Partição copiada. O Windows deve montá-la com uma letra nova em alguns segundos.");
+        sink.Log(OperatingSystem.IsWindows() ? "Partição copiada. O Windows deve montá-la com uma letra nova em alguns segundos."
+            : "Partição copiada. Atenção: a cópia tem o mesmo UUID da original — se as duas ficarem no mesmo computador, troque o UUID de uma (Alterar UUID) para o sistema não confundir.");
     }
 
     // ───────────── imagem de disco ─────────────
@@ -369,7 +406,7 @@ public static class DiskOperations
 
     public static void RestoreImage(string imagePath, DiskInfo target, PartitionInfo? targetPartition, OpSink sink)
     {
-        RequireModifiable(target);
+        if (targetPartition == null) RequireModifiable(target); else RequirePartition(targetPartition);
         using var img = new ImageFileDevice(imagePath, false, target.SectorSize);
         long capacity = targetPartition?.Length ?? target.Size;
         if (img.Length > capacity) throw new InvalidOperationException($"A imagem ({Size(img.Length)}) é maior que o destino ({Size(capacity)}).");
@@ -403,13 +440,13 @@ public static class DiskOperations
         var plan = new ClonePlan { Source = source, Target = target, SystemOnly = systemOnly };
         int ss = source.SectorSize;
         var parts = source.Partitions.Where(p => p.Entry != null)
-            .Where(p => !systemOnly || p.IsEsp || p.IsMsr || p.IsWindowsVolume || p.IsRecovery || p.Entry!.Active)
+            .Where(p => !systemOnly || p.IsEsp || p.IsMsr || p.IsSystemVolume || p.IsRecovery || p.Entry!.Active)
             .OrderBy(p => p.Offset).ToList();
         var probe = new PartitionTable { Style = source.Table.Style == TableStyle.None ? TableStyle.Gpt : source.Table.Style, SectorSize = ss, DiskSectors = target.Size / ss };
         long align = probe.AlignSectors;
         long first = probe.Style == TableStyle.Gpt ? PartitionCodec.GptFirstUsable(probe) : 1;
         long last = probe.Style == TableStyle.Gpt ? PartitionCodec.GptLastUsable(probe) : probe.DiskSectors - 1;
-        var main = parts.FirstOrDefault(p => p.IsWindowsVolume) ?? parts.Where(p => p.FileSystem == FsKind.Ntfs).MaxBy(p => p.Length);
+        var main = parts.FirstOrDefault(p => p.IsSystemVolume) ?? parts.Where(p => p.FileSystem == FsKind.Ntfs).MaxBy(p => p.Length);
         plan.ShrinkCandidate = main;
 
         // mantém o deslocamento original quando dá (ajuda o Windows a reconhecer), senão compacta
@@ -492,7 +529,7 @@ public static class DiskOperations
         }
         if (makeBootable)
         {
-            var win = plan.Items.FirstOrDefault(i => i.src.IsWindowsVolume);
+            var win = plan.Items.FirstOrDefault(i => i.src.IsSystemVolume);
             var sys = plan.Items.FirstOrDefault(i => i.src.IsEsp || (style == TableStyle.Mbr && i.src.Entry!.Active));
             if (win.src == null || sys.src == null) { sink.Log("Sem partição do Windows/sistema no plano: o disco novo não foi preparado para iniciar."); return; }
             sink.Log("Preparando o disco novo para iniciar (bcdboot)…");

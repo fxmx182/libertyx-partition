@@ -17,6 +17,12 @@ public partial class App : Application
             var vm = new MainViewModel();
             desktop.MainWindow = new MainWindow { DataContext = vm };
             vm.Start(desktop.Args ?? []);
+            // reaberto como root pelo pkexec: avisa a instância sem privilégio que já pode fechar
+            if (Environment.GetEnvironmentVariable("LIBERTYX_READY") is { Length: > 0 } ready)
+                desktop.MainWindow.Opened += async (_, _) =>
+                {
+                    try { File.WriteAllText(ready, "ok"); await Task.Delay(5000); File.Delete(ready); } catch { }
+                };
         }
         base.OnFrameworkInitializationCompleted();
     }

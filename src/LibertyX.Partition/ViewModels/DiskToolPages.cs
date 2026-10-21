@@ -173,7 +173,7 @@ public sealed partial class HealthViewModel : PageViewModel
         Properties.Add(new("Setores", $"{d.Size / d.SectorSize:N0} de {d.SectorSize} B (físico {d.PhysicalSectorSize} B)"));
         Properties.Add(new("Tabela", d.StyleText + (d.Table.Style == TableStyle.Gpt ? $" · GUID {d.Table.DiskGuid.ToString().ToUpperInvariant()}" : d.Table.Style == TableStyle.Mbr ? $" · assinatura {d.Table.DiskSignature:X8}" : "")));
         Properties.Add(new("Partições", $"{d.Partitions.Count(p => !p.IsUnallocated)}"));
-        if (d.IsSystem) Properties.Add(new("Sistema", "Disco do Windows em uso"));
+        if (d.IsSystem) Properties.Add(new("Sistema", Ui.SystemDiskInUse.TrimEnd('.')));
         foreach (var warn in d.Table.Warnings) Properties.Add(new("Aviso", warn));
     }
 }
@@ -305,7 +305,7 @@ public sealed partial class WipeViewModel : PageViewModel
     public override string IconKey => "Wipe";
     public PickerViewModel Picker { get; } = new()
     {
-        DiskFilter = d => d.IsSystem ? "Disco do Windows em uso." : d.ReadOnly ? "Imagem só para leitura." : null,
+        DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : null,
         PartitionFilter = p => p.IsSystemCritical ? "Partição do sistema em uso." : p.Disk.ReadOnly ? "Imagem só para leitura." : null,
     };
     public List<string> Methods { get; } = Enum.GetValues<WipeMethod>().Select(Wiper.Describe).ToList();
@@ -342,7 +342,7 @@ public sealed partial class DeleteAllViewModel : PageViewModel
 {
     public override string Title => "Excluir todas as partições";
     public override string IconKey => "DeleteAll";
-    public PickerViewModel Picker { get; } = new() { ShowPartitions = false, DiskFilter = d => d.IsSystem ? "Disco do Windows em uso." : d.ReadOnly ? "Imagem só para leitura." : d.Table.Entries.Count == 0 ? "Não há partições." : null };
+    public PickerViewModel Picker { get; } = new() { ShowPartitions = false, DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : d.Table.Entries.Count == 0 ? "Não há partições." : null };
     public ObservableCollection<PartitionVM> Parts { get; } = [];
     public bool CanDelete => Picker.Selected != null;
     public DeleteAllViewModel()

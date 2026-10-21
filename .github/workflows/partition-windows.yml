@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths-ignore:
       - "**.md"
+      - "packaging/linux/**"
+      - ".github/workflows/partition-linux.yml"
   workflow_dispatch:
 
 concurrency:

@@ -1,0 +1,159 @@
+name: LibertyX Partition (Linux)
+
+# O mesmo app do Windows, com a camada nativa do Linux (sysfs, BLKPG, SG_IO, NVMe, cryptsetup,
+# mkfs.*). Cada arquitetura compila no próprio runner (x64 e ARM64 são grátis em repositório
+# público), roda o autoteste — leitura no disco do runner e operações destrutivas SÓ num disco
+# loop criado pelo próprio teste —, empacota, prova que o .deb e o .rpm instalam, e publica no
+# release "linux-latest" (separado do "latest" do Windows: um CI não apaga os arquivos do outro).
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "installer/**"
+  workflow_dispatch:
+
+concurrency:
+  group: partition-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compilar, testar e empacotar (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Ferramentas de disco e de empacotamento
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            e2fsprogs xfsprogs btrfs-progs dosfstools exfatprogs ntfs-3g f2fs-tools cryptsetup-bin \
+            rsync rpm smartmontools lvm2 >/dev/null
+
+      - name: Publicar o executável
+        run: |
+          dotnet publish src/LibertyX.Partition/LibertyX.Partition.csproj -c Release -r linux-${{ matrix.arch }} --self-contained true \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=none -p:SourceRevisionId=${{ github.sha }} -p:Version=1.0.${{ github.run_number }} -o dist 2>&1 | tee build.log
+          if [ ! -x dist/LibertyXPartition ]; then
+            errs=$(grep ' error ' build.log | sort -u | head -20 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
+            echo "::error title=Erros de compilação::$errs"
+            exit 1
+          fi
+          ls -la dist
+
+      # Cada FALHA vira anotação (as anotações de repositório público qualquer um lê).
+      - name: Autoteste (disco loop)
+        run: |
+          set +e
+          sudo -E env RUNNER_TEMP="$RUNNER_TEMP" ./dist/LibertyXPartition --selftest autoteste.txt --loop
+          code=$?
+          set -e
+          if [ ! -f autoteste.txt ]; then echo "::error title=Autoteste::o executável não gerou relatório (código $code)"; exit 1; fi
+          sudo chown "$USER" autoteste.txt
+          grep '^FALHA' autoteste.txt | while read -r l; do echo "::error title=Autoteste ${{ matrix.arch }}::${l//%/%25}"; done || true
+          echo "::notice title=Autoteste ${{ matrix.arch }}::$(tail -n 1 autoteste.txt)"
+          exit $code
+
+      - name: Empacotar (AppImage, .deb, .rpm, .tar.gz)
+        run: |
+          packaging/linux/empacotar.sh ${{ matrix.arch }} 1.0.${{ github.run_number }} dist/LibertyXPartition pacotes
+          ls -la pacotes
+
+      - name: Instalar e remover o .deb (Ubuntu)
+        run: |
+          sudo apt-get install -y -qq ./pacotes/libertyx-partition_*.deb >/dev/null
+          test -x /opt/libertyx-partition/LibertyXPartition
+          test -f /usr/share/applications/libertyx-partition.desktop
+          test -f /usr/share/polkit-1/actions/io.github.fxmx182.libertyx-partition.policy
+          test -f /usr/share/icons/hicolor/256x256/apps/libertyx-partition.png
+          sudo libertyx-partition --selftest /tmp/deb.txt >/dev/null || true
+          grep -q 'Listar discos' /tmp/deb.txt
+          echo "::notice title=.deb ${{ matrix.arch }}::instalou, abriu como /usr/bin/libertyx-partition ($(grep -c '^OK' /tmp/deb.txt) OK no autoteste de leitura)"
+          sudo apt-get remove -y -qq libertyx-partition >/dev/null
+          test ! -e /opt/libertyx-partition/LibertyXPartition
+
+      - name: Instalar o .rpm (Fedora) e o .tar.gz (Debian sem libicu)
+        run: |
+          docker run --rm -v "$PWD/pacotes:/p:ro" fedora:41 sh -c \
+            'dnf install -y -q /p/*.rpm >/dev/null && /usr/bin/libertyx-partition --selftest /tmp/r.txt >/dev/null; grep -q "Listar discos" /tmp/r.txt && echo "rpm ok: $(grep -c ^OK /tmp/r.txt) OK"'
+          docker run --rm -v "$PWD/pacotes:/p:ro" debian:bookworm-slim sh -c \
+            'tar -xzf /p/LibertyXPartition-linux*.tar.gz -C /tmp && /tmp/libertyx-partition/LibertyXPartition --selftest /tmp/r.txt >/dev/null; grep -q "Listar discos" /tmp/r.txt && echo "tar.gz ok (ICU embutida)"'
+
+      - name: AppImage abre
+        run: |
+          chmod +x pacotes/*.AppImage
+          sudo env APPIMAGE_EXTRACT_AND_RUN=1 ./pacotes/LibertyXPartition-*.AppImage --selftest /tmp/ai.txt >/dev/null || true
+          grep -q 'Listar discos' /tmp/ai.txt && echo "::notice title=AppImage ${{ matrix.arch }}::abre e roda o autoteste de leitura"
+
+      - name: Guardar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            pacotes/
+            autoteste.txt
+          retention-days: 30
+
+  release:
+    name: Publicar "linux-latest"
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p up
+          cp art/linux-x64/pacotes/* art/linux-arm64/pacotes/* up/
+          ls -la up
+          ver=1.0.${{ github.run_number }}
+          sha=$(echo "${{ github.sha }}" | cut -c1-7)
+          novidade=$(git log -1 --pretty=%s | cut -c1-400)
+          tam() { stat -c %s "up/$1"; }
+          {
+            echo "versao=$ver"; echo "commit=$sha"; echo "novidades=$novidade"
+            echo "appimage=LibertyXPartition-x86_64.AppImage"; echo "tamanho_appimage=$(tam LibertyXPartition-x86_64.AppImage)"
+            echo "deb=libertyx-partition_amd64.deb"; echo "tamanho_deb=$(tam libertyx-partition_amd64.deb)"
+            echo "rpm=libertyx-partition.x86_64.rpm"; echo "tamanho_rpm=$(tam libertyx-partition.x86_64.rpm)"
+            echo "tar=LibertyXPartition-linux.tar.gz"; echo "tamanho_tar=$(tam LibertyXPartition-linux.tar.gz)"
+            echo "appimage_arm64=LibertyXPartition-aarch64.AppImage"; echo "tamanho_appimage_arm64=$(tam LibertyXPartition-aarch64.AppImage)"
+            echo "deb_arm64=libertyx-partition_arm64.deb"; echo "tamanho_deb_arm64=$(tam libertyx-partition_arm64.deb)"
+            echo "rpm_arm64=libertyx-partition.aarch64.rpm"; echo "tamanho_rpm_arm64=$(tam libertyx-partition.aarch64.rpm)"
+            echo "tar_arm64=LibertyXPartition-linux-arm64.tar.gz"; echo "tamanho_tar_arm64=$(tam LibertyXPartition-linux-arm64.tar.gz)"
+          } > up/versao.txt
+          (cd up && sha256sum *.AppImage *.deb *.rpm *.tar.gz > SHA256SUMS)
+          base="https://github.com/${{ github.repository }}/releases/download/linux-latest"
+          notes="Versão $ver para Linux, compilada de $sha e aprovada no autoteste num disco loop (x64 e ARM64).
+
+          Novidades: $novidade
+
+          Ubuntu, Debian, Mint, Pop!_OS: $base/libertyx-partition_amd64.deb
+          Fedora, openSUSE, RHEL: $base/libertyx-partition.x86_64.rpm
+          Qualquer distribuição (AppImage, sem instalar): $base/LibertyXPartition-x86_64.AppImage
+          ARM64 (Raspberry Pi 4/5, notebooks ARM): os mesmos com _arm64 / aarch64."
+          gh release delete linux-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create linux-latest up/* --title "LibertyX Partition (Linux) — build mais recente" --notes "$notes" --prerelease

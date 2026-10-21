@@ -450,6 +450,20 @@ public sealed partial class RecoveryViewModel : PageViewModel
         var dest = await MainViewModel.PickFolder("Onde salvar os arquivos recuperados");
         if (dest == null) return;
         var src = Picker.Selected;
+        if (src != null && !src.Disk.IsImage && OperatingSystem.IsLinux())
+        {
+            // o disco físico de onde vem o destino (atravessando LVM/LUKS) é o mesmo que está sendo recuperado?
+            string full = Path.GetFullPath(dest);
+            var m = Core.Platform.Linux.LinuxDiskSystem.ReadMounts().Where(x => full == x.MountPoint || full.StartsWith(x.MountPoint.TrimEnd('/') + "/")).OrderByDescending(x => x.MountPoint.Length).FirstOrDefault();
+            string? kn = m != null && m.Source.StartsWith("/dev/") ? Core.Platform.Linux.LinuxDiskSystem.KernelNameOf(m.Source) : null;
+            var phys = kn == null ? [] : Core.Platform.Linux.LinuxDiskSystem.SlavesOf(kn).DefaultIfEmpty(kn).ToList();
+            string srcKn = src.Disk.KernelName;
+            var srcPhys = src.Disk.IsVirtual ? Core.Platform.Linux.LinuxDiskSystem.SlavesOf(srcKn) : [srcKn];
+            bool same = phys.Any(x => srcPhys.Any(s => x == s || x.StartsWith(s) && x.Length > s.Length && (char.IsDigit(x[s.Length]) || x[s.Length] == 'p')));
+            if (same && !await Main.Confirm("Mesmo disco da origem",
+                    $"Você vai gravar os arquivos recuperados em {m!.MountPoint}, que fica no MESMO disco que está sendo recuperado.\n\nCada arquivo gravado pode cair exatamente em cima de outro que ainda não foi recuperado — e esse se perde para sempre. Use outro disco, um pendrive ou um HD externo.",
+                    "Gravar mesmo assim", true)) return;
+        }
         if (src != null && !src.Disk.IsImage && OperatingSystem.IsWindows())
         {
             string root = Path.GetPathRoot(dest)?.TrimEnd('\\') ?? "";
@@ -475,6 +489,8 @@ public sealed partial class RecoveryViewModel : PageViewModel
             if (rep.Failed > 0) s.Log($"{rep.Failed} arquivo(s) não puderam ser gravados — veja o relatório.");
             s.Log($"Relatório: {rep.ReportPath}");
             report = rep.ReportPath;
+            // no Linux o app roda como root: os arquivos voltam a ser de quem pediu a recuperação
+            if (OperatingSystem.IsLinux()) Core.Platform.Linux.LinuxSession.GiveBack(dest);
         }, refresh: false, success: $"Arquivos salvos em {dest}");
         if (saved > 0 && !lic.IsPremium) { lic.AddFreeRecovered(saved); Main.LicenseChanged(); }
         if (ok && Main.Operation != null) Main.Operation.AfterClose = () => { MainViewModel.OpenInExplorer(dest); return Task.CompletedTask; };

@@ -15,9 +15,9 @@ public sealed partial class PartitionVM : ObservableObject
 
     public PartitionVM(PartitionInfo p, DiskVM disk) { P = p; Disk = disk; }
 
-    public string Name => P.IsUnallocated ? "Não alocado" : P.Letter ?? "*:";
+    public string Name => P.IsUnallocated ? "Não alocado" : P.Letter ?? P.KernelName ?? "*:";
     public string LabelText => P.IsUnallocated ? "" : !string.IsNullOrEmpty(P.Label) ? P.Label! : P.IsEsp ? "Sistema EFI" : P.IsMsr ? "Reservada" : P.IsRecovery ? "Recuperação" : "Sem rótulo";
-    public string Title => P.IsUnallocated ? "Não alocado" : P.Letter != null ? $"{P.Letter} {LabelText}" : LabelText;
+    public string Title => P.IsUnallocated ? "Não alocado" : P.Letter != null ? $"{P.Letter} {LabelText}" : P.KernelName != null ? $"{P.KernelName} · {LabelText}" : LabelText;
     public string SizeText => Fmt.Size(P.Length);
     public string UsedText => P.IsUnallocated ? "—" : Fmt.Size(P.Used);
     public string FreeText => P.IsUnallocated ? Fmt.Size(P.Length) : Fmt.Size(P.Free);
@@ -31,7 +31,9 @@ public sealed partial class PartitionVM : ObservableObject
     public Color Color => Ui.PartitionColor(P);
     public IBrush ColorBrush => new SolidColorBrush(Color);
     public bool IsUnallocated => P.IsUnallocated;
-    public string Short => P.IsUnallocated ? "Livre" : P.Letter ?? (P.IsEsp ? "EFI" : P.IsMsr ? "MSR" : P.IsRecovery ? "Rec." : FsText);
+    public string Short => P.IsUnallocated ? "Livre" : P.Letter ?? (P.IsEsp ? "EFI" : P.IsMsr ? "MSR" : P.IsRecovery ? "Rec." : P.IsMounted && !OperatingSystem.IsWindows() ? MountShort : FsText);
+    /// <summary>Linux: o ponto de montagem curto para caber na faixa ("/", "/home", "…/PENDRIVE").</summary>
+    private string MountShort { get { var m = P.MountPoints[0]; return m.Length <= 10 ? m : "…/" + Path.GetFileName(m.TrimEnd('/')); } }
 
     public IRelayCommand SelectCommand => new RelayCommand(() => MainViewModel.Instance.Page<DisksPageViewModel>("discos").Select(this));
 }

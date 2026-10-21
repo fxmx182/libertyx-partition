@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LinuxToolsView" x:DataType="vm:LinuxToolsViewModel">
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,4,0,18">
+      <StackPanel>
+        <TextBlock Classes="h1" Text="Ferramentas do sistema" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Recuperação, tabela de partições e cópia são do próprio LibertyX. Formatar, redimensionar e reparar cada sistema de arquivos usa a ferramenta oficial dele — as mesmas do GParted." />
+        <TextBlock Classes="faint" Text="{Binding Distro}" Margin="0,4,0,0" />
+      </StackPanel>
+      <Button Grid.Column="1" Classes="primary" Command="{Binding InstallMissingCommand}" IsVisible="{Binding AnyMissing}" VerticalAlignment="Center" Margin="0,0,8,0">
+        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcDownload}" Classes="small" /><TextBlock Text="Instalar o que falta" /></StackPanel>
+      </Button>
+      <Button Grid.Column="2" Command="{Binding LoadCommand}" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Text="Atualizar" /></StackPanel>
+      </Button>
+    </Grid>
+    <Border DockPanel.Dock="Top" Classes="notice gold" Margin="0,0,0,14">
+      <SelectableTextBlock Text="{Binding InstallLine}" TextWrapping="Wrap" FontFamily="monospace" FontSize="12.5" />
+    </Border>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Groups}">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ToolGroup">
+            <Border Classes="card" Width="420" Margin="0,0,14,14">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding Title}" Classes="h2" />
+                  <Border Grid.Column="1" Classes="chip" Classes.green="{Binding Complete}" Classes.red="{Binding !Complete}"><TextBlock Text="{Binding Summary}" /></Border>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Items}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ToolRow">
+                      <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,8">
+                        <Panel Width="18" VerticalAlignment="Top" Margin="0,2,8,0">
+                          <PathIcon Data="{StaticResource IcCheck}" Width="13" Height="13" Foreground="{StaticResource Verde}" IsVisible="{Binding Installed}" />
+                          <PathIcon Data="{StaticResource IcClose}" Width="11" Height="11" Foreground="{StaticResource Laranja}" IsVisible="{Binding Missing}" />
+                        </Panel>
+                        <StackPanel Grid.Column="1">
+                          <TextBlock FontSize="13"><Run Text="{Binding Exe}" FontWeight="SemiBold" /><Run Text=" — " Foreground="{StaticResource Tenue}" /><Run Text="{Binding Purpose}" Foreground="{StaticResource Apagado}" /></TextBlock>
+                          <TextBlock Text="{Binding Where}" Classes="faint" FontSize="11" />
+                        </StackPanel>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=LibertyX Partition
+GenericName=Gerenciador de partições e recuperação de dados
+GenericName[en]=Partition manager and data recovery
+GenericName[es]=Gestor de particiones y recuperación de datos
+Comment=Recuperar arquivos e partições, clonar, redimensionar, formatar e cuidar dos discos
+Comment[en]=Recover files and partitions, clone, resize, format and look after your disks
+Comment[es]=Recuperar archivos y particiones, clonar, redimensionar, formatear y cuidar los discos
+Exec=libertyx-partition %F
+Icon=libertyx-partition
+Terminal=false
+Categories=System;Filesystem;Utility;
+Keywords=partition;disk;recovery;undelete;clone;format;resize;gparted;partição;disco;recuperar;formatar;
+StartupWMClass=LibertyXPartition
+MimeType=application/x-raw-disk-image;application/x-cd-image;application/vnd.efi.img;

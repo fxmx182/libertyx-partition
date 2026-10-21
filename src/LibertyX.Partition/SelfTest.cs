@@ -18,7 +18,7 @@ namespace LibertyX.Partition;
 /// Com --vhd: além disso, opera de verdade num disco virtual "Msft Virtual Disk" já anexado
 /// (criado pelo script do CI), e nunca em outro disco.
 /// </summary>
-public static class SelfTest
+public static partial class SelfTest
 {
     private static readonly StringBuilder Log = new();
     private static int _fails;
@@ -36,7 +36,7 @@ public static class SelfTest
 
     public static int Run(string outPath, bool vhd)
     {
-        var t = RunAsync(vhd);
+        var t = OperatingSystem.IsLinux() ? RunLinuxAsync(vhd) : RunAsync(vhd);
         t.Wait();
         W(_fails == 0 ? "\nRESULTADO: TUDO OK" : $"\nRESULTADO: {_fails} FALHA(S)");
         File.WriteAllText(outPath, Log.ToString(), Encoding.UTF8);
@@ -60,7 +60,7 @@ public static class SelfTest
             Check(disks.Count > 0, "há discos");
             Check(disks.Any(d => d.IsSystem), "disco do sistema identificado");
             var sys = disks.FirstOrDefault(d => d.IsSystem);
-            Check(sys?.Partitions.Any(p => p.IsWindowsVolume && p.FileSystem == FsKind.Ntfs) == true, "volume do Windows identificado como NTFS");
+            Check(sys?.Partitions.Any(p => p.IsSystemVolume && p.FileSystem == FsKind.Ntfs) == true, "volume do Windows identificado como NTFS");
             return Task.CompletedTask;
         });
 
@@ -76,7 +76,7 @@ public static class SelfTest
 
         await Step("Ler o MFT do volume do Windows", () =>
         {
-            var c = disks.SelectMany(d => d.Partitions).First(p => p.IsWindowsVolume);
+            var c = disks.SelectMany(d => d.Partitions).First(p => p.IsSystemVolume);
             using var v = DiskSystem.OpenPartition(c);
             var nv = NtfsVolume.Open(v, out var err);
             Check(nv != null, "NTFS do C: aberto direto dos setores " + err);
@@ -92,7 +92,7 @@ public static class SelfTest
 
         await Step("Instantâneo VSS", async () =>
         {
-            var c = disks.SelectMany(d => d.Partitions).First(p => p.IsWindowsVolume);
+            var c = disks.SelectMany(d => d.Partitions).First(p => p.IsSystemVolume);
             var (dev, release) = await DiskOperations.OpenSource(c, true, new OpSink());
             try
             {
@@ -105,7 +105,7 @@ public static class SelfTest
 
         await Step("PowerShell / Storage", async () =>
         {
-            var c = disks.SelectMany(d => d.Partitions).First(p => p.IsWindowsVolume);
+            var c = disks.SelectMany(d => d.Partitions).First(p => p.IsSystemVolume);
             var sup = await WinCommands.SupportedSize(c.Disk.Number, c.Offset);
             W($"   C: pode ir de {Fmt(sup?.min)} a {Fmt(sup?.max)}");
             Check(sup != null, "Get-PartitionSupportedSize respondeu");

@@ -81,7 +81,7 @@ public sealed partial class CloneViewModel : PageViewModel
         Target = new PickerViewModel
         {
             ShowPartitions = false,
-            DiskFilter = d => d.IsSystem ? "Disco do Windows em uso." : d.ReadOnly ? "Imagem só para leitura." : Source?.Selected?.Disk.Number == d.Number && !d.IsImage ? "É o disco de origem." : null,
+            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : Source?.Selected?.Disk.Number == d.Number && !d.IsImage ? "É o disco de origem." : null,
         };
         Source.Changed += _ => { Target.Load(Main.Disks); Replan(); };
         Target.Changed += _ => Replan();
@@ -230,7 +230,7 @@ public sealed partial class BackupViewModel : PageViewModel
     [ObservableProperty] private string _restoreInfo = "";
     public PickerViewModel RestoreTarget { get; } = new()
     {
-        DiskFilter = d => d.IsSystem ? "Disco do Windows em uso." : d.ReadOnly ? "Imagem só para leitura." : null,
+        DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : null,
         PartitionFilter = p => p.IsSystemCritical ? "Partição do sistema em uso." : p.IsUnallocated ? null : p.Disk.ReadOnly ? "Imagem só para leitura." : null,
         AllowUnallocated = false,
     };

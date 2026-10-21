@@ -27,6 +27,11 @@ public abstract partial class PageViewModel : ViewModelBase
 
 public static class Ui
 {
+    public static bool IsWin => OperatingSystem.IsWindows();
+    /// <summary>"Disco do Windows em uso." / "Disco do sistema em uso." — os filtros e avisos que bloqueiam o disco do sistema.</summary>
+    public static string SystemDiskInUse => IsWin ? "Disco do Windows em uso." : "Disco do sistema em uso (onde está o /).";
+    public static string SystemBadge => IsWin ? "Windows" : "Sistema";
+
     public static Geometry? Icon(string key) =>
         Application.Current != null && Application.Current.TryGetResource("Ic" + key, null, out var v) ? v as Geometry : null;
 

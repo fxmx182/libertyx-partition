@@ -13,9 +13,7 @@ public static class TableBackup
     {
         get
         {
-            var d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LibertyX Partition", "Backups de tabela");
-            Directory.CreateDirectory(d);
-            return d;
+            return Platform.AppPaths.EnsureDocuments("Backups de tabela");
         }
     }
 
@@ -38,6 +36,8 @@ public static class TableBackup
             fs.Write(buf, 0, buf.Length);
             _ = n;
         }
+        fs.Close();
+        if (OperatingSystem.IsLinux()) Platform.Linux.LinuxSession.GiveBack(path, false);
         return path;
     }
 

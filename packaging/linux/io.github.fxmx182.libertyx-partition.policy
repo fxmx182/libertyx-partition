@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>LibertyX</vendor>
+  <vendor_url>https://github.com/fxmx182/libertyx-partition</vendor_url>
+  <icon_name>libertyx-partition</icon_name>
+  <action id="io.github.fxmx182.libertyx-partition.run">
+    <description>Run LibertyX Partition</description>
+    <description xml:lang="pt_BR">Abrir o LibertyX Partition</description>
+    <description xml:lang="pt">Abrir o LibertyX Partition</description>
+    <message>Authentication is required to read and change disks with LibertyX Partition</message>
+    <message xml:lang="pt_BR">Para ler e alterar os discos, o LibertyX Partition precisa da senha de administrador</message>
+    <message xml:lang="pt">Para ler e alterar os discos, o LibertyX Partition precisa da senha de administrador</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/opt/libertyx-partition/LibertyXPartition</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+</policyconfig>

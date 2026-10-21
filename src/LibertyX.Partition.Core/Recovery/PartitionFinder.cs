@@ -27,6 +27,8 @@ public sealed class FoundPartition
     /// <summary>Sobrepõe outra candidata mais confiável — costuma ser o resto de um volume que foi movido.</summary>
     public bool Conflicting { get; set; }
     public int Score => (Verified ? 2 : 0) + (BackupConfirmed ? 4 : 0) + (InCurrentTable ? 8 : 0);
+    /// <summary>Quão recente é o volume (ext: última gravação do superbloco; Btrfs: geração). Desempata sobreposições: o resto de um volume movido é sempre mais velho.</summary>
+    public long Freshness { get; set; }
     public long EndLba => StartLba + SectorCount - 1;
 }
 
@@ -78,6 +80,14 @@ public static class PartitionFinder
                 try { buf = disk.ReadBytes(l * ss, Math.Max(ss, 4096)); } catch (MediaReadException) { continue; }
                 int before = found.Count;
                 Consider(l, buf, buf.Length >= 1024 + 512 ? buf.AsSpan(1024) : default);
+                // o Btrfs guarda o superbloco a 64 KiB do início
+                if (l * ss + 0x10000 + 4096 <= disk.Length)
+                    try
+                    {
+                        var bt = disk.ReadBytes(l * ss + 0x10000, 4096);
+                        if (bt.Length >= 512 && Match(bt, 0x40, "_BHRfS_M"u8)) Consider(l + 0x10000 / ss, bt, default);
+                    }
+                    catch (MediaReadException) { }
                 if (found.Count > before || found.Values.Any(f => f.StartLba == l))
                 {
                     // segue a corrente: depois do fim de cada volume costuma vir o próximo
@@ -109,9 +119,12 @@ public static class PartitionFinder
                     bool boot = s[510] == 0x55 && s[511] == 0xAA || (ss > 512 && s[ss - 2] == 0x55);
                     bool ext = o + 1024 + 512 <= got && U16(buf, o + 1024 + 56) == 0xEF53;
                     bool hfs = o + 1024 + 512 <= got && (Match(buf, o + 1024, "H+\0\x04"u8) || Match(buf, o + 1024, "HX\0\x05"u8));
-                    bool other = Match(s, 32, "NXSB"u8) || Match(s, 3, "ReFS"u8) || (o + 4096 <= got && Match(buf, o + 4086, "SWAPSPACE2"u8));
+                    bool other = Match(s, 32, "NXSB"u8) || Match(s, 3, "ReFS"u8) || (o + 4096 <= got && Match(buf, o + 4086, "SWAPSPACE2"u8))
+                        || Match(s, 0, "XFSB"u8) || Match(s, 0, LuksMagic) || Match(s, 0x40, "_BHRfS_M"u8)
+                        || (o + 1024 + 512 <= got && U32(buf, o + 1024) == 0xF2F52010);
                     if (!boot && !ext && !hfs && !other && !Match(s, 3, "NTFS    "u8) && !Match(s, 3, "EXFAT   "u8)) continue;
-                    Consider((p + o) / ss, buf.AsSpan(o, Math.Min(4096, got - o)), ext || hfs ? buf.AsSpan(o + 1024) : default);
+                    bool f2 = o + 1024 + 512 <= got && U32(buf, o + 1024) == 0xF2F52010;
+                    Consider((p + o) / ss, buf.AsSpan(o, Math.Min(4096, got - o)), ext || hfs || f2 ? buf.AsSpan(o + 1024) : default);
                 }
                 progress?.Report(new("Lendo o disco inteiro", (double)p / disk.Length, found.Count, p / ss, sectors));
             }
@@ -126,10 +139,10 @@ public static class PartitionFinder
             foreach (var f in list)
                 f.InCurrentTable = table.Entries.Any(e => e.StartLba == f.StartLba && Math.Abs(e.SectorCount - f.SectorCount) <= 1);
         // confirma pela cópia do setor de boot: o resto de um volume movido não tem a cópia no lugar
-        foreach (var f in list) f.BackupConfirmed = HasMatchingBackup(disk, f);
+        foreach (var f in list) { f.BackupConfirmed = HasMatchingBackup(disk, f); f.Freshness = FreshnessOf(disk, f); }
         // sobreposições: a mais confiável fica; as outras continuam na lista, marcadas
         var keep = new List<FoundPartition>();
-        foreach (var f in list.OrderByDescending(f => f.Score).ThenBy(f => f.StartLba))
+        foreach (var f in list.OrderByDescending(f => f.Score).ThenByDescending(f => f.Freshness).ThenBy(f => f.StartLba))
         {
             if (keep.Any(k => f.StartLba <= k.EndLba && k.StartLba <= f.EndLba)) f.Conflicting = true;
             else keep.Add(f);
@@ -140,11 +153,55 @@ public static class PartitionFinder
         return result.OrderBy(f => f.StartLba).ToList();
     }
 
+    private static ReadOnlySpan<byte> LuksMagic => [(byte)'L', (byte)'U', (byte)'K', (byte)'S', 0xBA, 0xBE];
+
     private static IEnumerable<FoundPartition> Analyze(IBlockDevice disk, long lba, ReadOnlySpan<byte> sec, ReadOnlySpan<byte> plus1024)
     {
         int ss = disk.SectorSize;
         var res = new List<FoundPartition>();
         if (sec.Length < 512) return res;
+
+        // ── sistemas do Linux ──
+        if (Match(sec, 0, "XFSB"u8) && FindXfs(disk, lba, sec) is { } xfs) { res.Add(xfs); return res; }
+        if (Match(sec, 0x40, "_BHRfS_M"u8))
+        {
+            // cada cópia do superbloco diz onde ela mesma está (bytenr): o início é a posição menos isso
+            long bytenr = (long)U64(sec, 0x30), total = (long)U64(sec, 0x70);
+            long start = lba * ss - bytenr;
+            if (start >= 0 && start % ss == 0 && total > 0 && U64(sec, 0x88) == 1)
+                res.Add(new FoundPartition
+                {
+                    StartLba = start / ss, SectorCount = total / ss, FileSystem = FsKind.Btrfs, Variant = "Btrfs", Verified = true,
+                    Evidence = bytenr == 0x10000 ? "superbloco Btrfs" : $"cópia do superbloco Btrfs ({DiskSizeText(bytenr)})",
+                    Label = Encoding.UTF8.GetString(sec.Slice(0x12B, 256)).TrimEnd('\0'),
+                });
+            return res;
+        }
+        if (Match(sec, 0, LuksMagic))
+        {
+            int ver = U16BE(sec, 6);
+            string? label = ver == 2 ? Ascii(sec, 24, 48) : null;
+            res.Add(new FoundPartition
+            {
+                StartLba = lba, SectorCount = 1, FileSystem = FsKind.Luks, Variant = ver == 2 ? "LUKS2" : "LUKS1", Verified = ver is 1 or 2,
+                Evidence = "cabeçalho LUKS", LengthGuessed = true, Label = string.IsNullOrEmpty(label) ? null : label,
+            });
+            return res;
+        }
+        if (plus1024.Length >= 512 && U32(plus1024, 0) == 0xF2F52010)
+        {
+            int logBs = (int)U32(plus1024, 16);
+            long blocks = (long)U64(plus1024, 36);
+            // a segunda cópia fica no bloco 1: se 4 KiB antes há outra igual, esta é a cópia
+            bool isCopy = lba * ss >= 4096 && U32(disk.ReadBytes(lba * ss - 4096 + 1024, 4), 0) == 0xF2F52010;
+            if (!isCopy && logBs is >= 9 and <= 16 && blocks > 0)
+                res.Add(new FoundPartition
+                {
+                    StartLba = lba, SectorCount = (blocks << logBs) / ss, FileSystem = FsKind.F2fs, Variant = "F2FS", Verified = true,
+                    Evidence = "superbloco F2FS", Label = Utf16(plus1024, 0x7C, 512) is { Length: > 0 } fl ? fl : null,
+                });
+            return res;
+        }
 
         var nb = NtfsVolume.ParseBoot(sec);
         if (nb != null)
@@ -306,11 +363,93 @@ public static class PartitionFinder
         return res;
     }
 
+    private static long FreshnessOf(IBlockDevice disk, FoundPartition f)
+    {
+        try
+        {
+            int ss = disk.SectorSize;
+            switch (f.FileSystem)
+            {
+                case FsKind.Ext:
+                    {
+                        var sb = disk.ReadBytes(f.StartLba * ss + 1024, 1024);
+                        return sb.Length >= 0x34 && U16(sb, 56) == 0xEF53 ? Math.Max(U32(sb, 0x2C), U32(sb, 0x30)) : 0;
+                    }
+                case FsKind.Btrfs:
+                    {
+                        var sb = disk.ReadBytes(f.StartLba * ss + 0x10000, 4096);
+                        return Match(sb, 0x40, "_BHRfS_M"u8) ? (long)U64(sb, 0x48) : 0;
+                    }
+            }
+        }
+        catch { }
+        return 0;
+    }
+
+    private static string DiskSizeText(long b) => b >= 1L << 30 ? $"{b >> 30} GiB" : $"{b >> 20} MiB";
+
+    /// <summary>
+    /// XFS: cada grupo de alocação começa com uma cópia do superbloco. Volta de grupo em grupo
+    /// enquanto houver superbloco com o mesmo UUID — o primeiro é o início do volume.
+    /// </summary>
+    private static FoundPartition? FindXfs(IBlockDevice disk, long lba, ReadOnlySpan<byte> sec)
+    {
+        int ss = disk.SectorSize;
+        long bs = U32BE(sec, 4), blocks = (long)U64BE(sec, 8), agBlocks = U32BE(sec, 84), agCount = U32BE(sec, 88);
+        if (bs is < 512 or > 65536 || blocks <= 0 || agBlocks <= 0 || agCount <= 0) return null;
+        var uuid = sec.Slice(32, 16).ToArray();
+        long agBytes = agBlocks * bs;
+        long start = lba * ss;
+        int copies = 0;
+        for (long k = 1; k < agCount && start - agBytes >= 0; k++)
+        {
+            byte[] prev;
+            try { prev = disk.ReadBytes(start - agBytes, 512); } catch { break; }
+            if (prev.Length < 512 || !Match(prev, 0, "XFSB"u8) || !prev.AsSpan(32, 16).SequenceEqual(uuid)) break;
+            start -= agBytes;
+            copies++;
+        }
+        if (start % ss != 0) return null;
+        return new FoundPartition
+        {
+            StartLba = start / ss, SectorCount = blocks * bs / ss, FileSystem = FsKind.Xfs, Variant = (U16BE(sec, 100) & 0xF) >= 5 ? "XFS v5" : "XFS",
+            Verified = true, Evidence = copies == 0 ? "superbloco XFS" : $"cópia do superbloco XFS (grupo {copies})",
+            Label = Ascii(sec, 108, 12) is { Length: > 0 } l ? l : null,
+        };
+    }
+
     private static bool HasMatchingBackup(IBlockDevice disk, FoundPartition f)
     {
         try
         {
             int ss = disk.SectorSize;
+            if (f.FileSystem == FsKind.Xfs)
+            {
+                var main = disk.ReadBytes(f.StartLba * ss, 512);
+                long agBytes = (long)U32BE(main, 84) * U32BE(main, 4);
+                var copy = disk.ReadBytes(f.StartLba * ss + agBytes, 512);
+                return U32BE(main, 88) < 2 || (Match(copy, 0, "XFSB"u8) && copy.AsSpan(32, 16).SequenceEqual(main.AsSpan(32, 16)));
+            }
+            if (f.FileSystem == FsKind.Btrfs)
+            {
+                var main = disk.ReadBytes(f.StartLba * ss + 0x10000, 4096);
+                long mirror = f.StartLba * ss + (64L << 20);
+                if (f.SectorCount * ss < (64L << 20) + 4096) return Match(main, 0x40, "_BHRfS_M"u8);
+                var copy = disk.ReadBytes(mirror, 4096);
+                return Match(copy, 0x40, "_BHRfS_M"u8) && copy.AsSpan(0x20, 16).SequenceEqual(main.AsSpan(0x20, 16));
+            }
+            if (f.FileSystem == FsKind.F2fs)
+            {
+                var a = disk.ReadBytes(f.StartLba * ss + 1024, 512);
+                var b = disk.ReadBytes(f.StartLba * ss + 4096 + 1024, 512);
+                return U32(b, 0) == 0xF2F52010 && a.AsSpan(0x6C, 16).SequenceEqual(b.AsSpan(0x6C, 16));
+            }
+            if (f.FileSystem == FsKind.Luks)
+            {
+                // LUKS2 tem um segundo cabeçalho binário a 16 KiB ("SKUL")
+                var b = disk.ReadBytes(f.StartLba * ss + 0x4000, 512);
+                return b.Length >= 6 && b[0] == (byte)'S' && b[1] == (byte)'K' && b[2] == (byte)'U' && b[3] == (byte)'L';
+            }
             if (f.FileSystem == FsKind.Ext)
             {
                 var main = FsDetect.ParseExt(disk.ReadBytes(f.StartLba * ss + 1024, 1024));
@@ -377,8 +516,10 @@ public static class PartitionFinder
                 e.TypeGuid = p.LooksLikeEsp ? PartitionTypes.Esp : p.LooksLikeRecovery ? PartitionTypes.WinRecovery
                     : p.FileSystem switch
                     {
-                        FsKind.Ext => PartitionTypes.LinuxFs, FsKind.LinuxSwap => PartitionTypes.LinuxSwap,
-                        FsKind.HfsPlus => PartitionTypes.AppleHfs, FsKind.Apfs => PartitionTypes.AppleApfs, _ => PartitionTypes.BasicData,
+                        FsKind.HfsPlus => PartitionTypes.AppleHfs, FsKind.Apfs => PartitionTypes.AppleApfs,
+                        FsKind.Ext or FsKind.Xfs or FsKind.Btrfs or FsKind.F2fs or FsKind.LinuxSwap or FsKind.Luks or FsKind.LvmPv or FsKind.MdRaid
+                            or FsKind.ReiserFs or FsKind.Jfs or FsKind.Bcachefs => PartitionTypes.ForFileSystem(p.FileSystem).gpt,
+                        _ => PartitionTypes.BasicData,
                     };
                 if (p.LooksLikeRecovery) e.Attributes = PartitionTypes.RecoveryAttributes;
                 if (p.LooksLikeEsp && string.IsNullOrEmpty(e.Name)) e.Name = "EFI system partition";
@@ -389,6 +530,7 @@ public static class PartitionFinder
                 e.MbrType = p.LooksLikeEsp ? (byte)0xEF : p.LooksLikeRecovery ? (byte)0x27 : p.FileSystem switch
                 {
                     FsKind.LinuxSwap => (byte)0x82, FsKind.HfsPlus or FsKind.Apfs => (byte)0xAF,
+                    FsKind.Xfs or FsKind.Btrfs or FsKind.F2fs or FsKind.Luks or FsKind.Ext => (byte)0x83,
                     _ => PartitionTypes.GptToMbr(PartitionTypes.BasicData, p.FileSystem) ?? 0x07,
                 };
             }

@@ -16,7 +16,9 @@ public static partial class ActionsBuilder
     private static Task Exec(Func<OpSink, Task> f, OpSink s) => f(s);
     private static Task Exec(Action<OpSink> f, OpSink s) { f(s); return Task.CompletedTask; }
 
-    private static string Who(PartitionInfo p) => p.Letter ?? (string.IsNullOrEmpty(p.Label) ? $"partição em {Fmt.Size(p.Offset)}" : p.Label!);
+    private static string Who(PartitionInfo p) => p.Letter
+        ?? (p.KernelName is { } k ? (string.IsNullOrEmpty(p.Label) ? k : $"{k} ({p.Label})")
+        : string.IsNullOrEmpty(p.Label) ? $"partição em {Fmt.Size(p.Offset)}" : p.Label!);
 
     // ───────────── disco ─────────────
 
@@ -620,7 +622,7 @@ public static partial class ActionsBuilder
         mode.Options.Add("Verificar e corrigir erros");
         mode.Options.Add("Corrigir erros e procurar setores defeituosos (lento)");
         f.Note("Em disco que está morrendo, corrigir pode piorar: faça antes uma imagem (Backup e imagem) e recupere dela.", "warn");
-        if (p.IsWindowsVolume) f.Note("No volume do Windows, a correção é agendada para a próxima reinicialização.", "gold");
+        if (p.IsSystemVolume) f.Note("No volume do Windows, a correção é agendada para a próxima reinicialização.", "gold");
         if (!await Main.ShowDialog(f)) return;
         string target = p.Letter ?? p.VolumePath!.TrimEnd('\\');
         Func<OpSink, Task> work = async s =>
@@ -655,8 +657,11 @@ public static partial class ActionsBuilder
         if (p.Entry?.UniqueGuid is { } g && g != Guid.Empty) Row("GUID da partição", g.ToString().ToUpperInvariant());
         if (p.Entry != null && p.Disk.Table.Style == TableStyle.Gpt) Row("Atributos GPT", $"0x{p.Entry.Attributes:X16}");
         if (p.VolumeSerial != 0) Row("Nº de série do volume", $"{p.VolumeSerial >> 16:X4}-{p.VolumeSerial & 0xFFFF:X4}");
-        if (p.VolumePath != null) Row("Volume", p.VolumePath);
+        if (p.VolumePath != null) Row(Win ? "Volume" : "Dispositivo", p.VolumePath);
         if (p.MountPoints.Count > 0) Row("Montada em", string.Join(", ", p.MountPoints));
+        if (!string.IsNullOrEmpty(p.FsUuid)) Row("UUID do sistema de arquivos", p.FsUuid!);
+        if (p.Entry is { Name.Length: > 0 } && p.Disk.Table.Style == TableStyle.Gpt) Row("Nome GPT (PARTLABEL)", p.Entry.Name);
+        if (p.HeldBy != null) Row("Aberta como", p.HeldBy);
         if (p.StatusText != "—") Row("Status", p.StatusText);
         return Main.ShowDialog(f);
     }

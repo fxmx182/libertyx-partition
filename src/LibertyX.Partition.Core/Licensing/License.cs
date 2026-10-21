@@ -211,9 +211,7 @@ public sealed class LicenseManager
     }
 
     /// <summary>Para todos os usuários do computador (o app roda como administrador).</summary>
-    public static string DefaultDir() => OperatingSystem.IsWindows()
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "LibertyX Partition")
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "libertyx-partition");
+    public static string DefaultDir() => Platform.AppPaths.MachineData;
 
     public static string MachineName() => Environment.MachineName;
 

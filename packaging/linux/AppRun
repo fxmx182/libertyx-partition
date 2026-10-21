@@ -1,0 +1,4 @@
+#!/bin/sh
+# AppImage: o executável único está em usr/bin; o próprio app se reabre como root pelo pkexec.
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/bin/LibertyXPartition" "$@"

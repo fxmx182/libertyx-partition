@@ -12,6 +12,24 @@ namespace LibertyX.Partition.Core.Platform;
 public static partial class Updater
 {
     public const string Repo = "fxmx182/libertyx-partition";
+    /// <summary>Windows e Linux publicam em releases separados (cada CI recria o seu sem apagar o do outro).</summary>
+    public static string Tag => OperatingSystem.IsLinux() ? "linux-latest" : "latest";
+
+    public enum LinuxKind { None, AppImage, Deb, Rpm, Portable }
+
+    /// <summary>Como este Linux recebeu o app: AppImage (troca o arquivo), pacote (apt/dnf) ou pasta solta (só avisa).</summary>
+    public static LinuxKind InstallKind
+    {
+        get
+        {
+            if (!OperatingSystem.IsLinux()) return LinuxKind.None;
+            if (Environment.GetEnvironmentVariable("APPIMAGE") is { Length: > 0 }) return LinuxKind.AppImage;
+            string dir = AppContext.BaseDirectory.TrimEnd('/');
+            if (dir == "/opt/libertyx-partition" || dir == "/usr/lib/libertyx-partition")
+                return File.Exists("/var/lib/dpkg/info/libertyx-partition.list") ? LinuxKind.Deb : LinuxKind.Rpm;
+            return LinuxKind.Portable;
+        }
+    }
     public sealed record Info(int Build, string Version, string SetupUrl, long SetupSize, string PortableUrl, string Notes);
 
     /// <summary>O CI carimba 1.0.N; o N é o número do build. Zero = build local, sem atualização.</summary>
@@ -22,6 +40,7 @@ public static partial class Updater
     {
         get
         {
+            if (OperatingSystem.IsLinux()) return InstallKind is LinuxKind.AppImage or LinuxKind.Deb or LinuxKind.Rpm;
             try { return File.Exists(Path.Combine(AppContext.BaseDirectory, "unins000.exe")); } catch { return false; }
         }
     }
@@ -47,10 +66,19 @@ public static partial class Updater
         try
         {
             using var http = NewHttp();
-            string txt = await http.GetStringAsync($"https://github.com/{Repo}/releases/download/latest/versao.txt", ct);
+            string txt = await http.GetStringAsync($"https://github.com/{Repo}/releases/download/{Tag}/versao.txt", ct);
             var kv = txt.Split('\n').Select(l => l.Split('=', 2)).Where(p => p.Length == 2).ToDictionary(p => p[0].Trim(), p => p[1].Trim());
             if (!kv.TryGetValue("versao", out var v) || !v.StartsWith("1.0.") || !int.TryParse(v[4..], out int build)) return null;
-            string baseUrl = $"https://github.com/{Repo}/releases/download/latest/";
+            string baseUrl = $"https://github.com/{Repo}/releases/download/{Tag}/";
+            if (OperatingSystem.IsLinux())
+            {
+                // o pacote certo para o jeito como o app foi instalado (e a arquitetura deste computador)
+                string arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "_arm64" : "";
+                string key = InstallKind switch { LinuxKind.AppImage => "appimage", LinuxKind.Deb => "deb", LinuxKind.Rpm => "rpm", _ => "tar" } + arch;
+                if (!kv.TryGetValue(key, out var file)) return null;
+                long.TryParse(kv.GetValueOrDefault("tamanho_" + key), out long sz);
+                return new Info(build, v, baseUrl + file, sz, baseUrl + kv.GetValueOrDefault("tar" + arch, file), kv.GetValueOrDefault("novidades", ""));
+            }
             long.TryParse(kv.GetValueOrDefault("tamanho"), out long size);
             return new Info(build, v, baseUrl + kv.GetValueOrDefault("setup", "LibertyXPartition-Setup.exe"), size,
                             baseUrl + kv.GetValueOrDefault("portatil", "LibertyXPartition.exe"), kv.GetValueOrDefault("novidades", ""));
@@ -60,6 +88,7 @@ public static partial class Updater
 
     private static async Task<Info?> CheckApi(CancellationToken ct)
     {
+        if (OperatingSystem.IsLinux()) return null;   // o versao.txt já diz tudo; a API não tem os nomes por arquitetura
         try
         {
             using var http = NewHttp();
@@ -90,7 +119,7 @@ public static partial class Updater
     {
         using var http = NewHttp();
         http.Timeout = TimeSpan.FromMinutes(20);
-        string dest = Path.Combine(Path.GetTempPath(), $"LibertyXPartition-Setup-{i.Version}.exe");
+        string dest = Path.Combine(Path.GetTempPath(), OperatingSystem.IsLinux() ? $"{i.Version}-{Path.GetFileName(new Uri(i.SetupUrl).LocalPath)}" : $"LibertyXPartition-Setup-{i.Version}.exe");
         using (var resp = await http.GetAsync(i.SetupUrl, HttpCompletionOption.ResponseHeadersRead, ct))
         {
             resp.EnsureSuccessStatusCode();
@@ -112,6 +141,56 @@ public static partial class Updater
     }
 
     /// <summary>Roda o instalador por cima (com janela de progresso) e ele reabre o app no fim.</summary>
-    public static void LaunchSetup(string setup) =>
+    public static void LaunchSetup(string setup)
+    {
+        if (OperatingSystem.IsLinux()) { Relaunch(); return; }
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(setup, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /UPDATE=1") { UseShellExecute = true });
+    }
+
+    /// <summary>
+    /// Linux: instala o que foi baixado. AppImage: troca o arquivo (rename atômico — a versão em
+    /// uso continua rodando do arquivo antigo até fechar). .deb/.rpm: pelo apt/dnf/zypper.
+    /// </summary>
+    public static async Task InstallLinux(string file, Action<string> log, CancellationToken ct)
+    {
+        switch (InstallKind)
+        {
+            case LinuxKind.AppImage:
+                {
+                    string target = Environment.GetEnvironmentVariable("APPIMAGE")!;
+                    string tmp = target + ".novo";
+                    File.Copy(file, tmp, true);
+                    File.SetUnixFileMode(tmp, (UnixFileMode)0b111_101_101);
+                    File.Move(tmp, target, true);
+                    Linux.LinuxSession.GiveBack(target, false);
+                    log($"AppImage atualizado: {target}");
+                    break;
+                }
+            case LinuxKind.Deb:
+                {
+                    var r = Linux.LinuxTools.Has("apt-get") ? await Proc.Run("apt-get", ["install", "-y", "--allow-downgrades", Path.GetFullPath(file)], ct, log, env: new Dictionary<string, string> { ["DEBIAN_FRONTEND"] = "noninteractive" })
+                                                            : await Proc.Run("dpkg", ["-i", file], ct, log);
+                    if (!r.Ok) throw new IOException("O apt não instalou o pacote: " + r.Message);
+                    break;
+                }
+            case LinuxKind.Rpm:
+                {
+                    var r = Linux.LinuxTools.Has("dnf") ? await Proc.Run("dnf", ["install", "-y", file], ct, log)
+                          : Linux.LinuxTools.Has("zypper") ? await Proc.Run("zypper", ["--non-interactive", "install", "--allow-unsigned-rpm", file], ct, log)
+                          : await Proc.Run("rpm", ["-U", "--force", file], ct, log);
+                    if (!r.Ok) throw new IOException("O pacote não foi instalado: " + r.Message);
+                    break;
+                }
+        }
+    }
+
+    /// <summary>Abre a versão nova (já como root, sem pedir senha de novo) — a atual fecha em seguida.</summary>
+    private static void Relaunch()
+    {
+        string exe = InstallKind == LinuxKind.AppImage ? Environment.GetEnvironmentVariable("APPIMAGE")! : File.Exists("/usr/bin/libertyx-partition") ? "/usr/bin/libertyx-partition" : Environment.ProcessPath!;
+        var psi = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+        psi.Environment["LIBERTYX_ELEVATED"] = "1";
+        psi.Environment.Remove("LIBERTYX_READY");
+        System.Diagnostics.Process.Start(psi);
+    }
 }

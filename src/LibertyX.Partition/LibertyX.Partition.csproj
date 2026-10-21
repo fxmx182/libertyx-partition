@@ -22,4 +22,10 @@
   <ItemGroup>
     <ProjectReference Include="..\LibertyX.Partition.Core\LibertyX.Partition.Core.csproj" />
   </ItemGroup>
+  <!-- Linux: a ICU (idiomas, datas, números em português) vai dentro do app — sem ela o .NET não
+       abre em distribuições que não trazem a libicu, e cada uma traz uma versão diferente -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" />
+    <RuntimeHostConfigurationOption Include="System.Globalization.AppLocalIcu" Value="72.1.0.3" />
+  </ItemGroup>
 </Project>

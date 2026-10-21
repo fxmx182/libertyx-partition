@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LinuxVolumesView" x:DataType="vm:LinuxVolumesViewModel">
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,4,0,18">
+      <StackPanel>
+        <TextBlock Classes="h1" Text="LVM e RAID" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Grupos de volumes lógicos e conjuntos RAID por software. Volumes ativos aparecem como discos na tela inicial — dá para recuperar, verificar e formatar neles." />
+      </StackPanel>
+      <Button Grid.Column="1" Command="{Binding ScanCommand}" VerticalAlignment="Center" Margin="0,0,8,0">
+        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcSearch}" Classes="small" /><TextBlock Text="Procurar e ativar" /></StackPanel>
+      </Button>
+      <Button Grid.Column="2" Command="{Binding LoadCommand}" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Text="Atualizar" /></StackPanel>
+      </Button>
+    </Grid>
+    <Border DockPanel.Dock="Top" Classes="notice warn" Margin="0,0,0,14" IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+    </Border>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="18">
+        <StackPanel Spacing="10" IsVisible="{Binding Groups.Count}">
+          <TextBlock Classes="section" Text="GRUPOS LVM" />
+          <ItemsControl ItemsSource="{Binding Groups}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:VgRow">
+                <Border Classes="card" Width="380" Margin="0,0,14,14">
+                  <StackPanel Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                      <PathIcon Data="{StaticResource IcLayers}" Width="20" Height="20" Foreground="{StaticResource Ouro}" />
+                      <TextBlock Text="{Binding Title}" Classes="h2" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Detail}" Classes="faint" TextWrapping="Wrap" />
+                    <WrapPanel>
+                      <Button Content="Ativar" Command="{Binding On}" Classes="primary" Margin="0,0,8,0" />
+                      <Button Content="Desativar" Command="{Binding Off}" />
+                    </WrapPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+        <StackPanel Spacing="10" IsVisible="{Binding Logical.Count}">
+          <TextBlock Classes="section" Text="VOLUMES LÓGICOS" />
+          <ItemsControl ItemsSource="{Binding Logical}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:LvRow">
+                <Border Classes="inset" Padding="14,10" Margin="0,0,0,8">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Detail}" Classes="faint" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="chip" Classes.green="{Binding Active}" VerticalAlignment="Center"><TextBlock Text="{Binding Lv.Attr}" /></Border>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+        <StackPanel Spacing="10" IsVisible="{Binding Arrays.Count}">
+          <TextBlock Classes="section" Text="RAID POR SOFTWARE (MD)" />
+          <ItemsControl ItemsSource="{Binding Arrays}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:MdRow">
+                <Border Classes="card" Width="380" Margin="0,0,14,14">
+                  <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Title}" Classes="h2" />
+                      <Border Grid.Column="1" Classes="chip red" IsVisible="{Binding Degraded}"><TextBlock Text="Degradado" /></Border>
+                    </Grid>
+                    <TextBlock Text="{Binding Detail}" Classes="faint" TextWrapping="Wrap" />
+                    <Button Content="Parar" Command="{Binding Stop}" HorizontalAlignment="Left" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
