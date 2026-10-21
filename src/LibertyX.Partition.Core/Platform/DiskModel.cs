@@ -228,6 +228,12 @@ public static class UsageCalculator
                         var x = FsDetect.ParseExt(vol.ReadBytes(1024, 1024));
                         return x == null ? null : ((x.Blocks - x.FreeBlocks) * x.BlockSize, x.FreeBlocks * x.BlockSize, x.Label);
                     }
+                case FsKind.Xfs or FsKind.Btrfs:
+                    {
+                        var x = FsDetect.ReadSuper(vol, fs);
+                        variant = x?.Variant;
+                        return x?.Total is { } t && x.Free is { } f ? (t - f, f, string.IsNullOrEmpty(x.Label) ? null : x.Label) : null;
+                    }
                 case FsKind.Apfs:
                     {
                         var c = ApfsContainer.Open(vol, out _);

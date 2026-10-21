@@ -144,8 +144,8 @@ public sealed partial class RecoveryViewModel : PageViewModel
             OnPropertyChanged(nameof(CanStart));
             if (it?.Partition is { IsUnallocated: true } || (it != null && it.Partition == null)) DeepScan = true;
             if (it?.Partition is { } p && !FsDetect.CanRead(p.FileSystem) && !p.IsUnallocated) DeepScan = true;
-            // o Windows não abre ext, HFS+ etc.: o que se quer é copiar tudo para fora, não só os apagados
-            if (it?.Partition is { FileSystem: FsKind.Ext or FsKind.HfsPlus or FsKind.Apfs }) IncludeLive = true;
+            // o Windows não abre ext, XFS, Btrfs, HFS+ etc.: o que se quer é copiar tudo para fora, não só os apagados
+            if (it?.Partition is { FileSystem: FsKind.Ext or FsKind.HfsPlus or FsKind.Apfs or FsKind.Xfs or FsKind.Btrfs } && OperatingSystem.IsWindows()) IncludeLive = true;
         };
     }
 

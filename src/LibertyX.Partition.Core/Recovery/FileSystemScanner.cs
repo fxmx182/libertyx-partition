@@ -8,7 +8,7 @@ namespace LibertyX.Partition.Core.Recovery;
 /// Varredura rápida: lê as estruturas do sistema de arquivos (MFT, diretórios FAT/exFAT)
 /// e devolve a árvore de arquivos — os apagados com nome, pasta e datas originais.
 /// </summary>
-public static class FileSystemScanner
+public static partial class FileSystemScanner
 {
     public static ScanResult Scan(IBlockDevice vol, ScanOptions opt, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
@@ -42,6 +42,14 @@ public static class FileSystemScanner
                 case FsKind.Apfs:
                     var ap = ApfsContainer.Open(vol, out err);
                     if (ap != null) r = ScanApfs(ap, opt, progress, ct);
+                    break;
+                case FsKind.Xfs:
+                    var xf = XfsVolume.Open(vol, out err);
+                    if (xf != null) r = ScanXfs(xf, opt, progress, ct);
+                    break;
+                case FsKind.Btrfs:
+                    var bt = BtrfsVolume.Open(vol, out err);
+                    if (bt != null) { r = ScanBtrfs(bt, opt, progress, ct); if (err != null) r.Log.Insert(0, err); }
                     break;
                 default:
                     // Boot destruído? Tenta as cópias de reserva de cada formato.

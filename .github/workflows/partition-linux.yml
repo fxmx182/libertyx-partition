@@ -73,6 +73,13 @@ jobs:
           echo "::notice title=Autoteste ${{ matrix.arch }}::$(tail -n 1 autoteste.txt)"
           exit $code
 
+      - name: Leitores de XFS e Btrfs (imagens gravadas pelo kernel do runner)
+        run: |
+          sudo WORK="$PWD/tests/images" tests/scripts/make-xfs.sh
+          sudo WORK="$PWD/tests/images" tests/scripts/make-btrfs.sh || echo "::warning title=Btrfs::imagem de teste não gerada"
+          dotnet run --project tests/Probe -c Release -- tests/images linux | tee leitores.txt
+          grep -q "TUDO OK" leitores.txt
+
       - name: Empacotar (AppImage, .deb, .rpm, .tar.gz)
         run: |
           packaging/linux/empacotar.sh ${{ matrix.arch }} 1.0.${{ github.run_number }} dist/LibertyXPartition pacotes
@@ -95,8 +102,9 @@ jobs:
         run: |
           docker run --rm -v "$PWD/pacotes:/p:ro" fedora:41 sh -c \
             'dnf install -y -q /p/*.rpm >/dev/null && /usr/bin/libertyx-partition --selftest /tmp/r.txt >/dev/null; grep -q "Listar discos" /tmp/r.txt && echo "rpm ok: $(grep -c ^OK /tmp/r.txt) OK"'
+          # Debian mínimo SEM libicu (só a libssl, que todo sistema de verdade tem): prova a ICU embutida
           docker run --rm -v "$PWD/pacotes:/p:ro" debian:bookworm-slim sh -c \
-            'tar -xzf /p/LibertyXPartition-linux*.tar.gz -C /tmp && /tmp/libertyx-partition/LibertyXPartition --selftest /tmp/r.txt >/dev/null; grep -q "Listar discos" /tmp/r.txt && echo "tar.gz ok (ICU embutida)"'
+            'apt-get update -qq >/dev/null && apt-get install -y -qq libssl3 >/dev/null 2>&1; tar -xzf /p/LibertyXPartition-linux*.tar.gz -C /tmp && /tmp/libertyx-partition/LibertyXPartition --selftest /tmp/r.txt >/dev/null; grep -q "Listar discos" /tmp/r.txt && echo "tar.gz ok (ICU embutida)"'
 
       - name: AppImage abre
         run: |

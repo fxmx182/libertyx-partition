@@ -54,7 +54,7 @@ public static class FsDetect
     public static bool IsContainer(FsKind k) => k is FsKind.Luks or FsKind.LvmPv or FsKind.MdRaid or FsKind.Zfs or FsKind.BitLocker;
 
     public static bool IsFat(FsKind k) => k is FsKind.Fat12 or FsKind.Fat16 or FsKind.Fat32;
-    public static bool CanRead(FsKind k) => k is FsKind.Ntfs or FsKind.ExFat or FsKind.Ext or FsKind.HfsPlus or FsKind.Apfs || IsFat(k);
+    public static bool CanRead(FsKind k) => k is FsKind.Ntfs or FsKind.ExFat or FsKind.Ext or FsKind.HfsPlus or FsKind.Apfs or FsKind.Xfs or FsKind.Btrfs || IsFat(k);
 
     /// <summary>Reconhece o sistema de arquivos pelo setor de boot (e pelo superbloco, no caso dos Unix).</summary>
     public static FsKind Detect(IBlockDevice vol)

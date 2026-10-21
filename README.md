@@ -43,7 +43,17 @@ Tudo o que está acima (o motor é o mesmo), mais o que é do Linux:
   formatar); ativar e desativar grupos; montar e parar conjuntos.
 - **Sinalizadores e nomes**: esp, bios_grub, lvm, raid, swap, legacy_boot, oculta; nome GPT (PARTLABEL);
   tipos da especificação de partições detectáveis (raiz, /home, /var, XBOOTLDR…).
+- **Recuperação em XFS e Btrfs**, lidos direto dos setores (também volumes que não montam):
+  - XFS: árvore viva completa (extents e árvore B+), nomes dos apagados pelos restos das entradas nas
+    pastas e pelas cópias antigas no log, e o mapa de blocos de cada apagado tirado do log (journal)
+    enquanto ele não foi reciclado; a varredura profunda lê só o espaço livre.
+  - Btrfs: subvolumes e snapshots, compressão zstd/LZO/zlib, arquivos embutidos; apagados pelas
+    versões antigas das folhas da árvore (cópia na escrita), conferidos pelo checksum do próprio Btrfs.
 - **Busca de partições perdidas** também acha XFS, Btrfs, F2FS e LUKS (cópias de superbloco não viram fantasmas).
+- **Migrar o sistema** para outro disco, pronto para dar boot (GRUB UEFI/BIOS, systemd-boot), com
+  UUIDs novos e fstab/GRUB corrigidos — testado numa VM que liga só pelo disco novo.
+- **Limpar SSD do jeito certo**: TRIM do disco inteiro ou apagamento do fabricante (NVMe Format,
+  ATA Secure Erase); **Otimizar**: TRIM no SSD, desfragmentação no HD.
 - **S.M.A.R.T. sem programa externo**: NVMe pelo comando de administração e SATA/USB por SG_IO (ATA
   PASS-THROUGH), com o smartctl de reserva para pontes USB difíceis.
 - **Montar / desmontar**, ligar/desligar swap, lixeira do padrão freedesktop, montagem automática do

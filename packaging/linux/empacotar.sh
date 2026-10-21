@@ -56,7 +56,7 @@ Installed-Size: $SIZE
 Section: admin
 Priority: optional
 Homepage: https://github.com/fxmx182/libertyx-partition
-Depends: libc6, libfontconfig1, libx11-6, libice6, libsm6, pkexec | policykit-1
+Depends: libc6, libfontconfig1, libx11-6, libice6, libsm6, libssl3t64 | libssl3, pkexec | policykit-1
 Recommends: e2fsprogs, dosfstools, ntfs-3g, exfatprogs, xfsprogs, btrfs-progs, f2fs-tools, cryptsetup-bin, smartmontools, rsync, lvm2, util-linux
 Suggests: mdadm, wimtools, fatresize, nvme-cli, hdparm
 Description: Recuperação de dados e gerenciador de partições
@@ -89,7 +89,7 @@ Summary:        Recuperação de dados e gerenciador de partições
 License:        Proprietary
 URL:            https://github.com/fxmx182/libertyx-partition
 BuildArch:      $RPM_ARCH
-Requires:       fontconfig libX11 libICE libSM polkit
+Requires:       fontconfig libX11 libICE libSM polkit openssl-libs
 Recommends:     e2fsprogs dosfstools exfatprogs xfsprogs btrfs-progs f2fs-tools cryptsetup smartmontools rsync lvm2 util-linux
 Suggests:       ntfs-3g ntfsprogs mdadm wimlib-utils nvme-cli hdparm
 AutoReqProv:    no
