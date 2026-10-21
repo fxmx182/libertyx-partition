@@ -95,6 +95,8 @@ public static partial class ActionsBuilder
             ActionItem.Of("Propriedades da partição", "Properties", () => Properties(pv)),
             ActionItem.Of("Recuperação de dados", "RecoverFiles", () => { Main.Navigate("recuperar", p); return Task.CompletedTask; }),
             .. (p.FileSystem is FsKind.Luks or FsKind.BitLocker ? new[] { ActionItem.Of(p.HeldBy != null ? "Criptografia (fechar, chaves)" : "Desbloquear", "BitLocker", () => { Main.Navigate("bitlocker", p); return Task.CompletedTask; }) } : []),
+            .. (p.FileSystem is FsKind.Ext or FsKind.Xfs or FsKind.Btrfs ? new[] { ActionItem.Of("Reparar a inicialização deste Linux", "Boot", () => RepairBootLinux(pv),
+                held ?? NeedsDev(p) ?? (p.IsMounted && !p.IsSystemVolume ? "Desmonte antes (o reparo monta a raiz e o /boot do sistema)." : null)) } : []),
         ]);
     }
 
@@ -681,6 +683,32 @@ public static partial class ActionsBuilder
                 x.MbrType = type;
             }
             DiskOperations.WriteTable(q.Disk, t, "Sinalizadores", s);
+        }, p.Disk, dangerous: false, canPause: false);
+    }
+
+    // ───────── reparar a inicialização ─────────
+
+    private static async Task RepairBootLinux(PartitionVM pv)
+    {
+        var p = pv.P;
+        LinuxMigrate.InstalledLinux? info = null;
+        await Main.Run("Procurando um Linux instalado", async s => { info = await LinuxMigrate.Inspect(p); }, refresh: false);
+        if (info == null) { await Main.Alert("Não é a raiz de um Linux", $"{Who(p)} não tem /etc/fstab e /etc/os-release: escolha a partição onde o sistema está instalado (a que monta em /)."); return; }
+        var f = Form("Reparar a inicialização", "Boot", $"{Who(p)} · {info.Name}", "Adicionar");
+        f.Add(new InfoField { Label = "Sistema", Text = info.Name });
+        f.Add(new InfoField { Label = "Modo", Text = info.Uefi ? "UEFI (como este computador iniciou agora)" : "BIOS / Legado" });
+        f.Add(new InfoField { Label = "Carregador", Text = info.Loader == "systemd-boot" ? "systemd-boot" : info.Loader == "grub" ? "GRUB" : "não reconhecido" });
+        if (info.BtrfsSubvol != null) f.Add(new InfoField { Label = "Subvolume", Text = info.BtrfsSubvol });
+        f.Note("Monta o sistema, entra nele e refaz o initramfs e o carregador de boot" + (info.Uefi ? " — com a entrada no menu de boot deste computador e a cópia de reserva em EFI/BOOT." : $" no disco {p.Disk.DevicePath}."), "gold");
+        if (info.Uefi != Directory.Exists("/sys/firmware/efi")) f.Note("Atenção: este computador iniciou em outro modo. Para reparar o boot UEFI, inicie o pendrive em modo UEFI.", "warn");
+        f.Note("Precisa de internet só se o sistema pedir pacotes (raro). Faça uma imagem do disco antes se ele estiver com defeito.", "");
+        f.Validate = () => info.Loader == "?" ? "Este sistema não usa GRUB nem systemd-boot." : null;
+        if (!await Main.ShowDialog(f)) return;
+        var inf = info;
+        Main.Queue("Reparar a inicialização", $"{inf.Name} em {Who(p)} ({(inf.Uefi ? "UEFI" : "BIOS")}, {inf.Loader})", "Boot", async s =>
+        {
+            var q = MainViewModel.FreshPart(p);
+            await LinuxMigrate.RepairBoot(q, inf, s);
         }, p.Disk, dangerous: false, canPause: false);
     }
 

@@ -195,4 +195,43 @@ public static class LinuxSession
 
     /// <summary>Chegou aqui já elevado pelo próprio app (não precisa perguntar de novo).</summary>
     public static bool ElevatedByUs => Environment.GetEnvironmentVariable("LIBERTYX_ELEVATED") == "1";
+
+    /// <summary>
+    /// AppImage não entra no menu de aplicativos sozinho: o app cria o atalho e o ícone na pasta de
+    /// quem usa (~/.local/share), apontando para onde o AppImage está agora — e atualiza se ele mudar de lugar.
+    /// </summary>
+    public static void IntegrateAppImage(byte[] icon256)
+    {
+        try
+        {
+            string? appimage = Environment.GetEnvironmentVariable("APPIMAGE");
+            if (string.IsNullOrEmpty(appimage) || !File.Exists(appimage)) return;
+            string share = Path.Combine(Home, ".local", "share");
+            string desktop = Path.Combine(share, "applications", "libertyx-partition-appimage.desktop");
+            string iconPath = Path.Combine(share, "icons", "hicolor", "256x256", "apps", "libertyx-partition.png");
+            string content = $"""
+                [Desktop Entry]
+                Type=Application
+                Name=LibertyX Partition
+                GenericName=Gerenciador de partições e recuperação de dados
+                Comment=Recuperar arquivos e partições, clonar, redimensionar e formatar discos
+                Exec="{appimage}" %F
+                Icon=libertyx-partition
+                Terminal=false
+                Categories=System;Filesystem;Utility;
+                Keywords=partition;disk;recovery;undelete;partição;disco;recuperar;
+                StartupWMClass=LibertyXPartition
+                X-AppImage-Path={appimage}
+
+                """;
+            if (File.Exists(desktop) && File.ReadAllText(desktop) == content && File.Exists(iconPath)) return;
+            EnsureUserDir(Path.GetDirectoryName(desktop)!);
+            EnsureUserDir(Path.GetDirectoryName(iconPath)!);
+            File.WriteAllText(desktop, content);
+            File.WriteAllBytes(iconPath, icon256);
+            GiveBack(desktop, false);
+            GiveBack(iconPath, false);
+        }
+        catch { }
+    }
 }

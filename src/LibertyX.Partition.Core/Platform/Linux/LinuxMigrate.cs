@@ -466,16 +466,19 @@ public static class LinuxMigrate
         return string.Join('\n', lines);
     }
 
-    private static async Task Bootloader(Plan plan, List<Piece> order, string mnt, bool freshEsp, OpSink s)
+    private static async Task Bootloader(Plan plan, List<Piece> order, string mnt, bool freshEsp, OpSink s, bool nvram = false)
     {
         if (plan.Loader == "?") { s.Log("Carregador de boot não reconhecido: configure o boot do disco novo à mão."); return; }
-        foreach (var (src, dst) in new[] { ("/dev", "dev"), ("/dev/pts", "dev/pts"), ("/proc", "proc"), ("/sys", "sys"), ("/run", "run") })
+        if (mnt != "/")
         {
-            Directory.CreateDirectory(Path.Combine(mnt, dst));
-            await Proc.Run("mount", ["--bind", src, Path.Combine(mnt, dst)]);
+            foreach (var (src, dst) in new[] { ("/dev", "dev"), ("/dev/pts", "dev/pts"), ("/proc", "proc"), ("/sys", "sys"), ("/run", "run") })
+            {
+                Directory.CreateDirectory(Path.Combine(mnt, dst));
+                await Proc.Run("mount", ["--bind", src, Path.Combine(mnt, dst)]);
+            }
+            if (plan.Uefi && Directory.Exists("/sys/firmware/efi/efivars"))
+                await Proc.Run("mount", ["--bind", "/sys/firmware/efi/efivars", Path.Combine(mnt, "sys/firmware/efi/efivars")]);
         }
-        if (plan.Uefi && Directory.Exists("/sys/firmware/efi/efivars"))
-            await Proc.Run("mount", ["--bind", "/sys/firmware/efi/efivars", Path.Combine(mnt, "sys/firmware/efi/efivars")]);
         bool Has(string p) => File.Exists(Path.Combine(mnt, p.TrimStart('/')));
         Task<CommandResult> Chroot(params string[] cmd) => Proc.Run("chroot", [mnt, .. cmd], s.Token, Lines(s));
         string disk = plan.Target.DevicePath;
@@ -509,7 +512,8 @@ public static class LinuxMigrate
             {
                 // instalação normal (sem tocar no NVRAM deste PC) + a cópia em EFI/BOOT, que qualquer firmware acha sozinho
                 string id = Directory.Exists(Path.Combine(mnt, espMp.TrimStart('/'), "EFI")) ? Directory.GetDirectories(Path.Combine(mnt, espMp.TrimStart('/'), "EFI")).Select(Path.GetFileName).FirstOrDefault(n => n is not ("BOOT" or "Boot" or "Microsoft")) ?? "linux" : "linux";
-                await Must(Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", $"--bootloader-id={id}", "--no-nvram", "--recheck"), "grub-install (UEFI)");
+                await Must(nvram ? Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", $"--bootloader-id={id}", "--recheck")
+                                 : Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", $"--bootloader-id={id}", "--no-nvram", "--recheck"), "grub-install (UEFI)");
                 await Must(Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", "--removable", "--no-nvram"), "grub-install --removable");
             }
             else s.Log("Fedora/RHEL com UEFI: o shim e o GRUB assinados já estão na partição EFI copiada; só a configuração é refeita.");
@@ -521,5 +525,125 @@ public static class LinuxMigrate
         else if (Has("/usr/sbin/grub2-mkconfig")) await Must(Chroot("grub2-mkconfig", "-o", Directory.Exists(Path.Combine(mnt, "boot/grub2")) ? "/boot/grub2/grub.cfg" : "/boot/grub/grub.cfg"), "grub2-mkconfig");
         else if (Has("/usr/bin/grub-mkconfig") || Has("/usr/sbin/grub-mkconfig")) await Must(Chroot("grub-mkconfig", "-o", "/boot/grub/grub.cfg"), "grub-mkconfig");
         s.Log("GRUB instalado no disco novo.");
+    }
+
+    // ───────── reparar a inicialização de um Linux instalado ─────────
+
+    public sealed record InstalledLinux(string Name, string Loader, bool Uefi, string? BtrfsSubvol);
+
+    /// <summary>Confere se a partição é a raiz de um Linux instalado (etc/os-release + etc/fstab) e qual o carregador.</summary>
+    public static async Task<InstalledLinux?> Inspect(PartitionInfo p)
+    {
+        if (p.IsSystemVolume) return Describe("/", null);
+        string mp = Path.Combine("/run/libertyx", "olhar-" + Guid.NewGuid().ToString("N")[..6]);
+        Directory.CreateDirectory(mp);
+        try
+        {
+            if (!(await Proc.Run("mount", ["-o", "ro", p.DeviceNode!, mp])).Ok) return null;
+            try
+            {
+                if (File.Exists(Path.Combine(mp, "etc/fstab"))) return Describe(mp, null);
+                // Btrfs com subvolumes (Ubuntu: @, Fedora: root): o sistema está num deles
+                foreach (var sv in new[] { "@", "root", "@root", "rootfs" })
+                    if (File.Exists(Path.Combine(mp, sv, "etc/fstab"))) return Describe(Path.Combine(mp, sv), sv);
+                return null;
+            }
+            finally { await Proc.Run("umount", [mp]); }
+        }
+        finally { try { Directory.Delete(mp); } catch { } }
+    }
+
+    private static InstalledLinux Describe(string root, string? subvol)
+    {
+        string name = "Linux";
+        try
+        {
+            foreach (var l in File.ReadAllLines(Path.Combine(root, "etc/os-release")))
+                if (l.StartsWith("PRETTY_NAME=")) name = l[12..].Trim('"');
+        }
+        catch { }
+        string loader = File.Exists(Path.Combine(root, "boot/efi/loader/loader.conf")) || File.Exists(Path.Combine(root, "efi/loader/loader.conf")) ? "systemd-boot"
+            : Directory.Exists(Path.Combine(root, "boot/grub")) || Directory.Exists(Path.Combine(root, "boot/grub2")) || File.Exists(Path.Combine(root, "usr/sbin/grub-install")) || File.Exists(Path.Combine(root, "usr/sbin/grub2-install")) ? "grub" : "?";
+        return new InstalledLinux(name, loader, Directory.Exists("/sys/firmware/efi"), subvol);
+    }
+
+    /// <summary>
+    /// Reinstala o boot de um Linux instalado: monta a raiz e o que o fstab dele manda (/boot, /boot/efi,
+    /// /usr, /var), entra nele (chroot) e refaz initramfs, GRUB (com entrada no NVRAM deste computador
+    /// e a cópia de reserva em EFI/BOOT) ou systemd-boot. No sistema em uso, roda direto nele.
+    /// </summary>
+    public static async Task RepairBoot(PartitionInfo root, InstalledLinux info, OpSink s)
+    {
+        bool running = root.IsSystemVolume;
+        string mnt = running ? "/" : "/run/libertyx/reparar";
+        var mounted = new Stack<string>();
+        try
+        {
+            if (!running)
+            {
+                Directory.CreateDirectory(mnt);
+                await Must(Proc.Run("mount", info.BtrfsSubvol != null ? ["-o", "subvol=" + info.BtrfsSubvol, root.DeviceNode!, mnt] : [root.DeviceNode!, mnt]), "Montar a raiz");
+                mounted.Push(mnt);
+                // o que o fstab do sistema monta e o boot precisa
+                foreach (var (spec, mp, fs, opts) in Fstab(Path.Combine(mnt, "etc/fstab")).Where(x => x.mp is "/boot" or "/boot/efi" or "/efi" or "/usr" or "/var").OrderBy(x => x.mp.Length))
+                {
+                    string? dev = await Resolve(spec);
+                    if (dev == null) { s.Log($"Não achei {spec} ({mp}) — sigo sem ele."); continue; }
+                    string at = mnt + mp;
+                    Directory.CreateDirectory(at);
+                    var o = string.Join(',', opts.Split(',').Where(x => x.StartsWith("subvol=") || x.StartsWith("subvolid=")));
+                    var r = await Proc.Run("mount", o.Length > 0 ? ["-o", o, dev, at] : [dev, at]);
+                    if (r.Ok) { mounted.Push(at); s.Log($"{mp}: {dev}"); }
+                    else s.Log($"Não montou {mp} ({dev}): {r.Message.Trim()}");
+                }
+            }
+            var disk = root.Disk;
+            // o /boot pode estar em outro disco: no BIOS, o GRUB vai para o disco que tem o /boot
+            var plan = new Plan { Target = disk, Uefi = info.Uefi, Loader = info.Loader };
+            s.Log($"{info.Name} · {(info.Uefi ? "UEFI" : "BIOS")} · {info.Loader} · disco {disk.DevicePath}");
+            // a pasta EFI pode ter sumido (é justamente o boot quebrado); o que precisa é a partição EFI montada
+            bool espMounted = running
+                ? LinuxDiskSystem.ReadMounts().Any(m => m.MountPoint is "/boot/efi" or "/efi")
+                : mounted.Any(m => m == mnt + "/boot/efi" || m == mnt + "/efi");
+            if (info.Uefi && !espMounted)
+                throw new InvalidOperationException("Não achei a partição EFI do sistema (o fstab dele não a encontra). Confira se ela existe e se o fstab aponta para ela.");
+            // Fedora/RHEL com UEFI: o shim assinado já na partição EFI basta (o grub2-install quebraria o Secure Boot)
+            string espDir = Directory.Exists(Path.Combine(mnt, "boot/efi/EFI")) ? Path.Combine(mnt, "boot/efi/EFI") : Path.Combine(mnt, "efi/EFI");
+            bool shim = Directory.Exists(espDir) && Directory.EnumerateFiles(espDir, "shim*.efi", SearchOption.AllDirectories).Any();
+            await Bootloader(plan, [], mnt, freshEsp: !shim, s, nvram: true);
+            s.Log("Inicialização reparada. Reinicie e escolha o disco (ou a entrada do sistema) no menu de boot.");
+        }
+        finally
+        {
+            if (!running)
+            {
+                foreach (var b in new[] { "sys/firmware/efi/efivars", "run", "sys", "proc", "dev/pts", "dev" })
+                    await Proc.Run("umount", ["-l", Path.Combine(mnt, b)]);
+                while (mounted.Count > 0) await Proc.Run("umount", [mounted.Pop()]);
+            }
+        }
+    }
+
+    private static IEnumerable<(string spec, string mp, string fs, string opts)> Fstab(string path)
+    {
+        if (!File.Exists(path)) yield break;
+        foreach (var raw in File.ReadAllLines(path))
+        {
+            var l = raw.Trim();
+            if (l.Length == 0 || l.StartsWith('#')) continue;
+            var f = Regex.Split(l, @"\s+");
+            if (f.Length >= 4) yield return (f[0], f[1], f[2], f[3]);
+        }
+    }
+
+    /// <summary>UUID=, LABEL=, PARTUUID=, PARTLABEL= ou caminho → o /dev de agora.</summary>
+    private static async Task<string?> Resolve(string spec)
+    {
+        if (spec.StartsWith("/dev/") && !spec.StartsWith("/dev/disk/")) return File.Exists(spec) ? spec : null;
+        if (spec.StartsWith("/dev/disk/")) return LinuxDiskSystem.KernelNameOf(spec) is { } kn ? "/dev/" + kn : null;
+        int i = spec.IndexOf('=');
+        if (i <= 0) return null;
+        var r = await Proc.Run("blkid", ["-t", spec, "-o", "device"]);
+        return r.Ok ? r.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() : null;
     }
 }

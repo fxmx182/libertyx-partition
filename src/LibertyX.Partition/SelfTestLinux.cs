@@ -602,4 +602,34 @@ public static partial class SelfTest
             finally { await Proc.Run("umount", [mp]); }
         });
     }
+
+    /// <summary>Teste do reparo do boot (numa VM): <paramref name="partDev"/> é a raiz de um Linux instalado.</summary>
+    public static int RunRepair(string outPath, string partDev)
+    {
+        Task.Run(async () =>
+        {
+            W($"LibertyX Partition · teste de reparo do boot · {(Directory.Exists("/sys/firmware/efi") ? "UEFI" : "BIOS")}");
+            var sink = new OpSink();
+            sink.LogLine += l => W("   · " + l);
+            await Step("Reparar a inicialização", async () =>
+            {
+                var all = DiskSystem.Enumerate();
+                var p = all.SelectMany(d => d.Partitions).FirstOrDefault(x => x.DeviceNode == partDev);
+                if (p == null)
+                {
+                    foreach (var d in all) { W($"   {d.DevicePath} {d.StyleText} erro={d.Error}"); foreach (var q in d.Partitions) W($"      {q.DeviceNode} {FsDetect.Name(q.FileSystem)} @{q.Offset} {q.HeldBy}"); }
+                    Check(false, $"{partDev} não está na lista de discos");
+                    return;
+                }
+                var info = await LinuxMigrate.Inspect(p);
+                Check(info != null, $"Linux instalado reconhecido: {info?.Name} · {info?.Loader} · subvol={info?.BtrfsSubvol}");
+                if (info == null) return;
+                await LinuxMigrate.RepairBoot(p, info, sink);
+                Check(true, "reparo concluído");
+            });
+        }).Wait();
+        W(_fails == 0 ? "\nRESULTADO: TUDO OK" : $"\nRESULTADO: {_fails} FALHA(S)");
+        File.WriteAllText(outPath, Log.ToString(), System.Text.Encoding.UTF8);
+        return _fails;
+    }
 }

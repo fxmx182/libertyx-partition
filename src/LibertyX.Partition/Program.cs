@@ -19,6 +19,8 @@ internal static class Program
         if (st >= 0)
         {
             string outPath = st + 1 < args.Length ? args[st + 1] : "autoteste.txt";
+            int rp = Array.IndexOf(args, "--reparar");
+            if (rp >= 0 && rp + 1 < args.Length) Environment.Exit(SelfTest.RunRepair(outPath, args[rp + 1]));
             int mg = Array.IndexOf(args, "--migrar");
             if (mg >= 0 && mg + 1 < args.Length) Environment.Exit(SelfTest.RunMigrate(outPath, args[mg + 1]));
             Environment.Exit(SelfTest.Run(outPath, args.Contains("--vhd") || args.Contains("--loop")));
