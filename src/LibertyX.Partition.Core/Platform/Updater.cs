@@ -114,8 +114,28 @@ public static partial class Updater
 
     public static bool IsNewer(Info i) => CurrentBuild > 0 && i.Build > CurrentBuild;
 
-    /// <summary>Baixa o instalador para a pasta temporária e confere o tamanho.</summary>
+    /// <summary>
+    /// Baixa o instalador para a pasta temporária e confere o tamanho. Se o arquivo sumiu (uma versão
+    /// mais nova está sendo publicada naquele minuto), relê o versao.txt e tenta de novo, sem erro na cara.
+    /// </summary>
     public static async Task<string> Download(Info i, IProgress<double>? progress, CancellationToken ct)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return await DownloadOnce(i, progress, ct); }
+            catch (Exception ex) when (attempt < 4 && ex is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound } or IOException)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(attempt == 0 ? 2 : 15), ct);
+                if (await CheckFile(ct) is { } fresh && fresh.Build >= i.Build) i = fresh;
+            }
+            catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                throw new IOException("A versão nova está sendo publicada neste momento. Tente de novo em alguns minutos.");
+            }
+        }
+    }
+
+    private static async Task<string> DownloadOnce(Info i, IProgress<double>? progress, CancellationToken ct)
     {
         using var http = NewHttp();
         http.Timeout = TimeSpan.FromMinutes(20);

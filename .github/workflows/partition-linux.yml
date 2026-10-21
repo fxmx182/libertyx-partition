@@ -8,9 +8,12 @@ name: LibertyX Partition (Linux)
 on:
   push:
     branches: [main]
+    # o que é só do Windows não vira versão nova do Linux
     paths-ignore:
       - "**.md"
       - "installer/**"
+      - ".github/workflows/partition-windows.yml"
+      - "src/LibertyX.Partition.Core/Platform/Windows/**"
   workflow_dispatch:
 
 concurrency:
@@ -142,6 +145,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # as novidades juntam os commits desde a versão publicada antes
       - uses: actions/download-artifact@v4
         with:
           name: linux-x64
@@ -181,21 +186,31 @@ jobs:
           ls -la up
           ver=1.0.${{ github.run_number }}
           sha=$(echo "${{ github.sha }}" | cut -c1-7)
-          novidade=$(git log -1 --pretty=%s | cut -c1-400)
+          base="https://github.com/${{ github.repository }}/releases/download/linux-latest"
+          # novidades: os commits desde a versão no ar, sem os que são só do Windows
+          prev=$(curl -sfL "$base/versao.txt" | sed -n 's/^commit=//p' | tr -d '\r')
+          if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then subj=$(git log --pretty=%s "$prev..HEAD"); else subj=$(git log -1 --pretty=%s); fi
+          novidade=$(printf '%s\n' "$subj" | grep -v -E '^\s*Windows\b' | grep -v '^$' | paste -sd'·' | sed 's/·/ · /g' | cut -c1-400)
+          [ -n "$novidade" ] || novidade="Correções e melhorias"
+          # os pacotes que o app baixa ao se atualizar vão também com o número da versão no nome:
+          # quem está baixando a versão anterior não toma 404 enquanto esta sobe
+          for f in LibertyXPartition-x86_64.AppImage libertyx-partition_amd64.deb libertyx-partition.x86_64.rpm \
+                   LibertyXPartition-aarch64.AppImage libertyx-partition_arm64.deb libertyx-partition.aarch64.rpm; do
+            cp "up/$f" "up/$ver-$f"
+          done
           tam() { stat -c %s "up/$1"; }
           {
             echo "versao=$ver"; echo "commit=$sha"; echo "novidades=$novidade"
-            echo "appimage=LibertyXPartition-x86_64.AppImage"; echo "tamanho_appimage=$(tam LibertyXPartition-x86_64.AppImage)"
-            echo "deb=libertyx-partition_amd64.deb"; echo "tamanho_deb=$(tam libertyx-partition_amd64.deb)"
-            echo "rpm=libertyx-partition.x86_64.rpm"; echo "tamanho_rpm=$(tam libertyx-partition.x86_64.rpm)"
+            echo "appimage=$ver-LibertyXPartition-x86_64.AppImage"; echo "tamanho_appimage=$(tam LibertyXPartition-x86_64.AppImage)"
+            echo "deb=$ver-libertyx-partition_amd64.deb"; echo "tamanho_deb=$(tam libertyx-partition_amd64.deb)"
+            echo "rpm=$ver-libertyx-partition.x86_64.rpm"; echo "tamanho_rpm=$(tam libertyx-partition.x86_64.rpm)"
             echo "tar=LibertyXPartition-linux.tar.gz"; echo "tamanho_tar=$(tam LibertyXPartition-linux.tar.gz)"
-            echo "appimage_arm64=LibertyXPartition-aarch64.AppImage"; echo "tamanho_appimage_arm64=$(tam LibertyXPartition-aarch64.AppImage)"
-            echo "deb_arm64=libertyx-partition_arm64.deb"; echo "tamanho_deb_arm64=$(tam libertyx-partition_arm64.deb)"
-            echo "rpm_arm64=libertyx-partition.aarch64.rpm"; echo "tamanho_rpm_arm64=$(tam libertyx-partition.aarch64.rpm)"
+            echo "appimage_arm64=$ver-LibertyXPartition-aarch64.AppImage"; echo "tamanho_appimage_arm64=$(tam LibertyXPartition-aarch64.AppImage)"
+            echo "deb_arm64=$ver-libertyx-partition_arm64.deb"; echo "tamanho_deb_arm64=$(tam libertyx-partition_arm64.deb)"
+            echo "rpm_arm64=$ver-libertyx-partition.aarch64.rpm"; echo "tamanho_rpm_arm64=$(tam libertyx-partition.aarch64.rpm)"
             echo "tar_arm64=LibertyXPartition-linux-arm64.tar.gz"; echo "tamanho_tar_arm64=$(tam LibertyXPartition-linux-arm64.tar.gz)"
           } > up/versao.txt
-          (cd up && sha256sum *.AppImage *.deb *.rpm *.tar.gz > SHA256SUMS)
-          base="https://github.com/${{ github.repository }}/releases/download/linux-latest"
+          (cd up && sha256sum LibertyXPartition-*.AppImage libertyx-partition*.deb libertyx-partition*.rpm *.tar.gz > SHA256SUMS)
           notes="Versão $ver para Linux, compilada de $sha e aprovada no autoteste num disco loop (x64 e ARM64).
 
           Novidades: $novidade
@@ -204,5 +219,15 @@ jobs:
           Fedora, openSUSE, RHEL: $base/libertyx-partition.x86_64.rpm
           Qualquer distribuição (AppImage, sem instalar): $base/LibertyXPartition-x86_64.AppImage
           ARM64 (Raspberry Pi 4/5, notebooks ARM): os mesmos com _arm64 / aarch64."
-          gh release delete linux-latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create linux-latest up/* --title "LibertyX Partition (Linux) — build mais recente" --notes "$notes" --prerelease
+          # nunca apagar o release: sobe os arquivos por cima e o versao.txt por último (só aponta para o que já está no ar)
+          gh release view linux-latest >/dev/null 2>&1 || gh release create linux-latest --title "LibertyX Partition (Linux) — build mais recente" --notes "$notes" --prerelease --target "${{ github.sha }}"
+          gh release upload linux-latest $(ls up/* | grep -v '/versao.txt$') --clobber
+          gh release upload linux-latest up/versao.txt --clobber
+          gh release edit linux-latest --notes "$notes"
+          git tag -f linux-latest && git push -f origin refs/tags/linux-latest
+          # guarda só esta e a anterior com o número da versão no nome
+          keep=$(( ${{ github.run_number }} - 1 ))
+          gh release view linux-latest --json assets --jq '.assets[].name' | while read -r a; do
+            n=$(printf '%s' "$a" | sed -n 's/^1\.0\.\([0-9]\+\)-.*/\1/p')
+            if [ -n "$n" ] && [ "$n" -lt "$keep" ]; then gh release delete-asset linux-latest "$a" --yes; fi
+          done

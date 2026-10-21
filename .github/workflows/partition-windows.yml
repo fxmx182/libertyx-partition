@@ -8,10 +8,16 @@ name: LibertyX Partition (Windows)
 on:
   push:
     branches: [main]
+    # o que é só do Linux não vira versão nova do Windows
     paths-ignore:
       - "**.md"
+      - "tests/**"
       - "packaging/linux/**"
       - ".github/workflows/partition-linux.yml"
+      - "src/LibertyX.Partition.Core/Platform/Linux/**"
+      - "src/LibertyX.Partition/SelfTestLinux.cs"
+      - "src/LibertyX.Partition/ViewModels/Linux*.cs"
+      - "src/LibertyX.Partition/Views/Linux*"
   workflow_dispatch:
 
 concurrency:
@@ -31,6 +37,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # as novidades juntam os commits desde a versão publicada antes
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -108,14 +116,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete latest --yes --cleanup-tag 2>$null
+          $ver = "1.0.${{ github.run_number }}"
           $sha = "${{ github.sha }}".Substring(0,7)
           $base = "https://github.com/${{ github.repository }}/releases/download/latest"
-          # a primeira linha do commit vira o "O que mudou" que o app mostra ao oferecer a atualização
-          $novidade = (git log -1 --pretty=%s).Trim()
+          # novidades: os commits desde a versão no ar, sem os que são só do Linux
+          $prev = ((curl.exe -sL "$base/versao.txt") -split "`n" | Where-Object { $_ -like 'commit=*' } | Select-Object -First 1) -replace '^commit=', ''
+          $subjects = @()
+          if ($prev) { git cat-file -e "$prev^{commit}" 2>$null; if ($LASTEXITCODE -eq 0) { $subjects = @(git log --pretty=%s "$prev..HEAD") } }
+          if ($subjects.Count -eq 0) { $subjects = @(git log -1 --pretty=%s) }
+          $subjects = @($subjects | Where-Object { $_ -and $_ -notmatch '^\s*Linux\b' })
+          $novidade = if ($subjects.Count -gt 0) { $subjects -join ' · ' } else { 'Correções e melhorias' }
           if ($novidade.Length -gt 400) { $novidade = $novidade.Substring(0, 400) + "…" }
-          $notes = "Versão 1.0.${{ github.run_number }}, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nNovidades: $novidade`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"
-          # versao.txt: o app confere atualização por download direto (a API do GitHub limita a 60/h por IP)
+          $notes = "Versão $ver, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nNovidades: $novidade`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"
+          # o instalador desta versão também com nome próprio: quem está baixando a anterior não toma 404
+          Copy-Item dist/LibertyXPartition-Setup.exe "dist/LibertyXPartition-Setup-$ver.exe"
           $tam = (Get-Item dist/LibertyXPartition-Setup.exe).Length
-          "versao=1.0.${{ github.run_number }}`ncommit=$sha`nsetup=LibertyXPartition-Setup.exe`ntamanho=$tam`nportatil=LibertyXPartition.exe`nnovidades=$novidade" | Set-Content -Encoding utf8NoBOM dist/versao.txt
-          gh release create latest dist/LibertyXPartition-Setup.exe dist/LibertyXPartition.exe dist/versao.txt --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease
+          # versao.txt: o app confere atualização por download direto (a API do GitHub limita a 60/h por IP)
+          "versao=$ver`ncommit=$sha`nsetup=LibertyXPartition-Setup-$ver.exe`ntamanho=$tam`nportatil=LibertyXPartition.exe`nnovidades=$novidade" | Set-Content -Encoding utf8NoBOM dist/versao.txt
+          # nunca apagar o release: sobe os arquivos por cima e o versao.txt por último (só aponta para o que já está no ar)
+          gh release view latest *> $null
+          if ($LASTEXITCODE -ne 0) { gh release create latest --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease --target "${{ github.sha }}" }
+          gh release upload latest "dist/LibertyXPartition-Setup-$ver.exe" dist/LibertyXPartition-Setup.exe dist/LibertyXPartition.exe --clobber
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          gh release upload latest dist/versao.txt --clobber
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          gh release edit latest --notes $notes
+          git tag -f latest; git push -f origin refs/tags/latest
+          # guarda só esta e a anterior com nome de versão
+          gh release view latest --json assets --jq '.assets[].name' | ForEach-Object {
+            if ($_ -match '^LibertyXPartition-Setup-1\.0\.(\d+)\.exe$' -and [int]$Matches[1] -lt ${{ github.run_number }} - 1) { gh release delete-asset latest $_ --yes }
+          }
+          exit 0
