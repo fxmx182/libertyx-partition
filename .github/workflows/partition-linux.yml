@@ -190,7 +190,7 @@ jobs:
           # novidades: os commits desde a versão no ar, sem os que são só do Windows
           prev=$(curl -sfL "$base/versao.txt" | sed -n 's/^commit=//p' | tr -d '\r')
           if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then subj=$(git log --pretty=%s "$prev..HEAD"); else subj=$(git log -1 --pretty=%s); fi
-          novidade=$(printf '%s\n' "$subj" | grep -v -E '^\s*Windows\b' | grep -v '^$' | paste -sd'·' | sed 's/·/ · /g' | cut -c1-400)
+          novidade=$(printf '%s\n' "$subj" | grep -v -E '^\s*Windows\b' | awk 'NF { printf "%s%s", (n++ ? " · " : ""), $0 }' | cut -c1-400)
           [ -n "$novidade" ] || novidade="Correções e melhorias"
           # os pacotes que o app baixa ao se atualizar vão também com o número da versão no nome:
           # quem está baixando a versão anterior não toma 404 enquanto esta sobe

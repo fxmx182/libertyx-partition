@@ -510,7 +510,7 @@ public static partial class SelfTest
             var u = await Updater.Check();
             // sem resposta: limite de consultas do GitHub no IP compartilhado do CI — ambiente, não defeito
             if (u == null) { W("   (GitHub não respondeu à consulta de versão neste servidor — limite de consultas; não conta como falha)"); return; }
-            Check(u.Build > 0 && u.SetupUrl.EndsWith("LibertyXPartition-Setup.exe"),
+            Check(u.Build > 0 && System.Text.RegularExpressions.Regex.IsMatch(u.SetupUrl, @"/LibertyXPartition-Setup(-1\.0\.\d+)?\.exe$"),
                 $"release latest lido: versão {u?.Version}, instalador de {Fmt(u?.SetupSize)} (este build: 1.0.{Updater.CurrentBuild})");
         });
 
