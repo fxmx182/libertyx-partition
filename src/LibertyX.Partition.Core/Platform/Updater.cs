@@ -69,6 +69,8 @@ public static partial class Updater
             string txt = await http.GetStringAsync($"https://github.com/{Repo}/releases/download/{Tag}/versao.txt", ct);
             var kv = txt.Split('\n').Select(l => l.Split('=', 2)).Where(p => p.Length == 2).ToDictionary(p => p[0].Trim(), p => p[1].Trim());
             if (!kv.TryGetValue("versao", out var v) || !v.StartsWith("1.0.") || !int.TryParse(v[4..], out int build)) return null;
+            // cada sistema tem a sua versão: nunca oferecer a do outro
+            if (kv.TryGetValue("sistema", out var so) && so != (OperatingSystem.IsLinux() ? "linux" : "windows")) return null;
             string baseUrl = $"https://github.com/{Repo}/releases/download/{Tag}/";
             if (OperatingSystem.IsLinux())
             {

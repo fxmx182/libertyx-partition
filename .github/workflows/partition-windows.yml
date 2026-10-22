@@ -119,24 +119,23 @@ jobs:
           $ver = "1.0.${{ github.run_number }}"
           $sha = "${{ github.sha }}".Substring(0,7)
           $base = "https://github.com/${{ github.repository }}/releases/download/latest"
-          # novidades: os commits desde a versão no ar, sem os que são só do Linux
+          # Windows e Linux são produtos separados: só vira versão do Windows o commit que começa com
+          # "Windows:" (ou "Windows e Linux:" para o que vale para os dois). Sem isso (Linux, CI, testes),
+          # compila e testa, mas o app do Windows não vê atualização nenhuma.
           $prev = ((curl.exe -sL "$base/versao.txt") -split "`n" | Where-Object { $_ -like 'commit=*' } | Select-Object -First 1) -replace '^commit=', ''
           $subjects = @()
           if ($prev) { git cat-file -e "$prev^{commit}" 2>$null; if ($LASTEXITCODE -eq 0) { $subjects = @(git log --pretty=%s "$prev..HEAD") } }
           if ($subjects.Count -eq 0) { $subjects = @(git log -1 --pretty=%s) }
-          $all = @($subjects | Where-Object { $_ })
-          $subjects = @($subjects | Where-Object { $_ -and $_ -notmatch '^\s*Linux\b' })
-          # só commits do Linux desde a versão no ar (mesmo mexendo em arquivo comum, atrás de IsLinux):
-          # o Windows foi compilado e testado, mas não vira versão nova
-          if ($prev -and $all.Count -gt 0 -and $subjects.Count -eq 0) { Write-Output "::notice title=Sem versão nova::só mudanças do Linux desde a $prev"; exit 0 }
-          $novidade = if ($subjects.Count -gt 0) { $subjects -join ' · ' } else { 'Correções e melhorias' }
+          $mine = @($subjects | Where-Object { $_ -match '^\s*Windows\b' })
+          if ($mine.Count -eq 0) { Write-Output "::notice title=Sem versão nova::nenhum commit do Windows desde a $prev"; exit 0 }
+          $novidade = ($mine | ForEach-Object { $_ -replace '^\s*Windows( e Linux)?\s*:\s*', '' }) -join ' · '
           if ($novidade.Length -gt 400) { $novidade = $novidade.Substring(0, 400) + "…" }
           $notes = "Versão $ver, compilada de $sha e aprovada no autoteste num disco virtual do Windows.`n`nNovidades: $novidade`n`nInstalar (recomendado): $base/LibertyXPartition-Setup.exe`nPortátil, sem instalar: $base/LibertyXPartition.exe"
           # o instalador desta versão também com nome próprio: quem está baixando a anterior não toma 404
           Copy-Item dist/LibertyXPartition-Setup.exe "dist/LibertyXPartition-Setup-$ver.exe"
           $tam = (Get-Item dist/LibertyXPartition-Setup.exe).Length
           # versao.txt: o app confere atualização por download direto (a API do GitHub limita a 60/h por IP)
-          "versao=$ver`ncommit=$sha`nsetup=LibertyXPartition-Setup-$ver.exe`ntamanho=$tam`nportatil=LibertyXPartition.exe`nnovidades=$novidade" | Set-Content -Encoding utf8NoBOM dist/versao.txt
+          "sistema=windows`nversao=$ver`ncommit=$sha`nsetup=LibertyXPartition-Setup-$ver.exe`ntamanho=$tam`nportatil=LibertyXPartition.exe`nnovidades=$novidade" | Set-Content -Encoding utf8NoBOM dist/versao.txt
           # nunca apagar o release: sobe os arquivos por cima e o versao.txt por último (só aponta para o que já está no ar)
           gh release view latest *> $null
           if ($LASTEXITCODE -ne 0) { gh release create latest --title "LibertyX Partition (Windows) — build mais recente" --notes $notes --prerelease --target "${{ github.sha }}" }

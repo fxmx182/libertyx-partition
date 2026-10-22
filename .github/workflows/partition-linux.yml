@@ -187,11 +187,13 @@ jobs:
           ver=1.0.${{ github.run_number }}
           sha=$(echo "${{ github.sha }}" | cut -c1-7)
           base="https://github.com/${{ github.repository }}/releases/download/linux-latest"
-          # novidades: os commits desde a versão no ar, sem os que são só do Windows
+          # Windows e Linux são produtos separados: só vira versão do Linux o commit que começa com
+          # "Linux:" (ou "Windows e Linux:"); sem isso, compila e testa, mas não publica
           prev=$(curl -sfL "$base/versao.txt" | sed -n 's/^commit=//p' | tr -d '\r')
           if [ -n "$prev" ] && git cat-file -e "$prev^{commit}" 2>/dev/null; then subj=$(git log --pretty=%s "$prev..HEAD"); else subj=$(git log -1 --pretty=%s); fi
-          novidade=$(printf '%s\n' "$subj" | grep -v -E '^\s*Windows\b' | awk 'NF { printf "%s%s", (n++ ? " · " : ""), $0 }' | cut -c1-400)
-          [ -n "$novidade" ] || novidade="Correções e melhorias"
+          mine=$(printf '%s\n' "$subj" | grep -E '^\s*(Linux|Windows e Linux)\b' || true)
+          if [ -z "$mine" ]; then echo "::notice title=Sem versão nova::nenhum commit do Linux desde a $prev"; exit 0; fi
+          novidade=$(printf '%s\n' "$mine" | sed -E 's/^\s*(Windows e Linux|Linux)\s*:\s*//' | awk 'NF { printf "%s%s", (n++ ? " · " : ""), $0 }' | cut -c1-400)
           # os pacotes que o app baixa ao se atualizar vão também com o número da versão no nome:
           # quem está baixando a versão anterior não toma 404 enquanto esta sobe
           for f in LibertyXPartition-x86_64.AppImage libertyx-partition_amd64.deb libertyx-partition.x86_64.rpm \
@@ -200,7 +202,7 @@ jobs:
           done
           tam() { stat -c %s "up/$1"; }
           {
-            echo "versao=$ver"; echo "commit=$sha"; echo "novidades=$novidade"
+            echo "sistema=linux"; echo "versao=$ver"; echo "commit=$sha"; echo "novidades=$novidade"
             echo "appimage=$ver-LibertyXPartition-x86_64.AppImage"; echo "tamanho_appimage=$(tam LibertyXPartition-x86_64.AppImage)"
             echo "deb=$ver-libertyx-partition_amd64.deb"; echo "tamanho_deb=$(tam libertyx-partition_amd64.deb)"
             echo "rpm=$ver-libertyx-partition.x86_64.rpm"; echo "tamanho_rpm=$(tam libertyx-partition.x86_64.rpm)"
