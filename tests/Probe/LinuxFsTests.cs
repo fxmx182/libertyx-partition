@@ -55,6 +55,28 @@ public static class LinuxFsTests
         return fails == 0 ? 0 : 1;
     }
 
+    /// <summary>
+    /// Sem udev (contêiner que ligou antes do pendrive): o disco e as partições têm de abrir mesmo
+    /// sem /dev/sdX. Lista os discos cujo nome começa com o prefixo e lê o 1º setor de cada nó.
+    /// </summary>
+    public static int Nodes(string prefix)
+    {
+        Console.WriteLine("== nós de /dev sem udev");
+        Environment.SetEnvironmentVariable("LIBERTYX_LOOPS", "1");
+        var disks = new LibertyX.Partition.Core.Platform.Linux.LinuxDiskSystem().Enumerate().Where(d => d.KernelName.StartsWith(prefix)).ToList();
+        Check(disks.Count > 0, $"disco {prefix}* listado");
+        foreach (var d in disks)
+            foreach (var path in new[] { d.DevicePath }.Concat(d.Partitions.Select(p => p.DeviceNode)))
+            {
+                bool ok;
+                try { using var f = File.OpenHandle(path!); ok = RandomAccess.Read(f, new byte[512], 0) == 512; }
+                catch (Exception e) { Console.WriteLine("   " + e.Message); ok = false; }
+                Check(ok, $"{path} abre e lê");
+            }
+        Console.WriteLine(fails == 0 ? "RESULTADO: TUDO OK" : $"RESULTADO: {fails} FALHA(S)");
+        return fails == 0 ? 0 : 1;
+    }
+
     public static int Run(string dir)
     {
         foreach (var (img, kind) in new[] { ("xfs.img", FsKind.Xfs), ("btrfs.img", FsKind.Btrfs) })

@@ -44,7 +44,7 @@ public static unsafe class KernelSync
         // o cache de cada partição pode guardar o que havia antes da escrita direta no disco
         foreach (var pd in Directory.GetDirectories($"/sys/block/{name}").Where(p => File.Exists(Path.Combine(p, "partition"))))
         {
-            int pf = Open("/dev/" + Path.GetFileName(pd), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+            int pf = Open(DevNodes.Node(Path.GetFileName(pd)), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
             if (pf >= 0) { IoctlInt(pf, BLKFLSBUF, 0); Close(pf); }
         }
     }
@@ -114,7 +114,7 @@ public static unsafe class KernelSync
             foreach (var pd in Directory.GetDirectories($"/sys/block/{name}").Where(p => File.Exists(Path.Combine(p, "partition"))))
                 if (long.TryParse(Read(Path.Combine(pd, "start")), out long st) && st * 512 == offset)
                 {
-                    string node = "/dev/" + Path.GetFileName(pd);
+                    string node = DevNodes.Node(Path.GetFileName(pd));
                     if (File.Exists(node)) return node;
                 }
             Thread.Sleep(250);

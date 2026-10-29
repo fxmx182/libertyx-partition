@@ -12,6 +12,7 @@ if (args.Length > 1 && args[1] == "gravar") return FlashTests.Run(dir);
 if (args.Length > 1 && args[1] == "luks") return LuksTests.Run(dir);
 if (args.Length > 1 && args[1] == "linux") return LinuxFsTests.Run(dir);
 if (args.Length > 1 && args[1] == "escala") return LinuxFsTests.Scale();
+if (args.Length > 1 && args[1] == "dev") return LinuxFsTests.Nodes(args.Length > 2 ? args[2] : "loop");
 if (args.Length > 1 && args[1] == "dump") return MacTests.Dump(args[0]);   // lista o que o leitor vê numa imagem qualquer   // só os testes de Mac, rápido
 var manifest = File.ReadAllLines(Path.Combine(dir, "manifest.txt")).Where(l => l.Length > 66 && l[64] == ' ')
     .ToDictionary(l => l[66..].Trim(), l => l[..64]);

@@ -67,6 +67,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
         {
             var fi = new FileInfo(devPath);
             string full = fi.LinkTarget != null ? Path.GetFullPath(fi.ResolveLinkTarget(true)!.FullName) : devPath;
+            if (full.StartsWith(DevNodes.AltDir + "/")) return Path.GetFileName(full);
             return full.StartsWith("/dev/") ? full[5..] : null;
         }
         catch { return null; }
@@ -226,7 +227,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
             if (virt) model = name.StartsWith("md") ? $"RAID {Sys(Path.Combine(dir, "md/level"))} ({name})" : Sys(Path.Combine(dir, "dm/name"));
             var d = new DiskInfo
             {
-                Number = StableNumber(name), DevicePath = "/dev/" + name, KernelName = name,
+                Number = StableNumber(name), DevicePath = DevNodes.Node(name), KernelName = name,
                 Model = model.Trim().Length > 0 ? model.Trim() : name,
                 Size = sectors512 * 512,
                 SectorSize = int.TryParse(Sys(Path.Combine(dir, "queue/logical_block_size")), out var ls) && ls > 0 ? ls : 512,
@@ -275,7 +276,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
                     pname = k.name; pmm = k.majMin;
                     if (k.size != p.Length) p.HeldBy = $"o kernel vê {Operations.DiskOperations.Size(k.size)} — releia a tabela";
                 }
-                p.DeviceNode = "/dev/" + pname;
+                p.DeviceNode = DevNodes.Node(pname);
                 p.VolumePath = p.DeviceNode;
                 var pu = Udev(pmm);
                 if (pu.TryGetValue("ID_FS_UUID", out var uu)) p.FsUuid = uu;
