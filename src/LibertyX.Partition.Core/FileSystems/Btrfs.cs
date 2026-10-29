@@ -47,11 +47,11 @@ public sealed class BtrfsVolume
             var v = new BtrfsVolume(dev) { UsedMirrorSuperblock = at != 0x10000 };
             if (!v.Parse(sb)) continue;
             try { v.LoadChunks(sb); }
-            catch (Exception ex) { err = "Mapa de chunks ilegível: " + ex.Message; return null; }
-            if (v.NumDevices > 1) err = $"Volume Btrfs com {v.NumDevices} dispositivos: só este é lido (perfis RAID entre discos não são montados aqui).";
+            catch (Exception ex) { err = L.T("Mapa de chunks ilegível: ") + ex.Message; return null; }
+            if (v.NumDevices > 1) err = L.T($"Volume Btrfs com {v.NumDevices} dispositivos: só este é lido (perfis RAID entre discos não são montados aqui).");
             return v;
         }
-        err = "Superbloco Btrfs ilegível.";
+        err = L.T("Superbloco Btrfs ilegível.");
         return null;
     }
 
@@ -382,7 +382,7 @@ public sealed class BtrfsVolume
                     return ReadAll(z, ramBytes);
                 }
             case 2: return Lzo.BtrfsSegments(src, ramBytes, (int)SectorSize);
-            default: throw new NotSupportedException($"compressão {kind}");
+            default: throw new NotSupportedException(L.T($"compressão {kind}"));
         }
     }
 

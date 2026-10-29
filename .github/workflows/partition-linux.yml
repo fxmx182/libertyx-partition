@@ -41,6 +41,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # texto novo sem tradução aparece em português no app em inglês/espanhol: avisa, não reprova
+      - name: Traduções (en, es)
+        if: matrix.arch == 'x64'
+        run: python3 tests/i18n/conferir.py --ci
+
       - name: Ferramentas de disco e de empacotamento
         run: |
           sudo apt-get update -qq

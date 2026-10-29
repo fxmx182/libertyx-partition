@@ -15,6 +15,11 @@ internal static class Program
             Environment.SetEnvironmentVariable("LIBERTYX_READY", pr["--pronto=".Length..]);
             args = args.Where(a => a != pr).ToArray();
         }
+        // idioma da interface: o do sistema que a instância sem root viu vem como argumento (o pkexec
+        // não repassa LANG); o autoteste confere textos e roda sempre em português
+        string? idioma = args.FirstOrDefault(a => a.StartsWith("--idioma="))?["--idioma=".Length..];
+        args = args.Where(a => !a.StartsWith("--idioma=")).ToArray();
+        L.Init(idioma, args.Contains("--selftest") ? "pt" : null);
         int st = Array.IndexOf(args, "--selftest");
         if (st >= 0)
         {

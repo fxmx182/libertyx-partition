@@ -3,6 +3,10 @@
     <RootNamespace>LibertyX.Partition.Core</RootNamespace>
     <IsTrimmable>false</IsTrimmable>
   </PropertyGroup>
+  <!-- traduções da interface (a chave é o texto em português; ver L.cs) -->
+  <ItemGroup>
+    <EmbeddedResource Include="Lang\*.json" LogicalName="Lang.%(Filename).json" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="SharpCompress" Version="0.50.5" />
     <PackageReference Include="System.IO.Hashing" Version="10.0.12" />

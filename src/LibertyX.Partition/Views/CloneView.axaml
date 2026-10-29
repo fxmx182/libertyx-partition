@@ -1,4 +1,5 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" x:Class="LibertyX.Partition.Views.CloneView" x:DataType="vm:CloneViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" x:Class="LibertyX.Partition.Views.CloneView" x:DataType="vm:CloneViewModel">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Margin="0,4,0,18">
       <TextBlock Classes="h1" Text="{Binding Title}" />
@@ -8,35 +9,35 @@
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="330" /></Grid.ColumnDefinitions>
         <StackPanel Spacing="10">
-          <TextBlock Classes="section" Text="ORIGEM" />
+          <TextBlock Classes="section" Text="{l:T 'ORIGEM'}" />
           <c:PartitionRibbon Items="{Binding SourceMap}" Compact="True" />
-          <TextBlock Classes="section" Text="DESTINO, DEPOIS DA CÓPIA" Margin="0,6,0,0" />
+          <TextBlock Classes="section" Text="{l:T 'DESTINO, DEPOIS DA CÓPIA'}" Margin="0,6,0,0" />
           <c:PartitionRibbon Items="{Binding TargetMap}" />
           <ItemsControl ItemsSource="{Binding Notes}">
             <ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Apagado}" Margin="0,2" /></DataTemplate></ItemsControl.ItemTemplate>
           </ItemsControl>
         </StackPanel>
         <StackPanel Grid.Column="2" Spacing="8">
-          <CheckBox IsChecked="{Binding SystemOnly}" Content="Só as partições do sistema" IsVisible="{Binding Migrate}" />
-          <CheckBox IsChecked="{Binding FitToTarget}" Content="Usar o disco novo inteiro" />
-          <CheckBox IsChecked="{Binding UsedOnly}" Content="Copiar só o espaço em uso" ToolTip.Tip="Mais rápido, mas arquivos apagados (o espaço livre) não vão para o disco novo. Desmarque se ainda for recuperar algo dele." />
+          <CheckBox IsChecked="{Binding SystemOnly}" Content="{l:T 'Só as partições do sistema'}" IsVisible="{Binding Migrate}" />
+          <CheckBox IsChecked="{Binding FitToTarget}" Content="{l:T 'Usar o disco novo inteiro'}" />
+          <CheckBox IsChecked="{Binding UsedOnly}" Content="{l:T 'Copiar só o espaço em uso'}" ToolTip.Tip="{l:T 'Mais rápido, mas arquivos apagados (o espaço livre) não vão para o disco novo. Desmarque se ainda for recuperar algo dele.'}" />
           <CheckBox IsChecked="{Binding UseVss}" Content="{x:Static vm:Ui.SnapshotClone}" />
-          <CheckBox IsChecked="{Binding MakeBootable}" Content="Preparar para iniciar (bcdboot)" IsVisible="{x:Static vm:Ui.IsWin}" />
+          <CheckBox IsChecked="{Binding MakeBootable}" Content="{l:T 'Preparar para iniciar (bcdboot)'}" IsVisible="{x:Static vm:Ui.IsWin}" />
           <Button Command="{Binding ShrinkCommand}" IsVisible="{Binding CanShrink}" HorizontalAlignment="Stretch">
             <TextBlock Text="{Binding ShrinkText}" TextWrapping="Wrap" />
           </Button>
           <Button Classes="primary" Command="{Binding RunCommand}" IsEnabled="{Binding CanRun}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="16,12" Margin="0,6,0,0">
-            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcPlay}" /><TextBlock Text="Começar" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcPlay}" /><TextBlock Text="{l:T 'Começar'}" /></StackPanel>
           </Button>
         </StackPanel>
       </Grid>
     </Border>
     <Grid ColumnDefinitions="*,24,*">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="10"><TextBlock Classes="section" Text="1 · DISCO DE ORIGEM" /><ContentControl Content="{Binding Source}" /></StackPanel>
+        <StackPanel Spacing="10"><TextBlock Classes="section" Text="{l:T '1 · DISCO DE ORIGEM'}" /><ContentControl Content="{Binding Source}" /></StackPanel>
       </ScrollViewer>
       <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="10"><TextBlock Classes="section" Text="2 · DISCO DE DESTINO (SERÁ APAGADO)" /><ContentControl Content="{Binding Target}" /></StackPanel>
+        <StackPanel Spacing="10"><TextBlock Classes="section" Text="{l:T '2 · DISCO DE DESTINO (SERÁ APAGADO)'}" /><ContentControl Content="{Binding Target}" /></StackPanel>
       </ScrollViewer>
     </Grid>
   </DockPanel>

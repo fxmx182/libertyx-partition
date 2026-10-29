@@ -75,7 +75,7 @@ public sealed class ExtVolume
                 if (ci != null && ci.Group == 1) { sb = c; info = ci; v.UsedBackupSuperblock = true; break; }
             }
         }
-        if (info == null) { error = "Superbloco ext não encontrado (nem as cópias de reserva)."; return null; }
+        if (info == null) { error = L.T("Superbloco ext não encontrado (nem as cópias de reserva)."); return null; }
         v.Info = info;
         v.InodesCount = U32(sb, 0);
         v.InodesPerGroup = U32(sb, 40);
@@ -85,7 +85,7 @@ public sealed class ExtVolume
         v.FileType = (incompat & 0x2) != 0;
         int descSize = v.Is64 ? Math.Max(32, (int)U16(sb, 0xFE)) : 32;
         long groups = (info.Blocks - info.FirstDataBlock + info.BlocksPerGroup - 1) / info.BlocksPerGroup;
-        if (v.InodeSize < 128 || v.InodeSize > 4096 || v.InodesPerGroup == 0 || groups <= 0 || groups > 50_000_000) { error = "Parâmetros ext inválidos."; return null; }
+        if (v.InodeSize < 128 || v.InodeSize > 4096 || v.InodesPerGroup == 0 || groups <= 0 || groups > 50_000_000) { error = L.T("Parâmetros ext inválidos."); return null; }
         long gdtOfs = (info.FirstDataBlock + 1) * info.BlockSize;
         if (v.UsedBackupSuperblock) gdtOfs = (info.BlocksPerGroup + info.FirstDataBlock + 1) * info.BlockSize;
         var gdt = dev.ReadBytes(gdtOfs, (int)Math.Min(groups * descSize, 64L << 20));

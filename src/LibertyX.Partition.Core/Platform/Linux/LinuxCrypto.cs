@@ -46,9 +46,9 @@ public static class LinuxCrypto
 
     private static string Msg(CommandResult r) => r.ExitCode switch
     {
-        2 => "Senha ou chave incorreta.",
-        5 => "O dispositivo já está aberto ou em uso.",
-        _ => r.Message.Split('\n', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim() ?? $"cryptsetup terminou com o código {r.ExitCode}",
+        2 => L.T("Senha ou chave incorreta."),
+        5 => L.T("O dispositivo já está aberto ou em uso."),
+        _ => r.Message.Split('\n', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim() ?? L.T($"cryptsetup terminou com o código {r.ExitCode}"),
     };
 
     /// <summary>Nome do mapeamento no padrão do sistema (luks-&lt;uuid&gt;), que o udisks e o systemd reconhecem.</summary>
@@ -66,7 +66,7 @@ public static class LinuxCrypto
         args.Add(keyFile != null ? $"--key-file={keyFile}" : "--key-file=-");
         args.AddRange([v.Device, name]);
         var r = await Proc.Run("cryptsetup", args, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); }, stdin: keyFile == null ? secret : null);
-        if (!r.Ok) throw new InvalidOperationException("Não abriu: " + Msg(r));
+        if (!r.Ok) throw new InvalidOperationException(L.T("Não abriu: ") + Msg(r));
         KernelSync.Settle();
         return "/dev/mapper/" + name;
     }
@@ -81,7 +81,7 @@ public static class LinuxCrypto
             if (!u.Ok)
             {
                 var who = LinuxDiskSystem.WhoUses(mp);
-                throw new InvalidOperationException($"{mp} está em uso{(who.Count > 0 ? " por: " + string.Join(", ", who.Take(6)) : "")}.");
+                throw new InvalidOperationException(L.T($"{mp} está em uso{(who.Count > 0 ? L.T(" por: ") + string.Join(", ", who.Take(6)) : "")}."));
             }
         }
         // LVM dentro do LUKS: desativa o grupo antes de fechar
@@ -91,7 +91,7 @@ public static class LinuxCrypto
                 if (Read($"/sys/class/block/{h}/dm/uuid").StartsWith("LVM-"))
                     await Proc.Run("lvm", ["lvchange", "-an", "/dev/mapper/" + Read($"/sys/class/block/{h}/dm/name")], s.Token);
         var r = await Proc.Run("cryptsetup", ["close", v.MapperName], s.Token);
-        if (!r.Ok) throw new InvalidOperationException("Não fechou: " + Msg(r));
+        if (!r.Ok) throw new InvalidOperationException(L.T("Não fechou: ") + Msg(r));
     }
 
     private static async Task<T> WithSecretFiles<T>(Func<string[], Task<T>> work, params string[] secrets)
@@ -118,7 +118,7 @@ public static class LinuxCrypto
     {
         Need();
         var r = await Proc.Run("cryptsetup", ["luksAddKey", "-q", $"--key-file={f[0]}", v.Device, f[1]], s.Token);
-        if (!r.Ok) throw new InvalidOperationException("Não adicionou: " + Msg(r));
+        if (!r.Ok) throw new InvalidOperationException(L.T("Não adicionou: ") + Msg(r));
         return true;
     }, existing, added);
 
@@ -126,14 +126,14 @@ public static class LinuxCrypto
     {
         Need();
         var r = await Proc.Run("cryptsetup", ["luksRemoveKey", "-q", "--key-file=-", v.Device], s.Token, stdin: secret);
-        if (!r.Ok) throw new InvalidOperationException("Não removeu: " + Msg(r));
+        if (!r.Ok) throw new InvalidOperationException(L.T("Não removeu: ") + Msg(r));
     }
 
     public static async Task ChangeKey(Volume v, string oldSecret, string newSecret, OpSink s) => await WithSecretFiles(async f =>
     {
         Need();
         var r = await Proc.Run("cryptsetup", ["luksChangeKey", "-q", $"--key-file={f[0]}", v.Device, f[1]], s.Token);
-        if (!r.Ok) throw new InvalidOperationException("Não trocou: " + Msg(r));
+        if (!r.Ok) throw new InvalidOperationException(L.T("Não trocou: ") + Msg(r));
         return true;
     }, oldSecret, newSecret);
 
@@ -146,7 +146,7 @@ public static class LinuxCrypto
         Need();
         string file = Path.Combine(folder, $"cabecalho-luks-{v.Part.KernelName ?? "volume"}-{(v.Uuid ?? "")[..Math.Min(8, (v.Uuid ?? "").Length)]}-{DateTime.Now:yyyyMMdd-HHmmss}.img");
         var r = await Proc.Run("cryptsetup", ["luksHeaderBackup", v.Device, "--header-backup-file", file], s.Token);
-        if (!r.Ok) throw new InvalidOperationException("Não salvou: " + Msg(r));
+        if (!r.Ok) throw new InvalidOperationException(L.T("Não salvou: ") + Msg(r));
         LinuxSession.GiveBack(file, false);
         return file;
     }
@@ -155,7 +155,7 @@ public static class LinuxCrypto
     {
         Need();
         var r = await Proc.Run("cryptsetup", ["luksHeaderRestore", "-q", v.Device, "--header-backup-file", file], s.Token);
-        if (!r.Ok) throw new InvalidOperationException("Não restaurou: " + Msg(r));
+        if (!r.Ok) throw new InvalidOperationException(L.T("Não restaurou: ") + Msg(r));
     }
 
     public sealed record KeySlot(string Id, string Type, string? Kdf);
@@ -259,7 +259,7 @@ public static class LinuxVolumes
                 string next = i + 1 < lines.Length ? lines[i + 1].Trim() : "";
                 string sync = i + 2 < lines.Length && lines[i + 2].Contains('%') ? lines[i + 2].Trim() : "";
                 var m = System.Text.RegularExpressions.Regex.Match(next, @"\[(\d+)/(\d+)\]\s*\[([U_]+)\]");
-                res.Add(new Md(parts[0], level, state + (m.Success ? $" · {m.Groups[2].Value} de {m.Groups[1].Value} discos ativos [{m.Groups[3].Value}]" : ""), devs, sync));
+                res.Add(new Md(parts[0], level, state + (m.Success ? Core.L.T($" · {m.Groups[2].Value} de {m.Groups[1].Value} discos ativos [{m.Groups[3].Value}]") : ""), devs, sync));
             }
         }
         catch { }

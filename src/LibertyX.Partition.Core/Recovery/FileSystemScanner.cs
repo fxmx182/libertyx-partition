@@ -54,11 +54,11 @@ public static partial class FileSystemScanner
                 default:
                     // Boot destruído? Tenta as cópias de reserva de cada formato.
                     var n2 = NtfsVolume.Open(vol, out _);
-                    if (n2 != null) { r = ScanNtfs(n2, opt, progress, ct); r.Log.Add("Setor de boot destruído — usada a cópia de reserva do NTFS."); break; }
+                    if (n2 != null) { r = ScanNtfs(n2, opt, progress, ct); r.Log.Add(L.T("Setor de boot destruído — usada a cópia de reserva do NTFS.")); break; }
                     var f2 = FatVolume.Open(vol, out _);
-                    if (f2 != null) { r = ScanFat(f2, opt, progress, ct); r.Log.Add("Setor de boot destruído — usada a cópia de reserva do FAT32."); break; }
+                    if (f2 != null) { r = ScanFat(f2, opt, progress, ct); r.Log.Add(L.T("Setor de boot destruído — usada a cópia de reserva do FAT32.")); break; }
                     var x2 = ExFatVolume.Open(vol, out _);
-                    if (x2 != null) { r = ScanExFat(x2, opt, progress, ct); r.Log.Add("Setor de boot destruído — usada a cópia de reserva do exFAT."); break; }
+                    if (x2 != null) { r = ScanExFat(x2, opt, progress, ct); r.Log.Add(L.T("Setor de boot destruído — usada a cópia de reserva do exFAT.")); break; }
                     break;
             }
         }
@@ -67,9 +67,9 @@ public static partial class FileSystemScanner
 
         if (r == null)
         {
-            r = new ScanResult { Root = new RecoveredItem { Id = 0, Name = "Volume", IsDirectory = true, Origin = ItemOrigin.Live } };
+            r = new ScanResult { Root = new RecoveredItem { Id = 0, Name = L.T("Volume"), IsDirectory = true, Origin = ItemOrigin.Live } };
             r.FileSystem = FsDetect.Name(kind);
-            r.Log.Add(err ?? $"Sistema de arquivos {FsDetect.Name(kind)} não é lido pela varredura rápida — use a varredura profunda.");
+            r.Log.Add(err ?? L.T($"Sistema de arquivos {FsDetect.Name(kind)} não é lido pela varredura rápida — use a varredura profunda."));
         }
         return r;
     }
@@ -102,14 +102,14 @@ public static partial class FileSystemScanner
         string label = v.ReadLabel() ?? "";
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = 5, Name = label.Length > 0 ? label : "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            Root = new RecoveredItem { Id = 5, Name = label.Length > 0 ? label : L.T("Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
             FileSystem = "NTFS", Label = label, ClusterSize = v.ClusterSize,
         };
-        if (v.UsedBackupBoot) res.Log.Add("Setor de boot principal danificado — usada a cópia do fim da partição.");
+        if (v.UsedBackupBoot) res.Log.Add(L.T("Setor de boot principal danificado — usada a cópia do fim da partição."));
 
-        progress?.Report(new("Lendo o mapa de clusters", 0, 0, 0, 1));
+        progress?.Report(new(L.T("Lendo o mapa de clusters"), 0, 0, 0, 1));
         byte[]? bmp = null;
-        try { bmp = v.LoadBitmap(); } catch (Exception ex) { res.Log.Add("Mapa de clusters ($Bitmap) ilegível: " + ex.Message); }
+        try { bmp = v.LoadBitmap(); } catch (Exception ex) { res.Log.Add(L.T("Mapa de clusters ($Bitmap) ilegível: ") + ex.Message); }
         if (bmp != null)
         {
             var b = bmp;
@@ -135,7 +135,7 @@ public static partial class FileSystemScanner
                 if (run.Sparse) { index += n / rs; continue; }
                 int got;
                 try { got = v.Dev.ReadBytes(run.Lcn * v.ClusterSize + off, buf.AsSpan(0, n)); }
-                catch (MediaReadException) { got = 0; bad += n / rs; res.Log.Add($"Setores ilegíveis no MFT (registros {index}–{index + n / rs})."); }
+                catch (MediaReadException) { got = 0; bad += n / rs; res.Log.Add(L.T($"Setores ilegíveis no MFT (registros {index}–{index + n / rs}).")); }
                 for (int p = 0; p + rs <= got; p += rs, index++)
                 {
                     var rec = NtfsVolume.ParseRecordStatic(buf.AsSpan(p, rs), index);
@@ -162,12 +162,12 @@ public static partial class FileSystemScanner
                 }
                 if (got < n) index += (n - got) / rs;
                 vcnBytes += n;
-                progress?.Report(new("Lendo a tabela de arquivos (MFT)", (double)index / total, nodes.Count, index, total));
+                progress?.Report(new(L.T("Lendo a tabela de arquivos (MFT)"), (double)index / total, nodes.Count, index, total));
             }
         }
 
         // Monta as pastas e os itens.
-        var lost = new RecoveredItem { Id = -2, Name = "$Sem pasta (órfãos)", IsDirectory = true, Origin = ItemOrigin.Orphan, Note = "pasta original não existe mais", Condition = Condition.Unknown };
+        var lost = new RecoveredItem { Id = -2, Name = L.T("$Sem pasta (órfãos)"), IsDirectory = true, Origin = ItemOrigin.Orphan, Note = L.T("pasta original não existe mais"), Condition = Condition.Unknown };
         bool lostUsed = false;
         foreach (var n in nodes.Values)
         {
@@ -183,8 +183,8 @@ public static partial class FileSystemScanner
                 var src = v.DataSourceFor(n.Data, n.Ext);
                 item.Data = src;
                 item.Size = src.Length;
-                if (n.Data.Encrypted) item.Note = "criptografado (EFS) — sem a chave o conteúdo sai ilegível";
-                else if (n.Data.Compressed) item.Note = "comprimido pelo NTFS";
+                if (n.Data.Encrypted) item.Note = L.T("criptografado (EFS) — sem a chave o conteúdo sai ilegível");
+                else if (n.Data.Compressed) item.Note = L.T("comprimido pelo NTFS");
                 item.Condition = n.InUse ? Condition.Excellent : !n.Data.NonResident ? Condition.Excellent : ConditionNtfs(n, bmp);
             }
             else item.Condition = n.InUse ? Condition.Excellent : Condition.Good;
@@ -212,8 +212,8 @@ public static partial class FileSystemScanner
         Flatten(res.Root, res.Items);
         // Lixeira: $I guarda o nome original do $R.
         RecycleBin.Annotate(res.Root);
-        if (bad > 0) res.Log.Add($"{bad} registros MFT ficaram em setores ilegíveis.");
-        res.Log.Add($"MFT: {total:N0} registros lidos, {res.Items.Count(i => !i.IsDirectory):N0} arquivos listados.");
+        if (bad > 0) res.Log.Add(L.T($"{bad} registros MFT ficaram em setores ilegíveis."));
+        res.Log.Add(L.T($"MFT: {total:N0} registros lidos, {res.Items.Count(i => !i.IsDirectory):N0} arquivos listados."));
         return res;
     }
 
@@ -257,10 +257,10 @@ public static partial class FileSystemScanner
     {
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = 0, Name = "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            Root = new RecoveredItem { Id = 0, Name = L.T("Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
             FileSystem = FsDetect.Name(v.Kind), ClusterSize = v.ClusterSize,
         };
-        if (v.UsedBackupBoot) res.Log.Add("Setor de boot principal danificado — usada a cópia do setor 6.");
+        if (v.UsedBackupBoot) res.Log.Add(L.T("Setor de boot principal danificado — usada a cópia do setor 6."));
         res.Allocation = new AllocationMap(v.DataOffset, v.ClusterSize, v.ClusterCount, c => v.IsAllocated(c + 2));
 
         long nextId = 1;
@@ -275,7 +275,7 @@ public static partial class FileSystemScanner
             if (cl != 0 && !visited.Add(cl)) continue;
             byte[] raw;
             try { raw = v.ReadDirectory(cl, delDir); }
-            catch (MediaReadException) { res.Log.Add($"Pasta ilegível: {parent.FullPath}"); continue; }
+            catch (MediaReadException) { res.Log.Add(L.T($"Pasta ilegível: {parent.FullPath}")); continue; }
             foreach (var e in v.ParseDirectory(raw))
             {
                 bool deleted = e.Deleted || delDir;
@@ -285,13 +285,13 @@ public static partial class FileSystemScanner
                     Id = nextId++, Name = e.Name, IsDirectory = e.IsDir,
                     Origin = deleted ? ItemOrigin.Deleted : ItemOrigin.Live,
                     Created = e.Created, Modified = e.Modified,
-                    Note = e.NameGuessed ? "1ª letra do nome perdida" : null,
+                    Note = e.NameGuessed ? L.T("1ª letra do nome perdida") : null,
                 };
                 if (e.IsDir)
                 {
                     if (v.IsValidCluster(e.FirstCluster) && (!deleted || v.LooksLikeDirectory(e.FirstCluster)))
                         queue.Enqueue((e.FirstCluster, deleted, item));
-                    else if (deleted) item.Note = "conteúdo da pasta já sobrescrito";
+                    else if (deleted) item.Note = L.T("conteúdo da pasta já sobrescrito");
                     item.Condition = deleted ? Condition.Good : Condition.Excellent;
                 }
                 else
@@ -322,7 +322,7 @@ public static partial class FileSystemScanner
                 res.Attach(parent, item);
             }
             dirsDone++;
-            progress?.Report(new("Lendo pastas", Math.Min(0.99, dirsDone / (double)(dirsDone + queue.Count + 1)), res.Items.Count, dirsDone, dirsDone + queue.Count));
+            progress?.Report(new(L.T("Lendo pastas"), Math.Min(0.99, dirsDone / (double)(dirsDone + queue.Count + 1)), res.Items.Count, dirsDone, dirsDone + queue.Count));
         }
         res.Label = v.Label;
         if (!string.IsNullOrEmpty(v.Label)) res.Root.Name = v.Label!;
@@ -338,14 +338,14 @@ public static partial class FileSystemScanner
         string label = v.Info.Label;
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = 2, Name = label.Length > 0 ? label : "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            Root = new RecoveredItem { Id = 2, Name = label.Length > 0 ? label : L.T("Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
             FileSystem = v.Info.Variant, Label = label, ClusterSize = v.BlockSize,
         };
-        if (v.UsedBackupSuperblock) res.Log.Add("Superbloco principal destruído — usada a cópia de reserva do grupo 1.");
-        progress?.Report(new("Lendo o mapa de blocos", 0, 0, 0, 1));
+        if (v.UsedBackupSuperblock) res.Log.Add(L.T("Superbloco principal destruído — usada a cópia de reserva do grupo 1."));
+        progress?.Report(new(L.T("Lendo o mapa de blocos"), 0, 0, 0, 1));
         byte[]? bmp = null;
         try { bmp = v.LoadBlockBitmap(); var b = bmp; res.Allocation = new AllocationMap(0, v.BlockSize, v.Info.Blocks, c => NtfsVolume.IsSet(b, c)); }
-        catch (Exception ex) { res.Log.Add("Mapa de blocos ilegível: " + ex.Message); }
+        catch (Exception ex) { res.Log.Add(L.T("Mapa de blocos ilegível: ") + ex.Message); }
         bool journalUsed = false;
         int fromJournal = 0, lost = 0;
 
@@ -364,7 +364,7 @@ public static partial class FileSystemScanner
         var visited = new HashSet<uint> { 2 };
         var queue = new Queue<(ExtInode dir, RecoveredItem item, bool deleted)>();
         var rootIno = v.ReadInode(2);
-        if (rootIno == null) { res.Log.Add("Inode raiz ilegível."); return res; }
+        if (rootIno == null) { res.Log.Add(L.T("Inode raiz ilegível.")); return res; }
         queue.Enqueue((rootIno, res.Root, false));
         long dirs = 0, nextId = 3_000_000_000;
         while (queue.Count > 0)
@@ -373,7 +373,7 @@ public static partial class FileSystemScanner
             var (dir, parent, delDir) = queue.Dequeue();
             List<ExtVolume.DirEntry> entries;
             try { entries = v.ReadDirectory(dir, history: true); }
-            catch (MediaReadException) { res.Log.Add($"Pasta ilegível: {parent.FullPath}"); continue; }
+            catch (MediaReadException) { res.Log.Add(L.T($"Pasta ilegível: {parent.FullPath}")); continue; }
             foreach (var e in entries)
             {
                 bool deleted = e.Deleted || delDir;
@@ -391,7 +391,7 @@ public static partial class FileSystemScanner
                     // ext3/ext4 zeram o mapa ao apagar: a cópia antiga do inode pode estar no journal
                     var hist = v.HistoricInode(e.Inode, (ushort)(isDir ? 0x4000 : 0x8000));
                     journalUsed = true;
-                    if (hist != null) { use = hist; fromJournal++; item.Note = "mapa de blocos recuperado do journal"; }
+                    if (hist != null) { use = hist; fromJournal++; item.Note = L.T("mapa de blocos recuperado do journal"); }
                 }
                 if (use != null)
                 {
@@ -402,7 +402,7 @@ public static partial class FileSystemScanner
                 {
                     item.Condition = deleted ? Condition.Good : Condition.Excellent;
                     if (use != null && use.HasMapping && visited.Add(e.Inode)) queue.Enqueue((use, item, deleted));
-                    else if (deleted) item.Note = "conteúdo da pasta perdido";
+                    else if (deleted) item.Note = L.T("conteúdo da pasta perdido");
                 }
                 else if (use != null && use.HasMapping && use.IsFile)
                 {
@@ -415,18 +415,18 @@ public static partial class FileSystemScanner
                     if (!deleted) continue;
                     item.Size = use?.Size ?? 0;
                     item.Condition = Condition.Overwritten;
-                    item.Note = reused ? "inode já reaproveitado por outro arquivo" : "mapa de blocos apagado e sem cópia no journal — tente a varredura profunda";
+                    item.Note = reused ? L.T("inode já reaproveitado por outro arquivo") : L.T("mapa de blocos apagado e sem cópia no journal — tente a varredura profunda");
                     lost++;
                 }
                 res.Attach(parent, item);
             }
             dirs++;
-            progress?.Report(new("Lendo pastas", Math.Min(0.99, dirs / (double)(dirs + queue.Count + 1)), res.Items.Count, dirs, dirs + queue.Count));
+            progress?.Report(new(L.T("Lendo pastas"), Math.Min(0.99, dirs / (double)(dirs + queue.Count + 1)), res.Items.Count, dirs, dirs + queue.Count));
         }
         if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
-        if (!v.HasJournal && v.Info.Variant == "ext2") res.Log.Add("ext2 não tem journal: no Linux atual, nome e mapa de um arquivo apagado somem do disco — só a varredura profunda (por assinatura) acha o conteúdo.");
-        if (journalUsed) res.Log.Add($"Journal: {v.JournalCopies:N0} cópias de blocos; {fromJournal} arquivo(s)/pasta(s) apagado(s) reconstruído(s) a partir dele.");
-        if (lost > 0) res.Log.Add($"{lost} apagado(s) sem mapa de blocos recuperável (ext3/ext4 zeram o mapa; o journal já tinha sido reciclado).");
+        if (!v.HasJournal && v.Info.Variant == "ext2") res.Log.Add(L.T("ext2 não tem journal: no Linux atual, nome e mapa de um arquivo apagado somem do disco — só a varredura profunda (por assinatura) acha o conteúdo."));
+        if (journalUsed) res.Log.Add(L.T($"Journal: {v.JournalCopies:N0} cópias de blocos; {fromJournal} arquivo(s)/pasta(s) apagado(s) reconstruído(s) a partir dele."));
+        if (lost > 0) res.Log.Add(L.T($"{lost} apagado(s) sem mapa de blocos recuperável (ext3/ext4 zeram o mapa; o journal já tinha sido reciclado)."));
         return res;
     }
 
@@ -436,14 +436,14 @@ public static partial class FileSystemScanner
     {
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = 2, Name = v.Label.Length > 0 ? v.Label : "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            Root = new RecoveredItem { Id = 2, Name = v.Label.Length > 0 ? v.Label : L.T("Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
             FileSystem = v.Variant, Label = v.Label, ClusterSize = v.BlockSize,
         };
-        if (v.UsedAlternateHeader) res.Log.Add("Cabeçalho principal destruído — usada a cópia do fim do volume.");
-        progress?.Report(new("Lendo o mapa de alocação", 0, 0, 0, 1));
+        if (v.UsedAlternateHeader) res.Log.Add(L.T("Cabeçalho principal destruído — usada a cópia do fim do volume."));
+        progress?.Report(new(L.T("Lendo o mapa de alocação"), 0, 0, 0, 1));
         byte[]? bmp = null;
         try { bmp = v.LoadAllocation(); var b = bmp; res.Allocation = new AllocationMap(0, v.BlockSize, v.TotalBlocks, c => HfsVolume.IsAllocated(b, c)); }
-        catch (Exception ex) { res.Log.Add("Mapa de alocação ilegível: " + ex.Message); }
+        catch (Exception ex) { res.Log.Add(L.T("Mapa de alocação ilegível: ") + ex.Message); }
 
         Condition Eval(List<Extent> ext)
         {
@@ -458,7 +458,7 @@ public static partial class FileSystemScanner
         }
 
         // 1) a árvore viva, lida do catálogo inteiro de uma vez (as folhas em ordem)
-        progress?.Report(new("Lendo o catálogo", 0.05, 0, 0, 1));
+        progress?.Report(new(L.T("Lendo o catálogo"), 0.05, 0, 0, 1));
         var live = new List<HfsRecord>();
         foreach (var r in v.LiveRecords()) { ct.ThrowIfCancellationRequested(); live.Add(r); }
         var folders = new Dictionary<uint, RecoveredItem> { [2] = res.Root };
@@ -500,7 +500,7 @@ public static partial class FileSystemScanner
         }
 
         // 2) os apagados: restos de registros nos nós livres, na sobra dos nós e no journal
-        progress?.Report(new("Procurando registros apagados", 0.4, res.Items.Count, 0, 1));
+        progress?.Report(new(L.T("Procurando registros apagados"), 0.4, res.Items.Count, 0, 1));
         var staleFiles = new Dictionary<uint, (HfsRecord rec, string where)>();
         var staleFolders = new Dictionary<uint, HfsRecord>();
         var threads = new Dictionary<uint, HfsRecord>();
@@ -528,8 +528,8 @@ public static partial class FileSystemScanner
             else if (threads.TryGetValue(id, out var th)) { name = th.Name; parent = th.ParentId; }
             if (name == null || depth > 256)
             {
-                lostBucket ??= res.GetOrAddFolder(res.Root, "Pastas perdidas", "pastas apagadas cujo nome não sobrou no catálogo");
-                f = new RecoveredItem { Id = res.NewId(), Name = $"Pasta {id}", IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good, Note = "nome original perdido" };
+                lostBucket ??= res.GetOrAddFolder(res.Root, L.T("Pastas perdidas"), L.T("pastas apagadas cujo nome não sobrou no catálogo"));
+                f = new RecoveredItem { Id = res.NewId(), Name = L.T($"Pasta {id}"), IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good, Note = L.T("nome original perdido") };
                 deletedFolders[id] = f;
                 res.Attach(lostBucket, f);
                 return f;
@@ -557,30 +557,30 @@ public static partial class FileSystemScanner
             {
                 // só sobrou o registro de quando o arquivo foi criado, antes de receber os dados
                 item.Condition = Condition.Overwritten;
-                item.Note = "só sobrou o registro de antes da gravação (tamanho desconhecido) — tente a varredura profunda";
+                item.Note = L.T("só sobrou o registro de antes da gravação (tamanho desconhecido) — tente a varredura profunda");
                 lost++;
             }
             else if (r.Data.LogicalSize > 0 && ext.Count == 0)
             {
                 item.Condition = Condition.Overwritten;
-                item.Note = "sem a lista de pedaços — tente a varredura profunda";
+                item.Note = L.T("sem a lista de pedaços — tente a varredura profunda");
                 lost++;
             }
             else
             {
                 item.Data = new ExtentSource(v.Dev, ext, r.Data.LogicalSize);
                 item.Condition = Eval(ext);
-                if (have < r.Data.LogicalSize) { item.Condition = Condition.Partial; item.Note = "só os 8 primeiros pedaços sobreviveram (o resto estava no arquivo de extents)"; }
-                else if (r.Compressed) item.Note = "estava comprimido pelo macOS — o conteúdo pode sair comprimido";
+                if (have < r.Data.LogicalSize) { item.Condition = Condition.Partial; item.Note = L.T("só os 8 primeiros pedaços sobreviveram (o resto estava no arquivo de extents)"); }
+                else if (r.Compressed) item.Note = L.T("estava comprimido pelo macOS — o conteúdo pode sair comprimido");
             }
             res.Attach(parent, item);
         }
         foreach (var id in staleFolders.Keys) if (!folders.ContainsKey(id)) DeletedFolder(id);
 
         if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
-        if (fromJournal > 0) res.Log.Add($"Journal: {fromJournal} arquivo(s) apagado(s) reconstruído(s) a partir das cópias antigas do catálogo.");
-        if (!v.Journaled) res.Log.Add("Volume sem journal: só sobram registros apagados que ficaram na sobra dos nós do catálogo — a varredura profunda acha o resto pelo conteúdo.");
-        if (lost > 0) res.Log.Add($"{lost} apagado(s) sem lista de pedaços.");
+        if (fromJournal > 0) res.Log.Add(L.T($"Journal: {fromJournal} arquivo(s) apagado(s) reconstruído(s) a partir das cópias antigas do catálogo."));
+        if (!v.Journaled) res.Log.Add(L.T("Volume sem journal: só sobram registros apagados que ficaram na sobra dos nós do catálogo — a varredura profunda acha o resto pelo conteúdo."));
+        if (lost > 0) res.Log.Add(L.T($"{lost} apagado(s) sem lista de pedaços."));
         return res;
     }
 
@@ -593,14 +593,14 @@ public static partial class FileSystemScanner
         string label = string.Join(" + ", c.Volumes.Where(v => v.Role is 0 or 0x2 or 0x40).Select(v => v.Name).DefaultIfEmpty(c.Volumes[0].Name));
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = 2, Name = many ? "Contêiner APFS" : (c.Volumes[0].Name.Length > 0 ? c.Volumes[0].Name : "Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            Root = new RecoveredItem { Id = 2, Name = many ? L.T("Contêiner APFS") : (c.Volumes[0].Name.Length > 0 ? c.Volumes[0].Name : L.T("Raiz")), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
             FileSystem = "APFS", Label = label, ClusterSize = c.BlockSize,
         };
-        if (c.UsedOlderSuperblock) res.Log.Add("O ponto de verificação mais novo estava incompleto — usado o anterior.");
+        if (c.UsedOlderSuperblock) res.Log.Add(L.T("O ponto de verificação mais novo estava incompleto — usado o anterior."));
         foreach (var v in c.Volumes.Where(v => v.Encrypted))
-            res.Log.Add($"Volume \"{v.Name}\" é criptografado (FileVault / APFS criptografado): sem a senha os arquivos não podem ser lidos.");
+            res.Log.Add(L.T($"Volume \"{v.Name}\" é criptografado (FileVault / APFS criptografado): sem a senha os arquivos não podem ser lidos."));
         foreach (var v in c.Volumes.Where(v => v.Sealed && !v.Encrypted))
-            res.Log.Add($"Volume \"{v.Name}\" é o sistema do macOS (selado, só arquivos do sistema) — pulado.");
+            res.Log.Add(L.T($"Volume \"{v.Name}\" é o sistema do macOS (selado, só arquivos do sistema) — pulado."));
 
         // mapa dos blocos ocupados por arquivos vivos: base da condição dos apagados e da escavação
         var used = new byte[(c.BlockCount + 7) / 8];
@@ -615,10 +615,10 @@ public static partial class FileSystemScanner
             if (many) res.Attach(res.Root, top);
             double baseF = (double)vi / usable.Count, span = 1.0 / usable.Count;
             vi++;
-            progress?.Report(new($"Lendo a árvore de {vol.Name}", baseF, res.Items.Count, 0, 1));
+            progress?.Report(new(L.T($"Lendo a árvore de {vol.Name}"), baseF, res.Items.Count, 0, 1));
             ApfsRecords live;
             try { live = c.ReadLive(vol, ct); }
-            catch (Exception ex) when (ex is not OperationCanceledException) { res.Log.Add($"Volume \"{vol.Name}\": árvore de arquivos ilegível ({ex.Message}) — tente a varredura profunda."); continue; }
+            catch (Exception ex) when (ex is not OperationCanceledException) { res.Log.Add(L.T($"Volume \"{vol.Name}\": árvore de arquivos ilegível ({ex.Message}) — tente a varredura profunda.")); continue; }
             foreach (var m in live.Extents.Values) foreach (var (phys, len, _) in m.Values) if (phys != 0) Mark(used, phys, (len + c.BlockSize - 1) / c.BlockSize);
 
             IDataSource? Source(ApfsRecords recs, ApfsInode ino, out string? note, out long size)
@@ -675,7 +675,7 @@ public static partial class FileSystemScanner
             }
 
             // 2) apagados: as árvores dos pontos de verificação anteriores e, na profunda, nós soltos
-            progress?.Report(new($"Procurando apagados em {vol.Name}", baseF + span * 0.3, res.Items.Count, 0, 1));
+            progress?.Report(new(L.T($"Procurando apagados em {vol.Name}"), baseF + span * 0.3, res.Items.Count, 0, 1));
             var hist = c.ReadHistory(vol, ct, out int cps);
             if (opt.DeepScan) c.ScanOrphanNodes(vol, hist, progress, ct);
             var deleted = hist.Inodes.Values.Where(i => i.Id > 15 && !live.Inodes.ContainsKey(i.Id) && (i.IsDir || i.IsFile)).ToDictionary(i => i.Id);
@@ -693,14 +693,14 @@ public static partial class FileSystemScanner
                 if (depth < 256 && deleted.TryGetValue(id, out var di) && di.IsDir)
                 {
                     var p = Folder(di.ParentId, depth + 1);
-                    f = new RecoveredItem { Id = res.NewId(), Name = NameOf(di) ?? $"Pasta {id}", IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good,
+                    f = new RecoveredItem { Id = res.NewId(), Name = NameOf(di) ?? L.T($"Pasta {id}"), IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good,
                                             Created = ApfsContainer.Time(di.Created), Modified = ApfsContainer.Time(di.Modified) };
                     delFolders[id] = f;
                     res.Attach(p, f);
                     return f;
                 }
-                lostBucket ??= res.GetOrAddFolder(top, "Pastas perdidas", "a pasta original não aparece em nenhuma versão encontrada");
-                f = new RecoveredItem { Id = res.NewId(), Name = $"Pasta {id}", IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good, Note = "nome original perdido" };
+                lostBucket ??= res.GetOrAddFolder(top, L.T("Pastas perdidas"), L.T("a pasta original não aparece em nenhuma versão encontrada"));
+                f = new RecoveredItem { Id = res.NewId(), Name = L.T($"Pasta {id}"), IsDirectory = true, Origin = ItemOrigin.Deleted, Condition = Condition.Good, Note = L.T("nome original perdido") };
                 delFolders[id] = f;
                 res.Attach(lostBucket, f);
                 return f;
@@ -710,7 +710,7 @@ public static partial class FileSystemScanner
             foreach (var ino in deleted.Values.Where(i => i.IsFile))
             {
                 ct.ThrowIfCancellationRequested();
-                var item = new RecoveredItem { Id = res.NewId(), Name = NameOf(ino) ?? $"arquivo {ino.Id}", Origin = ItemOrigin.Deleted,
+                var item = new RecoveredItem { Id = res.NewId(), Name = NameOf(ino) ?? L.T($"arquivo {ino.Id}"), Origin = ItemOrigin.Deleted,
                                                Created = ApfsContainer.Time(ino.Created), Modified = ApfsContainer.Time(ino.Modified) };
                 var ext = hist.Extents.GetValueOrDefault(ino.PrivateId);
                 item.Data = Source(hist, ino, out var note, out var size);
@@ -718,7 +718,7 @@ public static partial class FileSystemScanner
                 if (item.Data == null)
                 {
                     item.Condition = Condition.Overwritten;
-                    item.Note ??= "a lista de pedaços não sobrou — tente a varredura profunda";
+                    item.Note ??= L.T("a lista de pedaços não sobrou — tente a varredura profunda");
                     lost++;
                 }
                 else
@@ -737,14 +737,14 @@ public static partial class FileSystemScanner
                                 catch (MediaReadException) { }
                         }
                     item.Condition = meta && hit == 0 ? Condition.Partial : Evaluate(hit, total);
-                    if (meta) item.Note ??= "parte dos blocos já virou metadado do APFS";
+                    if (meta) item.Note ??= L.T("parte dos blocos já virou metadado do APFS");
                     found++;
                 }
                 res.Attach(Folder(ino.ParentId), item);
             }
-            res.Log.Add($"{vol.Name}: {live.Inodes.Count:N0} objetos na árvore atual; {cps} ponto(s) de verificação anterior(es) legível(is); {found} apagado(s) com conteúdo" + (lost > 0 ? $", {lost} sem pedaços" : "") + ".");
+            res.Log.Add(L.T($"{vol.Name}: {live.Inodes.Count:N0} objetos na árvore atual; {cps} ponto(s) de verificação anterior(es) legível(is); {found} apagado(s) com conteúdo") + (lost > 0 ? L.T($", {lost} sem pedaços") : "") + ".");
         }
-        if (usable.Count == 0 && c.Volumes.Count > 0) res.Log.Add("Nenhum volume legível sem senha — a varredura profunda ainda acha arquivos pelo conteúdo se o volume não for criptografado.");
+        if (usable.Count == 0 && c.Volumes.Count > 0) res.Log.Add(L.T("Nenhum volume legível sem senha — a varredura profunda ainda acha arquivos pelo conteúdo se o volume não for criptografado."));
         if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
         return res;
     }
@@ -755,10 +755,10 @@ public static partial class FileSystemScanner
     {
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = 0, Name = "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            Root = new RecoveredItem { Id = 0, Name = L.T("Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
             FileSystem = "exFAT", ClusterSize = v.ClusterSize,
         };
-        if (v.UsedBackupBoot) res.Log.Add("Setor de boot principal danificado — usada a região de boot de reserva.");
+        if (v.UsedBackupBoot) res.Log.Add(L.T("Setor de boot principal danificado — usada a região de boot de reserva."));
         long nextId = 1;
         var visited = new HashSet<long>();
         var queue = new Queue<(long cluster, long size, bool noChain, bool deleted, RecoveredItem parent, bool root)>();
@@ -771,7 +771,7 @@ public static partial class FileSystemScanner
             if (!visited.Add(cl)) continue;
             byte[] raw;
             try { raw = v.ReadDirectory(cl, size, noChain); }
-            catch (MediaReadException) { res.Log.Add($"Pasta ilegível: {parent.FullPath}"); continue; }
+            catch (MediaReadException) { res.Log.Add(L.T($"Pasta ilegível: {parent.FullPath}")); continue; }
             var entries = v.ParseDirectory(raw, root);
             if (root && v.Bitmap != null)
                 res.Allocation = new AllocationMap(v.HeapOffset, v.ClusterSize, v.ClusterCount, c => v.IsAllocated(c + 2));
@@ -810,7 +810,7 @@ public static partial class FileSystemScanner
                 res.Attach(parent, item);
             }
             dirsDone++;
-            progress?.Report(new("Lendo pastas", Math.Min(0.99, dirsDone / (double)(dirsDone + queue.Count + 1)), res.Items.Count, dirsDone, dirsDone + queue.Count));
+            progress?.Report(new(L.T("Lendo pastas"), Math.Min(0.99, dirsDone / (double)(dirsDone + queue.Count + 1)), res.Items.Count, dirsDone, dirsDone + queue.Count));
         }
         res.Label = v.Label;
         if (!string.IsNullOrEmpty(v.Label)) res.Root.Name = v.Label!;
@@ -843,7 +843,7 @@ public static class RecycleBin
                 try { i.Data.Read(0, buf); } catch { continue; }
                 var path = Parse(buf);
                 if (path == null) continue;
-                r.Note = "da Lixeira — original: " + path;
+                r.Note = L.T("da Lixeira — original: ") + path;
                 string orig = Path.GetFileName(path.Replace('\\', '/'));
                 if (orig.Length > 0) r.Name = orig + "  [" + r.Name + "]";
             }

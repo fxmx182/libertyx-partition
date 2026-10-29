@@ -14,7 +14,7 @@ public sealed class SubDevice : IBlockDevice
 
     public SubDevice(IBlockDevice parent, long offset, long length, string? name = null)
     {
-        if (offset < 0 || offset % parent.SectorSize != 0) throw new ArgumentException("deslocamento fora de setor", nameof(offset));
+        if (offset < 0 || offset % parent.SectorSize != 0) throw new ArgumentException(L.T("deslocamento fora de setor"), nameof(offset));
         _parent = parent;
         Offset = offset;
         Length = Math.Max(0, Math.Min(length, parent.Length - offset));
@@ -30,7 +30,7 @@ public sealed class SubDevice : IBlockDevice
 
     public void Write(long offset, ReadOnlySpan<byte> buffer)
     {
-        if (offset + buffer.Length > Length) throw new IOException("escrita além do fim da partição");
+        if (offset + buffer.Length > Length) throw new IOException(L.T("escrita além do fim da partição"));
         _parent.Write(Offset + offset, buffer);
     }
 

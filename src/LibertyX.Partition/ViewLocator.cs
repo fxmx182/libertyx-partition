@@ -19,7 +19,7 @@ public sealed class ViewLocator : IDataTemplate
             view = t.Assembly.GetType(name);
             Cache[t] = view;
         }
-        return view != null ? (Control)Activator.CreateInstance(view)! : new TextBlock { Text = "Tela não encontrada: " + t.Name };
+        return view != null ? (Control)Activator.CreateInstance(view)! : new TextBlock { Text = L.T("Tela não encontrada: ") + t.Name };
     }
 
     public bool Match(object? data) => data is ViewModelBase;

@@ -44,6 +44,8 @@ public static class LinuxMigrate
         public List<Piece> Pieces { get; } = [];
         public bool Uefi { get; init; }
         public string? Problem { get; set; }
+        /// <summary>O problema é só de espaço (refeito quando a pessoa deixa partições de fora).</summary>
+        public bool ProblemIsSpace { get; set; }
         public List<string> Notes { get; } = [];
         public required DiskInfo Target { get; init; }
         public string Loader { get; set; } = "grub";
@@ -64,13 +66,13 @@ public static class LinuxMigrate
         var mounts = LinuxDiskSystem.ReadMounts();
         var root = mounts.LastOrDefault(m => m.MountPoint == "/");
         string? rootKn = root == null ? null : root.Source.StartsWith("/dev/") ? LinuxDiskSystem.KernelNameOf(root.Source) : null;
-        if (rootKn == null) { plan.Problem = "A raiz (/) não está num disco (sistema ao vivo, contêiner ou rede): não há o que migrar."; return plan; }
+        if (rootKn == null) { plan.Problem = L.T("A raiz (/) não está num disco (sistema ao vivo, contêiner ou rede): não há o que migrar."); return plan; }
         string rootUuid = Read($"/sys/class/block/{rootKn}/dm/uuid");
-        if (rootUuid.StartsWith("CRYPT-")) { plan.Problem = "A raiz está criptografada (LUKS). A migração recriaria o sistema sem criptografia — use Copiar disco iniciando por um pendrive, que leva o volume criptografado como está."; return plan; }
-        if (rootKn.StartsWith("md")) { plan.Problem = "A raiz está num RAID por software: migre pelo próprio mdadm (adicionando o disco novo ao conjunto)."; return plan; }
+        if (rootUuid.StartsWith("CRYPT-")) { plan.Problem = L.T("A raiz está criptografada (LUKS). A migração recriaria o sistema sem criptografia — use Copiar disco iniciando por um pendrive, que leva o volume criptografado como está."); return plan; }
+        if (rootKn.StartsWith("md")) { plan.Problem = L.T("A raiz está num RAID por software: migre pelo próprio mdadm (adicionando o disco novo ao conjunto)."); return plan; }
         // os discos físicos do sistema (atravessando LVM)
         var sysPhys = LinuxDiskSystem.SlavesOf(rootKn).DefaultIfEmpty(rootKn).Select(DiskOf).ToHashSet();
-        if (sysPhys.Contains(target.KernelName)) { plan.Problem = "O destino é o próprio disco do sistema."; return plan; }
+        if (sysPhys.Contains(target.KernelName)) { plan.Problem = L.T("O destino é o próprio disco do sistema."); return plan; }
 
         var swaps = LinuxDiskSystem.ActiveSwaps();
         var byDev = new Dictionary<string, Piece>();
@@ -81,7 +83,7 @@ public static class LinuxMigrate
             if (kn == null) continue;
             var phys = LinuxDiskSystem.SlavesOf(kn).DefaultIfEmpty(kn).Select(DiskOf).ToHashSet();
             if (!phys.Overlaps(sysPhys)) continue;   // está em outro disco: fica onde está
-            if (!Supported.Contains(m.FsType)) { if (RequiredMounts.Contains(m.MountPoint)) plan.Problem = $"{m.MountPoint} usa {m.FsType}, que a migração não recria."; continue; }
+            if (!Supported.Contains(m.FsType)) { if (RequiredMounts.Contains(m.MountPoint)) plan.Problem = L.T($"{m.MountPoint} usa {m.FsType}, que a migração não recria."); continue; }
             if (byDev.TryGetValue(kn, out var existing))
             {
                 // mesmo volume montado de novo: subvolume do Btrfs, ou bind
@@ -115,11 +117,11 @@ public static class LinuxMigrate
                 Label = u.TryGetValue("ID_FS_LABEL", out var l) && l.Length > 0 ? l : null, Size = size, Used = size, Required = false, Include = true,
             });
         }
-        if (!plan.Pieces.Any(p => p.MountPoint == "/")) { plan.Problem ??= "Não achei a raiz entre as montagens do disco do sistema."; return plan; }
+        if (!plan.Pieces.Any(p => p.MountPoint == "/")) { plan.Problem ??= L.T("Não achei a raiz entre as montagens do disco do sistema."); return plan; }
         if (plan.Uefi && !plan.Pieces.Any(p => p.MountPoint is "/boot/efi" or "/efi"))
-            plan.Notes.Add("Inicia por UEFI, mas não há partição EFI montada: será criada uma nova (512 MB).");
+            plan.Notes.Add(L.T("Inicia por UEFI, mas não há partição EFI montada: será criada uma nova (512 MB)."));
         if (File.Exists("/boot/efi/loader/loader.conf") || File.Exists("/efi/loader/loader.conf") || File.Exists("/boot/loader/loader.conf")) plan.Loader = "systemd-boot";
-        else if (!Directory.Exists("/boot/grub") && !Directory.Exists("/boot/grub2")) { plan.Loader = "?"; plan.Notes.Add("Carregador de boot não reconhecido (nem GRUB nem systemd-boot): os arquivos vão, mas o boot do disco novo terá de ser configurado à mão."); }
+        else if (!Directory.Exists("/boot/grub") && !Directory.Exists("/boot/grub2")) { plan.Loader = "?"; plan.Notes.Add(L.T("Carregador de boot não reconhecido (nem GRUB nem systemd-boot): os arquivos vão, mas o boot do disco novo terá de ser configurado à mão.")); }
         if (LinuxTools.Missing("rsync") is { } miss) plan.Problem ??= miss;
         foreach (var p in plan.Pieces.Where(p => p.FsType != "swap"))
         {
@@ -153,7 +155,7 @@ public static class LinuxMigrate
     /// <summary>Refaz os tamanhos depois que a pessoa marcou ou desmarcou partições opcionais.</summary>
     public static Plan Resize(Plan plan)
     {
-        if (plan.Problem != null && plan.Problem.StartsWith("Não cabe")) plan.Problem = null;
+        if (plan.ProblemIsSpace) { plan.Problem = null; plan.ProblemIsSpace = false; }
         Size(plan);
         return plan;
     }
@@ -186,12 +188,13 @@ public static class LinuxMigrate
         {
             // não cabe com folga: tira a swap e aperta os opcionais antes de desistir
             var swap = plan.Pieces.FirstOrDefault(p => p.MountPoint == "[SWAP]" && p.Include);
-            if (swap != null && left + swap.TargetSize >= rootMin) { swap.Include = false; left += swap.TargetSize; plan.Notes.Add("A swap ficou de fora para caber (dá para criar um arquivo de swap depois)."); }
+            if (swap != null && left + swap.TargetSize >= rootMin) { swap.Include = false; left += swap.TargetSize; plan.Notes.Add(L.T("A swap ficou de fora para caber (dá para criar um arquivo de swap depois).")); }
         }
         if (left < rootMin)
         {
-            plan.Problem ??= $"Não cabe: o sistema precisa de pelo menos {DiskOperations.Size(fixedSum + rootMin)} e o disco novo tem {DiskOperations.Size(plan.Target.Size)}." +
-                (plan.Pieces.Any(p => !p.Required && p.Include && p.MountPoint != "[SWAP]") ? " Deixe de fora as partições de dados (só as do sistema)." : "");
+            if (plan.Problem == null) plan.ProblemIsSpace = true;
+            plan.Problem ??= L.T($"Não cabe: o sistema precisa de pelo menos {DiskOperations.Size(fixedSum + rootMin)} e o disco novo tem {DiskOperations.Size(plan.Target.Size)}.") +
+                (plan.Pieces.Any(p => !p.Required && p.Include && p.MountPoint != "[SWAP]") ? L.T(" Deixe de fora as partições de dados (só as do sistema).") : "");
             root.TargetSize = Math.Max(0, left) / MB * MB;
             return;
         }
@@ -212,7 +215,7 @@ public static class LinuxMigrate
     {
         if (plan.Problem != null) throw new InvalidOperationException(plan.Problem);
         var target = plan.Target;
-        if (target.IsSystem) throw new InvalidOperationException("O destino é o disco do sistema.");
+        if (target.IsSystem) throw new InvalidOperationException(L.T("O destino é o disco do sistema."));
         const long MB = 1 << 20;
         int ss = target.SectorSize;
         string arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "x64";
@@ -220,7 +223,7 @@ public static class LinuxMigrate
         var esp = pieces.FirstOrDefault(p => p.MountPoint is "/boot/efi" or "/efi");
 
         // 1. tabela nova (GPT) — EFI ou BIOS boot primeiro, depois /boot, raiz, os outros e a swap no fim
-        s.Log($"Disco novo: {target.DevicePath} ({target.Model}, {DiskOperations.Size(target.Size)}) — tabela GPT, {(plan.Uefi ? "UEFI" : "BIOS")}.");
+        s.Log(L.T($"Disco novo: {target.DevicePath} ({target.Model}, {DiskOperations.Size(target.Size)}) — tabela GPT, {(plan.Uefi ? "UEFI" : "BIOS")}."));
         var order = new List<Piece>();
         if (esp != null) order.Add(esp);
         order.AddRange(pieces.Where(p => p.MountPoint == "/boot"));
@@ -279,9 +282,9 @@ public static class LinuxMigrate
         // 2. sistemas de arquivos novos, com o mesmo tipo e rótulo
         foreach (var p in order)
         {
-            p.NewDev = KernelSync.WaitPartitionNode(target, slotOf[p]) ?? throw new InvalidOperationException($"O kernel não criou o /dev da partição de {p.Title}.");
+            p.NewDev = KernelSync.WaitPartitionNode(target, slotOf[p]) ?? throw new InvalidOperationException(L.T($"O kernel não criou o /dev da partição de {p.Title}."));
             s.Log($"{p.Title}: {p.NewDev} · {p.FsType} · {DiskOperations.Size(p.TargetSize)}");
-            s.Progress(-1, $"Formatando {p.Title}");
+            s.Progress(-1, L.T($"Formatando {p.Title}"));
             string key = p.FsType switch { "vfat" => "fat32", "swap" => "swap", "xfs" => "xfs", "btrfs" => "btrfs", "f2fs" => "f2fs", "ext3" => "ext3", "ext2" => "ext2", _ => "ext4" };
             await LinuxFs.Mkfs(p.NewDev, key, p.Label ?? (p.MountPoint is "/boot/efi" or "/efi" ? "EFI" : ""), 0, true, s);
             var u = LinuxDiskSystem.Udev(Read($"/sys/class/block/{Path.GetFileName(p.NewDev)}/dev"));
@@ -301,11 +304,11 @@ public static class LinuxMigrate
                     // recria os subvolumes com os mesmos nomes (o fstab monta por subvol=)
                     string top = Path.Combine("/run/libertyx", "btrfs-" + Guid.NewGuid().ToString("N")[..6]);
                     Directory.CreateDirectory(top);
-                    await Must(Proc.Run("mount", [p.NewDev!, top]), "Montar o Btrfs novo");
+                    await Must(Proc.Run("mount", [p.NewDev!, top]), L.T("Montar o Btrfs novo"));
                     foreach (var (sv, _) in p.Subvols)
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(top, sv))!);
-                        await Must(Proc.Run("btrfs", ["subvolume", "create", Path.Combine(top, sv)]), "Criar subvolume " + sv);
+                        await Must(Proc.Run("btrfs", ["subvolume", "create", Path.Combine(top, sv)]), L.T("Criar subvolume ") + sv);
                     }
                     await Proc.Run("umount", [top]);
                     try { Directory.Delete(top); } catch { }
@@ -313,14 +316,14 @@ public static class LinuxMigrate
                     {
                         string at = mnt + (mp == "/" ? "" : mp);
                         Directory.CreateDirectory(at);
-                        await Must(Proc.Run("mount", ["-o", "subvol=" + sv, p.NewDev!, at]), $"Montar {mp}");
+                        await Must(Proc.Run("mount", ["-o", "subvol=" + sv, p.NewDev!, at]), L.T($"Montar {mp}"));
                         mounted.Push(at);
                     }
                     continue;
                 }
                 string where = mnt + (p.MountPoint == "/" ? "" : p.MountPoint);
                 Directory.CreateDirectory(where);
-                await Must(Proc.Run("mount", [p.NewDev!, where]), $"Montar {p.Title} novo");
+                await Must(Proc.Run("mount", [p.NewDev!, where]), L.T($"Montar {p.Title} novo"));
                 mounted.Push(where);
             }
 
@@ -335,18 +338,18 @@ public static class LinuxMigrate
             {
                 foreach (var (from, to) in sources)
                 {
-                    s.Log(pass == 1 ? $"Copiando {from} …" : $"Segunda passada em {from} (o que mudou enquanto copiava)…");
+                    s.Log(pass == 1 ? L.T($"Copiando {from} …") : L.T($"Segunda passada em {from} (o que mudou enquanto copiava)…"));
                     var args = new List<string> { "-aAXHx", "--numeric-ids", "--delete", "--info=progress2", "--no-inc-recursive" };
                     if (from == "/") foreach (var ex in new[] { "/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "/media/*", "/lost+found", "/swapfile", "/swap.img" }) args.Add("--exclude=" + ex);
                     args.AddRange([from.TrimEnd('/') + "/", to.TrimEnd('/') + "/"]);
                     var r = await Proc.Run("rsync", args, s.Token, l =>
                     {
                         var m = Regex.Match(l, @"^\s*([\d,\.]+)\s+(\d+)%\s+(\S+)");
-                        if (m.Success) s.Progress(int.Parse(m.Groups[2].Value) / 100.0, pass == 1 ? $"Copiando {from}" : $"Conferindo {from}", $"{m.Groups[1].Value} bytes · {m.Groups[3].Value}");
+                        if (m.Success) s.Progress(int.Parse(m.Groups[2].Value) / 100.0, pass == 1 ? L.T($"Copiando {from}") : L.T($"Conferindo {from}"), L.T($"{m.Groups[1].Value} bytes · {m.Groups[3].Value}"));
                         else if (l.Trim().Length > 0 && !l.Contains("to-chk") && !l.StartsWith("file has vanished")) s.Log(l.Trim());
                     });
                     // 24 = arquivos sumiram durante a cópia (normal num sistema rodando)
-                    if (r.ExitCode is not (0 or 24)) throw new InvalidOperationException($"A cópia de {from} falhou (rsync {r.ExitCode}): {r.Message.Split('\n').LastOrDefault()}");
+                    if (r.ExitCode is not (0 or 24)) throw new InvalidOperationException(L.T($"A cópia de {from} falhou (rsync {r.ExitCode}): {r.Message.Split('\n').LastOrDefault()}"));
                     s.PauseGate.Wait(s.Token);
                 }
             }
@@ -354,7 +357,7 @@ public static class LinuxMigrate
             foreach (var sf in new[] { "/swapfile", "/swap.img" }.Where(File.Exists))
             {
                 long size = new FileInfo(sf).Length;
-                s.Log($"Recriando {sf} ({DiskOperations.Size(size)}) no disco novo…");
+                s.Log(L.T($"Recriando {sf} ({DiskOperations.Size(size)}) no disco novo…"));
                 string to = mnt + sf;
                 await Proc.Run("truncate", ["-s", "0", to]);
                 if (order.First(p => p.MountPoint == "/").FsType == "btrfs") await Proc.Run("chattr", ["+C", to]);
@@ -364,12 +367,12 @@ public static class LinuxMigrate
             }
 
             // 5. UUIDs novos no fstab, GRUB, resume, systemd-boot
-            s.Progress(-1, "Ajustando fstab e boot");
+            s.Progress(-1, L.T("Ajustando fstab e boot"));
             Fixup(plan, order, mnt, s);
 
             // 6. carregador de boot dentro do sistema copiado
             await Bootloader(plan, order, mnt, newEsp != null, s);
-            s.Log("Gravando o cache no disco novo…");
+            s.Log(L.T("Gravando o cache no disco novo…"));
             await Proc.Run("sync", []);
         }
         finally
@@ -378,7 +381,7 @@ public static class LinuxMigrate
                 await Proc.Run("umount", ["-l", Path.Combine(mnt, b)]);
             while (mounted.Count > 0) await Proc.Run("umount", [mounted.Pop()]);
         }
-        s.Log("Pronto. Para iniciar pelo disco novo, escolha-o no menu de boot (F12, F8, F11 ou Esc ao ligar) ou mude a ordem na BIOS/UEFI. Depois de conferir que tudo funciona, o disco antigo pode ser formatado.");
+        s.Log(L.T("Pronto. Para iniciar pelo disco novo, escolha-o no menu de boot (F12, F8, F11 ou Esc ao ligar) ou mude a ordem na BIOS/UEFI. Depois de conferir que tudo funciona, o disco antigo pode ser formatado."));
     }
 
     private static async Task<string?> BlkidUuid(string dev)
@@ -438,7 +441,7 @@ public static class LinuxMigrate
                 foreach (var (a, b) in devMap.OrderByDescending(x => x.from.Length))
                     txt = Regex.Replace(txt, @"(?<=root=|resume=)" + Regex.Escape(a) + @"(?=[\s""'])", b);
             if (rel == "etc/fstab") txt = NofailForOld(plan, order, txt);
-            if (txt != orig) { File.WriteAllText(f, txt); s.Log($"Ajustado: /{rel}"); }
+            if (txt != orig) { File.WriteAllText(f, txt); s.Log(L.T($"Ajustado: /{rel}")); }
         }
     }
 
@@ -468,7 +471,7 @@ public static class LinuxMigrate
 
     private static async Task Bootloader(Plan plan, List<Piece> order, string mnt, bool freshEsp, OpSink s, bool nvram = false)
     {
-        if (plan.Loader == "?") { s.Log("Carregador de boot não reconhecido: configure o boot do disco novo à mão."); return; }
+        if (plan.Loader == "?") { s.Log(L.T("Carregador de boot não reconhecido: configure o boot do disco novo à mão.")); return; }
         if (mnt != "/")
         {
             foreach (var (src, dst) in new[] { ("/dev", "dev"), ("/dev/pts", "dev/pts"), ("/proc", "proc"), ("/sys", "sys"), ("/run", "run") })
@@ -486,23 +489,23 @@ public static class LinuxMigrate
         bool arm = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64;
 
         // initramfs primeiro: o disco novo pode ser de outro tipo (SATA → NVMe) e a raiz não está mais no LVM
-        s.Progress(-1, "Gerando o initramfs");
+        s.Progress(-1, L.T("Gerando o initramfs"));
         if (Has("/usr/sbin/update-initramfs")) await Chroot("update-initramfs", "-u", "-k", "all");
         else if (Has("/usr/bin/dracut") || Has("/usr/sbin/dracut")) await Chroot("dracut", "-f", "--regenerate-all");
         else if (Has("/usr/bin/mkinitcpio")) await Chroot("mkinitcpio", "-P");
 
         if (plan.Loader == "systemd-boot")
         {
-            s.Progress(-1, "Instalando o systemd-boot");
-            await Must(Chroot("bootctl", "--esp-path=" + espMp, "install", "--no-variables"), "bootctl install");
+            s.Progress(-1, L.T("Instalando o systemd-boot"));
+            await Must(Chroot("bootctl", "--esp-path=" + espMp, "install", "--no-variables"), L.T("bootctl install"));
             if (Has("/usr/bin/kernel-install"))
                 foreach (var k in Directory.Exists(Path.Combine(mnt, "lib/modules")) ? Directory.GetDirectories(Path.Combine(mnt, "lib/modules")).Select(Path.GetFileName) : [])
                     if (File.Exists(Path.Combine(mnt, "lib/modules", k!, "vmlinuz"))) await Chroot("kernel-install", "add", k!, $"/lib/modules/{k}/vmlinuz");
-            s.Log("systemd-boot instalado no disco novo (também como carregador padrão EFI/BOOT, sem mexer no NVRAM deste computador).");
+            s.Log(L.T("systemd-boot instalado no disco novo (também como carregador padrão EFI/BOOT, sem mexer no NVRAM deste computador)."));
             return;
         }
 
-        s.Progress(-1, "Instalando o GRUB");
+        s.Progress(-1, L.T("Instalando o GRUB"));
         string grubInstall = Has("/usr/sbin/grub-install") || Has("/usr/bin/grub-install") ? "grub-install" : "grub2-install";
         bool fedoraLike = Has("/usr/sbin/grub2-mkconfig") && !Has("/usr/sbin/update-grub");
         if (plan.Uefi)
@@ -513,18 +516,18 @@ public static class LinuxMigrate
                 // instalação normal (sem tocar no NVRAM deste PC) + a cópia em EFI/BOOT, que qualquer firmware acha sozinho
                 string id = Directory.Exists(Path.Combine(mnt, espMp.TrimStart('/'), "EFI")) ? Directory.GetDirectories(Path.Combine(mnt, espMp.TrimStart('/'), "EFI")).Select(Path.GetFileName).FirstOrDefault(n => n is not ("BOOT" or "Boot" or "Microsoft")) ?? "linux" : "linux";
                 await Must(nvram ? Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", $"--bootloader-id={id}", "--recheck")
-                                 : Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", $"--bootloader-id={id}", "--no-nvram", "--recheck"), "grub-install (UEFI)");
-                await Must(Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", "--removable", "--no-nvram"), "grub-install --removable");
+                                 : Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", $"--bootloader-id={id}", "--no-nvram", "--recheck"), L.T("grub-install (UEFI)"));
+                await Must(Chroot(grubInstall, $"--target={target}", $"--efi-directory={espMp}", "--removable", "--no-nvram"), L.T("grub-install --removable"));
             }
-            else s.Log("Fedora/RHEL com UEFI: o shim e o GRUB assinados já estão na partição EFI copiada; só a configuração é refeita.");
+            else s.Log(L.T("Fedora/RHEL com UEFI: o shim e o GRUB assinados já estão na partição EFI copiada; só a configuração é refeita."));
         }
-        else await Must(Chroot(grubInstall, "--target=i386-pc", "--recheck", disk), "grub-install (BIOS)");
+        else await Must(Chroot(grubInstall, "--target=i386-pc", "--recheck", disk), L.T("grub-install (BIOS)"));
 
-        s.Progress(-1, "Gerando a configuração do GRUB");
+        s.Progress(-1, L.T("Gerando a configuração do GRUB"));
         if (Has("/usr/sbin/update-grub")) await Must(Chroot("update-grub"), "update-grub");
         else if (Has("/usr/sbin/grub2-mkconfig")) await Must(Chroot("grub2-mkconfig", "-o", Directory.Exists(Path.Combine(mnt, "boot/grub2")) ? "/boot/grub2/grub.cfg" : "/boot/grub/grub.cfg"), "grub2-mkconfig");
         else if (Has("/usr/bin/grub-mkconfig") || Has("/usr/sbin/grub-mkconfig")) await Must(Chroot("grub-mkconfig", "-o", "/boot/grub/grub.cfg"), "grub-mkconfig");
-        s.Log("GRUB instalado no disco novo.");
+        s.Log(L.T("GRUB instalado no disco novo."));
     }
 
     // ───────── reparar a inicialização de um Linux instalado ─────────
@@ -555,7 +558,7 @@ public static class LinuxMigrate
 
     private static InstalledLinux Describe(string root, string? subvol)
     {
-        string name = "Linux";
+        string name = L.T("Linux");
         try
         {
             foreach (var l in File.ReadAllLines(Path.Combine(root, "etc/os-release")))
@@ -582,36 +585,36 @@ public static class LinuxMigrate
             if (!running)
             {
                 Directory.CreateDirectory(mnt);
-                await Must(Proc.Run("mount", info.BtrfsSubvol != null ? ["-o", "subvol=" + info.BtrfsSubvol, root.DeviceNode!, mnt] : [root.DeviceNode!, mnt]), "Montar a raiz");
+                await Must(Proc.Run("mount", info.BtrfsSubvol != null ? ["-o", "subvol=" + info.BtrfsSubvol, root.DeviceNode!, mnt] : [root.DeviceNode!, mnt]), L.T("Montar a raiz"));
                 mounted.Push(mnt);
                 // o que o fstab do sistema monta e o boot precisa
                 foreach (var (spec, mp, fs, opts) in Fstab(Path.Combine(mnt, "etc/fstab")).Where(x => x.mp is "/boot" or "/boot/efi" or "/efi" or "/usr" or "/var").OrderBy(x => x.mp.Length))
                 {
                     string? dev = await Resolve(spec);
-                    if (dev == null) { s.Log($"Não achei {spec} ({mp}) — sigo sem ele."); continue; }
+                    if (dev == null) { s.Log(L.T($"Não achei {spec} ({mp}) — sigo sem ele.")); continue; }
                     string at = mnt + mp;
                     Directory.CreateDirectory(at);
                     var o = string.Join(',', opts.Split(',').Where(x => x.StartsWith("subvol=") || x.StartsWith("subvolid=")));
                     var r = await Proc.Run("mount", o.Length > 0 ? ["-o", o, dev, at] : [dev, at]);
                     if (r.Ok) { mounted.Push(at); s.Log($"{mp}: {dev}"); }
-                    else s.Log($"Não montou {mp} ({dev}): {r.Message.Trim()}");
+                    else s.Log(L.T($"Não montou {mp} ({dev}): {r.Message.Trim()}"));
                 }
             }
             var disk = root.Disk;
             // o /boot pode estar em outro disco: no BIOS, o GRUB vai para o disco que tem o /boot
             var plan = new Plan { Target = disk, Uefi = info.Uefi, Loader = info.Loader };
-            s.Log($"{info.Name} · {(info.Uefi ? "UEFI" : "BIOS")} · {info.Loader} · disco {disk.DevicePath}");
+            s.Log(L.T($"{info.Name} · {(info.Uefi ? "UEFI" : "BIOS")} · {info.Loader} · disco {disk.DevicePath}"));
             // a pasta EFI pode ter sumido (é justamente o boot quebrado); o que precisa é a partição EFI montada
             bool espMounted = running
                 ? LinuxDiskSystem.ReadMounts().Any(m => m.MountPoint is "/boot/efi" or "/efi")
                 : mounted.Any(m => m == mnt + "/boot/efi" || m == mnt + "/efi");
             if (info.Uefi && !espMounted)
-                throw new InvalidOperationException("Não achei a partição EFI do sistema (o fstab dele não a encontra). Confira se ela existe e se o fstab aponta para ela.");
+                throw new InvalidOperationException(L.T("Não achei a partição EFI do sistema (o fstab dele não a encontra). Confira se ela existe e se o fstab aponta para ela."));
             // Fedora/RHEL com UEFI: o shim assinado já na partição EFI basta (o grub2-install quebraria o Secure Boot)
             string espDir = Directory.Exists(Path.Combine(mnt, "boot/efi/EFI")) ? Path.Combine(mnt, "boot/efi/EFI") : Path.Combine(mnt, "efi/EFI");
             bool shim = Directory.Exists(espDir) && Directory.EnumerateFiles(espDir, "shim*.efi", SearchOption.AllDirectories).Any();
             await Bootloader(plan, [], mnt, freshEsp: !shim, s, nvram: true);
-            s.Log("Inicialização reparada. Reinicie e escolha o disco (ou a entrada do sistema) no menu de boot.");
+            s.Log(L.T("Inicialização reparada. Reinicie e escolha o disco (ou a entrada do sistema) no menu de boot."));
         }
         finally
         {

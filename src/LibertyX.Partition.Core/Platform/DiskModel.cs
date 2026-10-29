@@ -8,7 +8,7 @@ public sealed class DiskInfo
 {
     public int Number { get; init; }
     public string DevicePath { get; init; } = "";
-    public string Model { get; set; } = "Disco";
+    public string Model { get; set; } = L.T("Disco");
     public string Serial { get; set; } = "";
     public string Firmware { get; set; } = "";
     public string Bus { get; set; } = "";
@@ -32,9 +32,9 @@ public sealed class DiskInfo
     public SmartReport? Smart { get; set; }
     public string? Error { get; set; }
 
-    public string Title => IsImage ? $"Imagem · {Path.GetFileName(ImagePath)}" : KernelName.Length > 0 ? DevicePath : $"Disco {Number}";
-    public string StyleText => IsVirtual ? VirtualKind! : Table.Style switch { TableStyle.Gpt => "GPT", TableStyle.Mbr => "MBR", _ => "Sem tabela" };
-    public string KindText => IsImage ? "Arquivo de imagem" : IsVirtual ? $"Volume {VirtualKind}" : Bus is "USB" or "SD" or "MMC" ? $"{Bus} removível" : IsSsd == true ? (Bus == "NVMe" ? "SSD NVMe" : "SSD") : IsSsd == false ? "HD" : Bus;
+    public string Title => IsImage ? L.T($"Imagem · {Path.GetFileName(ImagePath)}") : KernelName.Length > 0 ? DevicePath : L.T($"Disco {Number}");
+    public string StyleText => IsVirtual ? VirtualKind! : Table.Style switch { TableStyle.Gpt => "GPT", TableStyle.Mbr => "MBR", _ => L.T("Sem tabela") };
+    public string KindText => IsImage ? L.T("Arquivo de imagem") : IsVirtual ? L.T($"Volume {VirtualKind}") : Bus is "USB" or "SD" or "MMC" ? L.T($"{Bus} removível") : IsSsd == true ? (Bus == "NVMe" ? L.T("SSD NVMe") : "SSD") : IsSsd == false ? "HD" : Bus;
     /// <summary>
     /// Disco inteiro pode ser reescrito (limpar, converter, clonar por cima, excluir todas).
     /// Nunca o do sistema em uso, nem um volume lógico (LVM/LUKS) — esse se altera pela partição.
@@ -87,24 +87,24 @@ public sealed class PartitionInfo
     public bool IsRecovery => Entry != null && (Entry.TypeGuid == PartitionTypes.WinRecovery || Entry.MbrType == 0x27);
     public bool IsSystemCritical => IsSystemVolume || HasPageFile || InUseBySystem || (Disk.IsSystem && (IsEsp || IsMsr) && OperatingSystem.IsWindows());
 
-    public string DisplayName => IsUnallocated ? "Não alocado" : Letter ?? KernelName ?? (Label is { Length: > 0 } ? Label : "*");
+    public string DisplayName => IsUnallocated ? L.T("Não alocado") : Letter ?? KernelName ?? (Label is { Length: > 0 } ? Label : "*");
 
-    public string TypeText => IsUnallocated ? "Espaço livre" : IsWholeDisk ? "Volume sem partição"
+    public string TypeText => IsUnallocated ? L.T("Espaço livre") : IsWholeDisk ? L.T("Volume sem partição")
         : Disk.Table.Style == TableStyle.Gpt ? $"GPT · {PartitionTypes.GptName(Entry!.TypeGuid)}"
-        : (Entry!.IsLogical ? "Lógica" : "Primária") + " · " + PartitionTypes.MbrName(Entry.MbrType);
+        : (Entry!.IsLogical ? L.T("Lógica") : L.T("Primária")) + " · " + PartitionTypes.MbrName(Entry.MbrType);
 
     public string StatusText
     {
         get
         {
             var s = new List<string>();
-            if (IsEsp) s.Add("Sistema EFI");
-            if (Entry?.Active == true) s.Add("Ativa");
-            if (IsSystemVolume) s.Add(OperatingSystem.IsWindows() ? "Windows" : "Sistema (/)");
-            if (HasPageFile) s.Add(OperatingSystem.IsWindows() ? "Paginação" : "Swap ativa");
-            if (!OperatingSystem.IsWindows() && !IsSystemVolume && MountPoints.Count > 0) s.Add("Montada em " + MountPoints[0]);
+            if (IsEsp) s.Add(L.T("Sistema EFI"));
+            if (Entry?.Active == true) s.Add(L.T("Ativa"));
+            if (IsSystemVolume) s.Add(OperatingSystem.IsWindows() ? L.T("Windows") : L.T("Sistema (/)"));
+            if (HasPageFile) s.Add(OperatingSystem.IsWindows() ? L.T("Paginação") : L.T("Swap ativa"));
+            if (!OperatingSystem.IsWindows() && !IsSystemVolume && MountPoints.Count > 0) s.Add(L.T("Montada em ") + MountPoints[0]);
             if (HeldBy != null) s.Add(HeldBy);
-            if (IsRecovery) s.Add("Recuperação");
+            if (IsRecovery) s.Add(L.T("Recuperação"));
             if (BitLocker) s.Add("BitLocker");
             return s.Count == 0 ? "—" : string.Join(" · ", s);
         }
@@ -133,7 +133,7 @@ public static class LayoutBuilder
         d.Partitions.Clear();
         PartitionTable t;
         try { t = PartitionCodec.Read(dev); }
-        catch (Exception ex) { d.Error = "Tabela ilegível: " + ex.Message; t = new PartitionTable { SectorSize = dev.SectorSize, DiskSectors = dev.Length / dev.SectorSize }; }
+        catch (Exception ex) { d.Error = L.T("Tabela ilegível: ") + ex.Message; t = new PartitionTable { SectorSize = dev.SectorSize, DiskSectors = dev.Length / dev.SectorSize }; }
         d.Table = t;
         int ss = dev.SectorSize;
         if (t.Style == TableStyle.None)
@@ -238,7 +238,7 @@ public static class UsageCalculator
                     {
                         var c = ApfsContainer.Open(vol, out _);
                         if (c == null) return null;
-                        variant = c.Volumes.Any(x => x.Encrypted) ? "APFS (criptografado)" : "APFS";
+                        variant = c.Volumes.Any(x => x.Encrypted) ? L.T("APFS (criptografado)") : "APFS";
                         long total = (long)c.BlockCount * c.BlockSize, used = Math.Min(total, c.UsedBytes);
                         var names = c.Volumes.Where(x => x.Role is 0 or 0x2 or 0x40).Select(x => x.Name).Where(n => n.Length > 0).ToList();
                         if (names.Count == 0) names = c.Volumes.Select(x => x.Name).Take(1).ToList();

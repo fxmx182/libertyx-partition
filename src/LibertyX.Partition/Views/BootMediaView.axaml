@@ -1,73 +1,74 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.BootMediaView" x:DataType="vm:BootMediaViewModel"
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.BootMediaView" x:DataType="vm:BootMediaViewModel"
              DragDrop.AllowDrop="True">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Margin="0,4,0,18">
-      <TextBlock Classes="h1" Text="Pendrive de boot e imagens" />
-      <TextBlock Classes="muted" Text="Instalação do Windows, ISOs de Linux e ferramentas, e imagens de disco (Raspberry Pi, Home Assistant…) — o que o Rufus e o balenaEtcher fazem, com verificação no fim." />
+      <TextBlock Classes="h1" Text="{l:T 'Pendrive de boot e imagens'}" />
+      <TextBlock Classes="muted" Text="{l:T 'Instalação do Windows, ISOs de Linux e ferramentas, e imagens de disco (Raspberry Pi, Home Assistant…) — o que o Rufus e o balenaEtcher fazem, com verificação no fim.'}" />
     </StackPanel>
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="300" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.9*" MinWidth="290" MaxWidth="460" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="10">
-          <TextBlock Classes="section" Text="DESTINO (SERÁ APAGADO)" />
+          <TextBlock Classes="section" Text="{l:T 'DESTINO (SERÁ APAGADO)'}" />
           <ContentControl Content="{Binding Target}" />
-          <CheckBox IsChecked="{Binding ShowAllDisks}" Content="Mostrar todos os discos (HDs externos e internos)" FontSize="12.5" />
+          <CheckBox IsChecked="{Binding ShowAllDisks}" Content="{l:T 'Mostrar todos os discos (HDs externos e internos)'}" FontSize="12.5" />
         </StackPanel>
       </ScrollViewer>
       <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
         <Border Classes="card" VerticalAlignment="Top">
           <StackPanel Spacing="12">
-            <TextBlock Classes="section" Text="IMAGEM" />
+            <TextBlock Classes="section" Text="{l:T 'IMAGEM'}" />
             <!-- área de soltar: arrastar o arquivo do Explorador funciona na tela inteira -->
             <Border Classes="inset" Padding="14,12">
               <StackPanel Spacing="8">
                 <Grid ColumnDefinitions="*,8,Auto">
-                  <TextBox Text="{Binding ImageName}" ToolTip.Tip="{Binding ImagePath}" Watermark="Arraste um arquivo para cá" IsReadOnly="True" />
-                  <Button Grid.Column="2" Content="Escolher…" Command="{Binding PickImageCommand}" />
+                  <TextBox Text="{Binding ImageName}" ToolTip.Tip="{Binding ImagePath}" Watermark="{l:T 'Arraste um arquivo para cá'}" IsReadOnly="True" />
+                  <Button Grid.Column="2" Content="{l:T 'Escolher…'}" Command="{Binding PickImageCommand}" />
                 </Grid>
                 <TextBlock Text="{Binding ImageInfo}" Classes="faint" TextWrapping="Wrap" />
                 <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding ImagePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                   <Button Classes="ghost" Command="{Binding ComputeShaCommand}" IsEnabled="{Binding !Hashing}" Padding="8,5" FontSize="12">
-                    <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IcShield}" Classes="small" /><TextBlock Text="SHA-256" /></StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IcShield}" Classes="small" /><TextBlock Text="{l:T 'SHA-256'}" /></StackPanel>
                   </Button>
                   <SelectableTextBlock Grid.Column="1" Text="{Binding Sha}" Classes="mono" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center" Margin="8,0,0,0" />
                 </Grid>
               </StackPanel>
             </Border>
 
-            <TextBlock Classes="section" Text="MODO" Margin="0,4,0,0" />
+            <TextBlock Classes="section" Text="{l:T 'MODO'}" Margin="0,4,0,0" />
             <ComboBox ItemsSource="{Binding Modes}" SelectedIndex="{Binding Mode}" HorizontalAlignment="Stretch" />
             <TextBlock Text="{Binding ModeNote}" Classes="faint" TextWrapping="Wrap" />
 
             <StackPanel Spacing="10" IsVisible="{Binding IsFiles}">
               <StackPanel Spacing="6">
-                <TextBlock Text="Esquema de partição" FontSize="12.5" Foreground="{StaticResource Apagado}" />
+                <TextBlock Text="{l:T 'Esquema de partição'}" FontSize="12.5" Foreground="{StaticResource Apagado}" />
                 <ComboBox ItemsSource="{Binding Schemes}" SelectedIndex="{Binding Scheme}" HorizontalAlignment="Stretch" />
               </StackPanel>
               <StackPanel Spacing="6">
-                <TextBlock Text="Rótulo do pendrive" FontSize="12.5" Foreground="{StaticResource Apagado}" />
+                <TextBlock Text="{l:T 'Rótulo do pendrive'}" FontSize="12.5" Foreground="{StaticResource Apagado}" />
                 <TextBox Text="{Binding Label}" MaxLength="11" />
               </StackPanel>
             </StackPanel>
 
             <Border Classes="option" IsVisible="{Binding IsWindows}">
               <StackPanel Spacing="8">
-                <TextBlock Text="Personalizar a instalação do Windows" FontWeight="Bold" />
-                <CheckBox IsChecked="{Binding BypassRequirements}" Content="Remover a exigência de TPM 2.0, Secure Boot e 4 GB de RAM" />
-                <CheckBox IsChecked="{Binding LocalAccount}" Content="Instalar sem conta Microsoft e sem internet" />
+                <TextBlock Text="{l:T 'Personalizar a instalação do Windows'}" FontWeight="Bold" />
+                <CheckBox IsChecked="{Binding BypassRequirements}" Content="{l:T 'Remover a exigência de TPM 2.0, Secure Boot e 4 GB de RAM'}" />
+                <CheckBox IsChecked="{Binding LocalAccount}" Content="{l:T 'Instalar sem conta Microsoft e sem internet'}" />
                 <StackPanel Spacing="4" Margin="30,0,0,0">
-                  <TextBlock Text="Criar conta local com o nome (opcional)" FontSize="12" Foreground="{StaticResource Tenue}" />
-                  <TextBox Text="{Binding UserName}" Watermark="ex.: Maria" MaxLength="20" />
+                  <TextBlock Text="{l:T 'Criar conta local com o nome (opcional)'}" FontSize="12" Foreground="{StaticResource Tenue}" />
+                  <TextBox Text="{Binding UserName}" Watermark="{l:T 'ex.: Maria'}" MaxLength="20" />
                 </StackPanel>
-                <CheckBox IsChecked="{Binding SkipPrivacy}" Content="Pular as perguntas de privacidade e coleta de dados" />
-                <CheckBox IsChecked="{Binding NoAutoEncryption}" Content="Não criptografar o disco sozinho (BitLocker automático)" />
+                <CheckBox IsChecked="{Binding SkipPrivacy}" Content="{l:T 'Pular as perguntas de privacidade e coleta de dados'}" />
+                <CheckBox IsChecked="{Binding NoAutoEncryption}" Content="{l:T 'Não criptografar o disco sozinho (BitLocker automático)'}" />
               </StackPanel>
             </Border>
 
-            <CheckBox IsChecked="{Binding Verify}" IsVisible="{Binding IsRaw}" Content="Verificar depois de gravar (relê e compara o SHA-256)" />
+            <CheckBox IsChecked="{Binding Verify}" IsVisible="{Binding IsRaw}" Content="{l:T 'Verificar depois de gravar (relê e compara o SHA-256)'}" />
 
             <Button Classes="primary" Command="{Binding WriteCommand}" IsEnabled="{Binding CanWrite}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="16,12">
-              <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcBoot}" /><TextBlock Text="Gravar" /></StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcBoot}" /><TextBlock Text="{l:T 'Gravar'}" /></StackPanel>
             </Button>
           </StackPanel>
         </Border>

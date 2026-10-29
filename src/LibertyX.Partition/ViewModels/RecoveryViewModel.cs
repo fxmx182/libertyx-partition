@@ -65,9 +65,9 @@ public sealed partial class FileRow : ObservableObject
         FileCategory.Image => "Image", FileCategory.Video => "Video", FileCategory.Audio => "Audio", FileCategory.Document => "Document",
         FileCategory.Archive => "Archive", FileCategory.Code => "Code", FileCategory.Executable => "App", FileCategory.Database => "Database", _ => "File",
     });
-    public string ConditionText => Item.Origin == ItemOrigin.Live ? "Existente" : Item.Condition switch
+    public string ConditionText => Item.Origin == ItemOrigin.Live ? L.T("Existente") : Item.Condition switch
     {
-        Condition.Excellent => "Excelente", Condition.Good => "Boa", Condition.Partial => "Parcial", Condition.Overwritten => "Sobrescrito", _ => Item.Origin == ItemOrigin.Carved ? "Escavado" : "Desconhecida",
+        Condition.Excellent => L.T("Excelente"), Condition.Good => L.T("Boa"), Condition.Partial => L.T("Parcial"), Condition.Overwritten => L.T("Sobrescrito"), _ => Item.Origin == ItemOrigin.Carved ? L.T("Escavado") : L.T("Desconhecida"),
     };
     public bool CondGood => Item.Origin != ItemOrigin.Live && Item.Condition is Condition.Excellent or Condition.Good;
     public bool CondPartial => Item.Condition == Condition.Partial;
@@ -88,7 +88,7 @@ public sealed partial class FileRow : ObservableObject
 /// </summary>
 public sealed partial class RecoveryViewModel : PageViewModel
 {
-    public override string Title => "Recuperar dados";
+    public override string Title => L.T("Recuperar dados");
     public override string IconKey => "RecoverFiles";
 
     public PickerViewModel Picker { get; } = new() { AllowUnallocated = true };
@@ -117,7 +117,7 @@ public sealed partial class RecoveryViewModel : PageViewModel
     [ObservableProperty] private bool _hideOverwritten;
     [ObservableProperty] private string _resultTitle = "";
     [ObservableProperty] private string _resultSubtitle = "";
-    [ObservableProperty] private string _selectionText = "Nada selecionado";
+    [ObservableProperty] private string _selectionText = L.T("Nada selecionado");
     [ObservableProperty] private bool _hasSelection;
     [ObservableProperty] private Bitmap? _previewImage;
     [ObservableProperty] private string? _previewText;
@@ -180,9 +180,9 @@ public sealed partial class RecoveryViewModel : PageViewModel
             IncludeLive = IncludeLive, DeepScan = DeepScan, CarveFreeSpaceOnly = FreeOnly,
             CarveTypes = Types.All(t => t.IsChecked) ? null : Types.Where(t => t.IsChecked).Select(t => t.Ext).ToHashSet(),
         };
-        SourceText = sel.Partition == null ? $"{sel.Disk.Title} · disco inteiro" : $"{sel.Title} · {sel.Disk.Title}";
+        SourceText = sel.Partition == null ? L.T($"{sel.Disk.Title} · disco inteiro") : $"{sel.Title} · {sel.Disk.Title}";
         ScanLog.Clear();
-        ScanFound = 0; ScanFraction = 0; ScanPhase = "Abrindo…"; ScanIndeterminate = true;
+        ScanFound = 0; ScanFraction = 0; ScanPhase = L.T("Abrindo…"); ScanIndeterminate = true;
         Step = 1;
         _dev?.Dispose(); _dev = null;
         var sw = Stopwatch.StartNew();
@@ -192,7 +192,7 @@ public sealed partial class RecoveryViewModel : PageViewModel
             if ((DateTime.UtcNow - last).TotalMilliseconds < 100 && p.Fraction < 1) return;
             last = DateTime.UtcNow;
             ScanPhase = p.Phase; ScanFraction = p.Fraction; ScanFound = p.Found; ScanIndeterminate = false;
-            ScanElapsed = Fmt.Duration(sw.Elapsed) + (p.Fraction > 0.02 && p.Fraction < 1 ? $" · faltam ~{Fmt.Duration(TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * (1 - p.Fraction) / p.Fraction))}" : "");
+            ScanElapsed = Fmt.Duration(sw.Elapsed) + (p.Fraction > 0.02 && p.Fraction < 1 ? L.T($" · faltam ~{Fmt.Duration(TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * (1 - p.Fraction) / p.Fraction))}") : "");
         });
         ScanResult? res = null;
         var holder = new ScanResult[1];
@@ -200,11 +200,11 @@ public sealed partial class RecoveryViewModel : PageViewModel
         {
             res = await Task.Run(() => DoScan(sel.Disk, sel.Partition, opt, progress, ct, holder), ct);
         }
-        catch (OperationCanceledException) { res = holder[0]; if (res != null) res.Log.Add("Varredura interrompida: mostrando o que foi achado até aqui."); }
+        catch (OperationCanceledException) { res = holder[0]; if (res != null) res.Log.Add(L.T("Varredura interrompida: mostrando o que foi achado até aqui.")); }
         catch (Exception ex)
         {
             CrashLog.Write(ex);
-            await Main.Alert("Não foi possível varrer", ex.Message, "danger");
+            await Main.Alert(L.T("Não foi possível varrer"), ex.Message, "danger");
             Step = 0;
             return;
         }
@@ -226,7 +226,7 @@ public sealed partial class RecoveryViewModel : PageViewModel
                 long? ntfsCluster = res.FileSystem == "NTFS" ? res.ClusterSize : res.Allocation == null ? 4096 : null;
                 Carver.Carve(_dev, ranges, res, opt, progress, ct, ntfsCluster);
             }
-            if (res.Root.Name is "Raiz" or "Volume") res.Root.Name = p.Letter ?? p.Label ?? "Partição";
+            if (res.Root.Name == L.T("Raiz") || res.Root.Name == L.T("Volume")) res.Root.Name = p.Letter ?? p.Label ?? L.T("Partição");
             return res;
         }
         var disk = DiskSystem.OpenDisk(d, false);
@@ -235,7 +235,7 @@ public sealed partial class RecoveryViewModel : PageViewModel
         holder[0] = res2;
         if (p != null)
         {
-            return DiskScanner.Scan(disk, d.Table, p.Offset, p.Length, "Espaço não alocado", opt, progress, ct, res2);
+            return DiskScanner.Scan(disk, d.Table, p.Offset, p.Length, L.T("Espaço não alocado"), opt, progress, ct, res2);
         }
         return DiskScanner.Scan(disk, d.Table, 0, disk.Length, d.Title, opt, progress, ct, res2);
     }
@@ -260,19 +260,19 @@ public sealed partial class RecoveryViewModel : PageViewModel
         Tree.Clear();
         var files = res.Items.Where(i => !i.IsDirectory).ToList();
         long deleted = files.Count(f => f.Origin != ItemOrigin.Live);
-        ResultTitle = $"{Fmt.Num(files.Count)} arquivos encontrados";
-        ResultSubtitle = $"{SourceText} · {res.FileSystem} · {Fmt.Num(deleted)} apagados ou perdidos · {Fmt.Size(files.Sum(f => f.Size))}";
+        ResultTitle = L.T($"{Fmt.Num(files.Count)} arquivos encontrados");
+        ResultSubtitle = L.T($"{SourceText} · {res.FileSystem} · {Fmt.Num(deleted)} apagados ou perdidos · {Fmt.Size(files.Sum(f => f.Size))}");
         foreach (var l in res.Log) ScanLog.Add(l);
 
         var root = MakeNode(res.Root);
         root.IsExpanded = true;
         Tree.Add(root);
         // vista por tipo
-        var byType = new FolderNode { Name = "Por tipo de arquivo", Owner = this, Icon = Ui.Icon("Filter"), VirtualFiles = [], IsExpanded = true };
+        var byType = new FolderNode { Name = L.T("Por tipo de arquivo"), Owner = this, Icon = Ui.Icon("Filter"), VirtualFiles = [], IsExpanded = true };
         foreach (var g in files.GroupBy(f => f.Category).OrderBy(g => g.Key))
         {
             var cat = new FolderNode { Name = FileTypes.CategoryName(g.Key), Owner = this, Icon = Ui.Icon("Folder"), VirtualFiles = [], Count = g.Count() };
-            foreach (var e in g.GroupBy(f => f.Extension.Length > 0 ? f.Extension : "(sem extensão)").OrderByDescending(e => e.Count()))
+            foreach (var e in g.GroupBy(f => f.Extension.Length > 0 ? f.Extension : L.T("(sem extensão)")).OrderByDescending(e => e.Count()))
                 cat.Children.Add(new FolderNode { Name = "." + e.Key, Owner = this, Icon = Ui.Icon("File"), VirtualFiles = e.ToList(), Count = e.Count() });
             byType.Children.Add(cat);
         }
@@ -334,7 +334,7 @@ public sealed partial class RecoveryViewModel : PageViewModel
         };
         var list = src.Take(50_000).ToList();
         foreach (var f in list) Files.Add(new FileRow(f, this));
-        ListCaption = list.Count == 50_000 ? "Mostrando os primeiros 50.000 — refine a busca" : $"{Fmt.Num(list.Count)} arquivo(s) aqui";
+        ListCaption = list.Count == 50_000 ? L.T("Mostrando os primeiros 50.000 — refine a busca") : L.T($"{Fmt.Num(list.Count)} arquivo(s) aqui");
     }
 
     public bool IsChecked(RecoveredItem i) => _checked.Contains(i);
@@ -363,7 +363,7 @@ public sealed partial class RecoveryViewModel : PageViewModel
     private void UpdateSelection()
     {
         HasSelection = _checked.Count > 0;
-        SelectionText = _checked.Count == 0 ? "Marque os arquivos que quer de volta" : $"{Fmt.Num(_checked.Count)} selecionado(s) · {Fmt.Size(_checked.Sum(f => f.Size))}";
+        SelectionText = _checked.Count == 0 ? L.T("Marque os arquivos que quer de volta") : L.T($"{Fmt.Num(_checked.Count)} selecionado(s) · {Fmt.Size(_checked.Sum(f => f.Size))}");
     }
 
     // ───────────── prévia ─────────────
@@ -375,15 +375,15 @@ public sealed partial class RecoveryViewModel : PageViewModel
         FileDetails.Clear();
         if (value == null) return;
         var it = value.Item;
-        FileDetails.Add(new("Nome", it.Name));
-        FileDetails.Add(new("Pasta", it.Parent?.FullPath ?? "—"));
-        FileDetails.Add(new("Tamanho", $"{Fmt.Size(it.Size)} ({it.Size:N0} bytes)"));
-        FileDetails.Add(new("Modificado", Fmt.Date(it.Modified)));
-        FileDetails.Add(new("Criado", Fmt.Date(it.Created)));
-        FileDetails.Add(new("Estado", value.ConditionText + (it.Origin == ItemOrigin.Carved ? " (por assinatura)" : it.Origin == ItemOrigin.Orphan ? " (registro MFT avulso)" : "")));
-        if (it.Note != null) FileDetails.Add(new("Observação", it.Note));
+        FileDetails.Add(new(L.T("Nome"), it.Name));
+        FileDetails.Add(new(L.T("Pasta"), it.Parent?.FullPath ?? "—"));
+        FileDetails.Add(new(L.T("Tamanho"), L.T($"{Fmt.Size(it.Size)} ({it.Size:N0} bytes)")));
+        FileDetails.Add(new(L.T("Modificado"), Fmt.Date(it.Modified)));
+        FileDetails.Add(new(L.T("Criado"), Fmt.Date(it.Created)));
+        FileDetails.Add(new(L.T("Estado"), value.ConditionText + (it.Origin == ItemOrigin.Carved ? L.T(" (por assinatura)") : it.Origin == ItemOrigin.Orphan ? L.T(" (registro MFT avulso)") : "")));
+        if (it.Note != null) FileDetails.Add(new(L.T("Observação"), it.Note));
         if (it.Data is ExtentSource es && es.Extents.Count > 0 && !es.Extents[0].Sparse)
-            FileDetails.Add(new("Posição", $"byte {es.Extents[0].DeviceOffset:N0} · {es.Extents.Count} fragmento(s)"));
+            FileDetails.Add(new(L.T("Posição"), L.T($"byte {es.Extents[0].DeviceOffset:N0} · {es.Extents.Count} fragmento(s)")));
         var cts = _previewCts = new CancellationTokenSource();
         _ = Task.Run(() => LoadPreview(it, cts.Token));
     }
@@ -426,7 +426,7 @@ public sealed partial class RecoveryViewModel : PageViewModel
         }
         catch (Exception ex)
         {
-            Ui.Post(() => { if (!ct.IsCancellationRequested) PreviewText = "Prévia indisponível: " + ex.Message; });
+            Ui.Post(() => { if (!ct.IsCancellationRequested) PreviewText = L.T("Prévia indisponível: ") + ex.Message; });
         }
     }
 
@@ -441,13 +441,13 @@ public sealed partial class RecoveryViewModel : PageViewModel
         long want = files.Sum(f => f.Size);
         if (!lic.IsPremium && want > lic.FreeRemaining)
         {
-            if (await Main.Confirm("Limite do Básico",
-                $"O Básico recupera até {Fmt.Size(LibertyX.Partition.Core.Licensing.LicenseManager.FreeLimit)} no total, somando todas as recuperações. Você marcou {Fmt.Size(want)} e restam {Fmt.Size(lic.FreeRemaining)}.\n\nDesmarque alguns arquivos, ou ative o Premium para recuperar sem limite: os arquivos que você está vendo continuam aqui.",
-                "Conhecer o Premium", icon: "Crown"))
+            if (await Main.Confirm(L.T("Limite do Básico"),
+                L.T($"O Básico recupera até {Fmt.Size(LibertyX.Partition.Core.Licensing.LicenseManager.FreeLimit)} no total, somando todas as recuperações. Você marcou {Fmt.Size(want)} e restam {Fmt.Size(lic.FreeRemaining)}.\n\nDesmarque alguns arquivos, ou ative o Premium para recuperar sem limite: os arquivos que você está vendo continuam aqui."),
+                L.T("Conhecer o Premium"), icon: "Crown"))
                 Main.Navigate("premium");
             return;
         }
-        var dest = await MainViewModel.PickFolder("Onde salvar os arquivos recuperados");
+        var dest = await MainViewModel.PickFolder(L.T("Onde salvar os arquivos recuperados"));
         if (dest == null) return;
         var src = Picker.Selected;
         if (src != null && !src.Disk.IsImage && OperatingSystem.IsLinux())
@@ -455,9 +455,9 @@ public sealed partial class RecoveryViewModel : PageViewModel
             // o disco físico de onde vem o destino (atravessando LVM/LUKS) é o mesmo que está sendo recuperado?
             string? mp = ActionsBuilder.MountOnDisk(dest, src.Disk);
             bool same = mp != null;
-            if (same && !await Main.Confirm("Mesmo disco da origem",
-                    $"Você vai gravar os arquivos recuperados em {mp}, que fica no MESMO disco que está sendo recuperado.\n\nCada arquivo gravado pode cair exatamente em cima de outro que ainda não foi recuperado — e esse se perde para sempre. Use outro disco, um pendrive ou um HD externo.",
-                    "Gravar mesmo assim", true)) return;
+            if (same && !await Main.Confirm(L.T("Mesmo disco da origem"),
+                    L.T($"Você vai gravar os arquivos recuperados em {mp}, que fica no MESMO disco que está sendo recuperado.\n\nCada arquivo gravado pode cair exatamente em cima de outro que ainda não foi recuperado — e esse se perde para sempre. Use outro disco, um pendrive ou um HD externo."),
+                    L.T("Gravar mesmo assim"), true)) return;
         }
         if (src != null && !src.Disk.IsImage && OperatingSystem.IsWindows())
         {
@@ -465,28 +465,28 @@ public sealed partial class RecoveryViewModel : PageViewModel
             var destDisk = Main.Disks.FirstOrDefault(d => d.Partitions.Any(p => string.Equals(p.Letter, root, StringComparison.OrdinalIgnoreCase)));
             if (destDisk != null && destDisk.Number == src.Disk.Number && !destDisk.IsImage)
             {
-                if (!await Main.Confirm("Mesmo disco da origem",
-                    $"Você vai gravar os arquivos recuperados em {root}, que fica no MESMO disco que está sendo recuperado.\n\nCada arquivo gravado pode cair exatamente em cima de outro que ainda não foi recuperado — e esse se perde para sempre. Use outro disco, um pendrive ou um HD externo.",
-                    "Gravar mesmo assim", true)) return;
+                if (!await Main.Confirm(L.T("Mesmo disco da origem"),
+                    L.T($"Você vai gravar os arquivos recuperados em {root}, que fica no MESMO disco que está sendo recuperado.\n\nCada arquivo gravado pode cair exatamente em cima de outro que ainda não foi recuperado — e esse se perde para sempre. Use outro disco, um pendrive ou um HD externo."),
+                    L.T("Gravar mesmo assim"), true)) return;
             }
         }
         long total = files.Sum(f => f.Size);
         string? report = null;
         long saved = 0;
-        bool ok = await Main.Run("Recuperando arquivos", s =>
+        bool ok = await Main.Run(L.T("Recuperando arquivos"), s =>
         {
             var rep = RecoveryExporter.Export(files, dest, true, new Progress<ExportProgress>(p =>
                 s.Progress(p.BytesTotal == 0 ? (double)p.FilesDone / Math.Max(1, p.FilesTotal) : (double)p.BytesDone / p.BytesTotal,
-                    $"{Fmt.Num(p.FilesDone)} de {Fmt.Num(p.FilesTotal)} arquivos", p.Current)), s.Token);
-            s.Log($"{rep.Saved} arquivo(s) salvos ({Fmt.Size(rep.Bytes)}).");
+                    L.T($"{Fmt.Num(p.FilesDone)} de {Fmt.Num(p.FilesTotal)} arquivos"), p.Current)), s.Token);
+            s.Log(L.T($"{rep.Saved} arquivo(s) salvos ({Fmt.Size(rep.Bytes)})."));
             saved = rep.Bytes;
-            if (rep.WithBadSectors > 0) s.Log($"{rep.WithBadSectors} arquivo(s) tinham setores ilegíveis (preenchidos com zeros).");
-            if (rep.Failed > 0) s.Log($"{rep.Failed} arquivo(s) não puderam ser gravados — veja o relatório.");
-            s.Log($"Relatório: {rep.ReportPath}");
+            if (rep.WithBadSectors > 0) s.Log(L.T($"{rep.WithBadSectors} arquivo(s) tinham setores ilegíveis (preenchidos com zeros)."));
+            if (rep.Failed > 0) s.Log(L.T($"{rep.Failed} arquivo(s) não puderam ser gravados — veja o relatório."));
+            s.Log(L.T($"Relatório: {rep.ReportPath}"));
             report = rep.ReportPath;
             // no Linux o app roda como root: os arquivos voltam a ser de quem pediu a recuperação
             if (OperatingSystem.IsLinux()) Core.Platform.Linux.LinuxSession.GiveBack(dest);
-        }, refresh: false, success: $"Arquivos salvos em {dest}");
+        }, refresh: false, success: L.T($"Arquivos salvos em {dest}"));
         if (saved > 0 && !lic.IsPremium) { lic.AddFreeRecovered(saved); Main.LicenseChanged(); }
         if (ok && Main.Operation != null) Main.Operation.AfterClose = () => { MainViewModel.OpenInExplorer(dest); return Task.CompletedTask; };
     }

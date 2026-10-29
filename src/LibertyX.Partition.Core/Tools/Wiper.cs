@@ -13,12 +13,12 @@ public static class Wiper
 {
     public static string Describe(WipeMethod m) => m switch
     {
-        WipeMethod.Zeros => "Preencher com zeros (1 passada) — rápido; suficiente para SSD e para reaproveitar o disco",
-        WipeMethod.Random => "Dados aleatórios (1 passada)",
-        WipeMethod.DoD3Pass => "DoD 5220.22-M (3 passadas: zeros, uns, aleatório)",
-        WipeMethod.Gutmann7 => "Reforçado (7 passadas alternadas) — lento; para discos mecânicos antigos",
-        WipeMethod.Discard => "SSD: descartar todos os blocos (TRIM) — segundos, e o SSD volta ao desempenho de novo",
-        WipeMethod.Sanitize => "SSD: apagamento seguro do fabricante (NVMe Format / ATA Secure Erase) — inclusive as células de reserva",
+        WipeMethod.Zeros => L.T("Preencher com zeros (1 passada) — rápido; suficiente para SSD e para reaproveitar o disco"),
+        WipeMethod.Random => L.T("Dados aleatórios (1 passada)"),
+        WipeMethod.DoD3Pass => L.T("DoD 5220.22-M (3 passadas: zeros, uns, aleatório)"),
+        WipeMethod.Gutmann7 => L.T("Reforçado (7 passadas alternadas) — lento; para discos mecânicos antigos"),
+        WipeMethod.Discard => L.T("SSD: descartar todos os blocos (TRIM) — segundos, e o SSD volta ao desempenho de novo"),
+        WipeMethod.Sanitize => L.T("SSD: apagamento seguro do fabricante (NVMe Format / ATA Secure Erase) — inclusive as células de reserva"),
         _ => "",
     };
 

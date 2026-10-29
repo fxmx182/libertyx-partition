@@ -93,6 +93,25 @@ O app se atualiza sozinho: o AppImage troca o próprio arquivo; o .deb/.rpm atua
 - `tests/Snap` — capturas de tela sem monitor (Avalonia.Headless).
 - `Scripts/icone.py` — ícone e marca, gerados por geometria.
 
+## Idiomas
+
+Português, inglês e espanhol. O app abre no idioma do sistema (no Linux, `LANGUAGE`/`LC_ALL`/
+`LC_MESSAGES`/`LANG`; no Windows, o idioma da interface); outro idioma qualquer abre em inglês. O
+botão "Aa" no rodapé da barra lateral troca o idioma, e o app reabre. O autoteste roda sempre em
+português.
+
+O texto em português fica no código e é a própria chave (`L.cs`):
+
+- C#: `L.T("Cancelar")` e `L.T($"Copiando {n} de {total}")` (a chave fica `Copiando {0} de {1}`).
+- AXAML: `Text="{l:T 'Cancelar'}"`.
+- As traduções ficam em `src/LibertyX.Partition.Core/Lang/en.json` e `es.json`.
+
+Comando, caminho, nome de ícone e saída de ferramenta comparada com `Contains` não levam `L.T`.
+Texto novo vai para os dois JSON (texto que não muda, como uma marca, entra com o próprio
+português). `python3 tests/i18n/conferir.py` lista o que falta, e o CI do Linux mostra isso como
+aviso. Para testar um idioma: `LANG=en_US.UTF-8`, ou `LX_SNAP_LANG=es` no `tests/Snap`;
+`LIBERTYX_LANG_MISSING=arquivo` registra o que apareceu sem tradução.
+
 ## Build
 
     dotnet publish src/LibertyX.Partition -c Release -r win-x64 --self-contained \

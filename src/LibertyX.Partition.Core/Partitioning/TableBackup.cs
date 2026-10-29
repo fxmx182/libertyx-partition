@@ -13,7 +13,7 @@ public static class TableBackup
     {
         get
         {
-            return Platform.AppPaths.EnsureDocuments("Backups de tabela");
+            return Platform.AppPaths.EnsureDocuments(L.T("Backups de tabela"));
         }
     }
 
@@ -61,8 +61,8 @@ public static class TableBackup
     {
         using var fs = File.OpenRead(path);
         var h = ReadHeader(fs);
-        if (h.SectorSize != dev.SectorSize) throw new InvalidOperationException("O backup é de um disco com outro tamanho de setor.");
-        if (h.DiskBytes != dev.Length) throw new InvalidOperationException($"O backup é de um disco de {h.DiskBytes:N0} bytes; este tem {dev.Length:N0}.");
+        if (h.SectorSize != dev.SectorSize) throw new InvalidOperationException(L.T("O backup é de um disco com outro tamanho de setor."));
+        if (h.DiskBytes != dev.Length) throw new InvalidOperationException(L.T($"O backup é de um disco de {h.DiskBytes:N0} bytes; este tem {dev.Length:N0}."));
         foreach (var r in h.Ranges)
         {
             var buf = new byte[r[1] * h.SectorSize];

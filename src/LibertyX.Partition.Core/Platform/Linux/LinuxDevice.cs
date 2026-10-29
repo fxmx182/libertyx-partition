@@ -37,11 +37,11 @@ public sealed unsafe class LinuxDevice : IBlockDevice
             int e = Errno;
             throw new IOException(e switch
             {
-                EACCES or EPERM => $"Acesso negado a {path}. O LibertyX Partition precisa rodar como administrador (root).",
-                EROFS => $"{path} está protegido contra gravação (trava do cartão SD ou mídia só de leitura).",
-                ENOMEDIUM or ENXIO or ENODEV => $"{path}: sem mídia ou dispositivo desconectado.",
-                EBUSY => $"{path} está em uso exclusivo por outro programa.",
-                _ => $"Não foi possível abrir {path}: {ErrText(e)}.",
+                EACCES or EPERM => L.T($"Acesso negado a {path}. O LibertyX Partition precisa rodar como administrador (root)."),
+                EROFS => L.T($"{path} está protegido contra gravação (trava do cartão SD ou mídia só de leitura)."),
+                ENOMEDIUM or ENXIO or ENODEV => L.T($"{path}: sem mídia ou dispositivo desconectado."),
+                EBUSY => L.T($"{path} está em uso exclusivo por outro programa."),
+                _ => L.T($"Não foi possível abrir {path}: {ErrText(e)}."),
             });
         }
         _fd = fd;
@@ -65,7 +65,7 @@ public sealed unsafe class LinuxDevice : IBlockDevice
     {
         if (offset >= Length) return 0;
         int want = (int)Math.Min(buffer.Length, Length - offset);
-        if (offset % SectorSize != 0 || want % SectorSize != 0) throw new ArgumentException("leitura desalinhada");
+        if (offset % SectorSize != 0 || want % SectorSize != 0) throw new ArgumentException(L.T("leitura desalinhada"));
         int done = 0;
         lock (_lock)
         {
@@ -78,7 +78,7 @@ public sealed unsafe class LinuxDevice : IBlockDevice
                 {
                     int e = Errno;
                     if (e == EINTR) continue;
-                    throw new MediaReadException(pos, n, e, $"Erro de leitura no setor {pos / SectorSize:N0}: {ErrText(e)}.");
+                    throw new MediaReadException(pos, n, e, L.T($"Erro de leitura no setor {pos / SectorSize:N0}: {ErrText(e)}."));
                 }
                 if (got == 0) break;
                 new Span<byte>(_bounce, (int)got).CopyTo(buffer[done..]);
@@ -91,8 +91,8 @@ public sealed unsafe class LinuxDevice : IBlockDevice
 
     public void Write(long offset, ReadOnlySpan<byte> buffer)
     {
-        if (!CanWrite) throw new IOException("dispositivo aberto só para leitura");
-        if (offset % SectorSize != 0 || buffer.Length % SectorSize != 0) throw new ArgumentException("escrita desalinhada");
+        if (!CanWrite) throw new IOException(L.T("dispositivo aberto só para leitura"));
+        if (offset % SectorSize != 0 || buffer.Length % SectorSize != 0) throw new ArgumentException(L.T("escrita desalinhada"));
         int done = 0;
         lock (_lock)
         {
@@ -108,11 +108,11 @@ public sealed unsafe class LinuxDevice : IBlockDevice
                     if (e == EINTR) continue;
                     throw new IOException(e switch
                     {
-                        EROFS or EPERM => $"Escrita recusada no setor {pos / SectorSize:N0}: mídia protegida contra gravação.",
-                        _ => $"Erro de escrita no setor {pos / SectorSize:N0}: {ErrText(e)}.",
+                        EROFS or EPERM => L.T($"Escrita recusada no setor {pos / SectorSize:N0}: mídia protegida contra gravação."),
+                        _ => L.T($"Erro de escrita no setor {pos / SectorSize:N0}: {ErrText(e)}."),
                     });
                 }
-                if (wrote == 0) throw new IOException($"O dispositivo parou de aceitar escrita no setor {pos / SectorSize:N0}.");
+                if (wrote == 0) throw new IOException(L.T($"O dispositivo parou de aceitar escrita no setor {pos / SectorSize:N0}."));
                 done += (int)wrote;
             }
         }

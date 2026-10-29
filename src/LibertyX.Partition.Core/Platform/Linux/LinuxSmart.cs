@@ -29,9 +29,9 @@ public static unsafe class LinuxSmart
         bool virtualDisk = d.Bus == "Virtio" || System.Text.RegularExpressions.Regex.IsMatch(d.Model, @"Virtual|QEMU|VMware|VBOX|Xen|Msft", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return d.Bus switch
         {
-            "SD" or "MMC" => new SmartReport { Summary = "Cartões SD e eMMC não têm S.M.A.R.T. — o teste de superfície é o jeito de avaliar." },
-            _ when virtualDisk => new SmartReport { Summary = "Disco virtual: a saúde é a do disco físico do hospedeiro." },
-            "USB" => new SmartReport { Summary = "Este adaptador USB não repassa o S.M.A.R.T. (instale o smartmontools: ele conhece mais pontes USB)." },
+            "SD" or "MMC" => new SmartReport { Summary = L.T("Cartões SD e eMMC não têm S.M.A.R.T. — o teste de superfície é o jeito de avaliar.") },
+            _ when virtualDisk => new SmartReport { Summary = L.T("Disco virtual: a saúde é a do disco físico do hospedeiro.") },
+            "USB" => new SmartReport { Summary = L.T("Este adaptador USB não repassa o S.M.A.R.T. (instale o smartmontools: ele conhece mais pontes USB).") },
             _ => new SmartReport(),
         };
     }
@@ -123,11 +123,11 @@ public static unsafe class LinuxSmart
                 i++;
             }
             var rep = SmartParser.ParseAta(vals, thr);
-            rep.Source = "ATA S.M.A.R.T. (smartctl)";
+            rep.Source = L.T("ATA S.M.A.R.T. (smartctl)");
             if (root.TryGetProperty("smart_status", out var st) && st.TryGetProperty("passed", out var passed) && !passed.GetBoolean())
             {
                 rep.Health = HealthLevel.Bad;
-                rep.Summary = "O próprio disco reporta falha (S.M.A.R.T. reprovado). Faça uma imagem dele agora.";
+                rep.Summary = L.T("O próprio disco reporta falha (S.M.A.R.T. reprovado). Faça uma imagem dele agora.");
             }
             return rep;
         }

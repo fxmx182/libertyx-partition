@@ -1,13 +1,14 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:core="using:LibertyX.Partition.Core.Platform" x:Class="LibertyX.Partition.Views.ConvertView" x:DataType="vm:ConvertViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:core="using:LibertyX.Partition.Core.Platform" x:Class="LibertyX.Partition.Views.ConvertView" x:DataType="vm:ConvertViewModel">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Margin="0,4,0,18">
-      <TextBlock Classes="h1" Text="Converter GPT ⇄ MBR" />
-      <TextBlock Classes="muted" Text="Troca o estilo da tabela sem apagar as partições: só a tabela é reescrita." />
+      <TextBlock Classes="h1" Text="{l:T 'Converter GPT ⇄ MBR'}" />
+      <TextBlock Classes="muted" Text="{l:T 'Troca o estilo da tabela sem apagar as partições: só a tabela é reescrita.'}" />
     </StackPanel>
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="400" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="10"><TextBlock Classes="section" Text="DISCO" /><ContentControl Content="{Binding Picker}" /></StackPanel>
+        <StackPanel Spacing="10"><TextBlock Classes="section" Text="{l:T 'DISCO'}" /><ContentControl Content="{Binding Picker}" /></StackPanel>
       </ScrollViewer>
       <Border Grid.Column="2" Classes="card" VerticalAlignment="Top" IsVisible="{Binding HasDisk}">
         <StackPanel Spacing="16">
@@ -27,10 +28,10 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
           <Button Classes="primary" Command="{Binding ConvertCommand}" IsEnabled="{Binding Ok}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="16,12">
-            <TextBlock><Run Text="Converter para " /><Run Text="{Binding To}" /></TextBlock>
+            <TextBlock><Run Text="{l:T 'Converter para '}" /><Run Text="{Binding To}" /></TextBlock>
           </Button>
           <Button Command="{Binding Mbr2GptCommand}" IsVisible="{Binding OfferMbr2Gpt}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
-            <TextBlock Text="Converter o disco do Windows com MBR2GPT (oficial)" />
+            <TextBlock Text="{l:T 'Converter o disco do Windows com MBR2GPT (oficial)'}" />
           </Button>
         </StackPanel>
       </Border>

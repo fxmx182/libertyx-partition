@@ -1,8 +1,9 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:t="using:LibertyX.Partition.Core.Tools" x:Class="LibertyX.Partition.Views.SpaceView" x:DataType="vm:SpaceViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:t="using:LibertyX.Partition.Core.Tools" x:Class="LibertyX.Partition.Views.SpaceView" x:DataType="vm:SpaceViewModel">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Margin="0,4,0,14">
-      <TextBlock Classes="h1" Text="Analisador de espaço" />
-      <TextBlock Classes="muted" Text="Para onde foi o espaço: cada bloco é proporcional ao tamanho. Duplo clique entra na pasta." />
+      <TextBlock Classes="h1" Text="{l:T 'Analisador de espaço'}" />
+      <TextBlock Classes="muted" Text="{l:T 'Para onde foi o espaço: cada bloco é proporcional ao tamanho. Duplo clique entra na pasta.'}" />
     </StackPanel>
     <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Roots}" Margin="0,0,0,6" MaxHeight="96" ClipToBounds="True">
       <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -12,12 +13,12 @@
     </ItemsControl>
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,8,Auto,8,Auto" Margin="0,0,0,12">
       <TextBox Text="{Binding Path}" />
-      <Button Grid.Column="2" Content="Escolher…" Command="{Binding BrowseCommand}" />
+      <Button Grid.Column="2" Content="{l:T 'Escolher…'}" Command="{Binding BrowseCommand}" />
       <Panel Grid.Column="4">
         <Button Classes="primary" Command="{Binding AnalyzeCommand}" IsVisible="{Binding !Busy}" Padding="18,9">
-          <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcSpace}" Classes="small" /><TextBlock Text="Analisar" /></StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcSpace}" Classes="small" /><TextBlock Text="{l:T 'Analisar'}" /></StackPanel>
         </Button>
-        <Button Classes="danger" Content="Parar" Command="{Binding CancelCommand}" IsVisible="{Binding Busy}" />
+        <Button Classes="danger" Content="{l:T 'Parar'}" Command="{Binding CancelCommand}" IsVisible="{Binding Busy}" />
       </Panel>
     </Grid>
     <TextBlock DockPanel.Dock="Top" Text="{Binding Status}" Classes="faint" Margin="2,0,0,10" TextTrimming="CharacterEllipsis" />
@@ -41,8 +42,8 @@
             </ItemsControl>
             </ScrollViewer>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-              <Button Content="Abrir no Explorador" Command="{Binding RevealCommand}" />
-              <Button Classes="danger" Content="Mandar para a Lixeira" Command="{Binding RecycleCommand}" />
+              <Button Content="{l:T 'Abrir no Explorador'}" Command="{Binding RevealCommand}" />
+              <Button Classes="danger" Content="{l:T 'Mandar para a Lixeira'}" Command="{Binding RecycleCommand}" />
             </StackPanel>
           </Grid>
           <c:TreemapView x:Name="Map" Items="{Binding Items}" Selected="{Binding Selected}" Version="{Binding Version}" />
@@ -52,7 +53,7 @@
         <StackPanel Spacing="14">
           <Border Classes="card" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
             <StackPanel Spacing="4">
-              <TextBlock Classes="section" Text="SELECIONADO" />
+              <TextBlock Classes="section" Text="{l:T 'SELECIONADO'}" />
               <TextBlock Text="{Binding Selected.Name}" Classes="h3" TextWrapping="Wrap" />
               <TextBlock Classes="muted"><Run Text="{Binding Selected.Size, Converter={x:Static vm:Conv.Size}}" /><Run Text=" · " /><Run Text="{Binding Selected.Files, StringFormat='{}{0:N0} arquivo(s)'}" /></TextBlock>
               <TextBlock Text="{Binding Selected.FullPath}" Classes="faint" TextWrapping="Wrap" />
@@ -60,7 +61,7 @@
           </Border>
           <Border Classes="card">
             <StackPanel Spacing="4">
-              <TextBlock Classes="section" Text="POR TIPO" Margin="0,0,0,4" />
+              <TextBlock Classes="section" Text="{l:T 'POR TIPO'}" Margin="0,0,0,4" />
               <ItemsControl ItemsSource="{Binding ByType}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:InfoRow">
@@ -72,7 +73,7 @@
           </Border>
           <Border Classes="card">
             <StackPanel Spacing="4">
-              <TextBlock Classes="section" Text="MAIORES ARQUIVOS" Margin="0,0,0,4" />
+              <TextBlock Classes="section" Text="{l:T 'MAIORES ARQUIVOS'}" Margin="0,0,0,4" />
               <ItemsControl ItemsSource="{Binding Largest}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:InfoRow">

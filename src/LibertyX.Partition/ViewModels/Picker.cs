@@ -52,25 +52,25 @@ public sealed partial class PickerViewModel : ViewModelBase
         PickItem? restore = null;
         foreach (var d in disks)
         {
-            string? dr = AllowDisks ? DiskFilter?.Invoke(d) : "Escolha uma partição.";
+            string? dr = AllowDisks ? DiskFilter?.Invoke(d) : L.T("Escolha uma partição.");
             var head = new PickItem
             {
                 Owner = this, Disk = d, Title = d.Title, Subtitle = $"{d.Model} · {d.KindText} · {Fmt.Size(d.Size)}",
                 Icon = Ui.Icon(d.IsImage ? "Disc" : d.Bus == "USB" ? "Usb" : "Disk"), Enabled = dr == null, Reason = dr,
-                Badge = d.IsSystem ? Ui.SystemBadge : d.IsImage ? "Imagem" : d.IsVirtual ? d.VirtualKind : null,
+                Badge = d.IsSystem ? Ui.SystemBadge : d.IsImage ? L.T("Imagem") : d.IsVirtual ? d.VirtualKind : null,
             };
             var g = new PickGroup { Header = head };
             if (ShowPartitions)
                 foreach (var p in d.Partitions)
                 {
                     if (p.IsUnallocated && !AllowUnallocated) continue;
-                    string? pr = !AllowPartitions ? "Escolha o disco inteiro." : PartitionFilter?.Invoke(p);
+                    string? pr = !AllowPartitions ? L.T("Escolha o disco inteiro.") : PartitionFilter?.Invoke(p);
                     var c = Ui.PartitionColor(p);
                     var vm = new PartitionVM(p, new DiskVM(d));
                     var it = new PickItem
                     {
                         Owner = this, Disk = d, Partition = p, Title = vm.Title,
-                        Subtitle = p.IsUnallocated ? $"{Fmt.Size(p.Length)} livres" : $"{vm.FsText} · {vm.SizeText}" + (vm.HasUsage ? $" · {vm.UsagePercent} usado" : ""),
+                        Subtitle = p.IsUnallocated ? L.T($"{Fmt.Size(p.Length)} livres") : $"{vm.FsText} · {vm.SizeText}" + (vm.HasUsage ? L.T($" · {vm.UsagePercent} usado") : ""),
                         Icon = Ui.Icon(p.IsUnallocated ? "Usage" : p.BitLocker ? "Lock" : "Disk"), Accent = new SolidColorBrush(c), Usage = vm.UsedFraction,
                         Enabled = pr == null, Reason = pr,
                     };

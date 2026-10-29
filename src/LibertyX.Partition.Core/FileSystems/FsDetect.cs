@@ -12,11 +12,11 @@ public static class FsDetect
     {
         FsKind.Ntfs => "NTFS", FsKind.Fat12 => "FAT12", FsKind.Fat16 => "FAT16", FsKind.Fat32 => "FAT32",
         FsKind.ExFat => "exFAT", FsKind.ReFS => "ReFS", FsKind.BitLocker => "BitLocker", FsKind.Ext => "Ext2/3/4",
-        FsKind.HfsPlus => "HFS+", FsKind.Apfs => "APFS", FsKind.LinuxSwap => "Linux swap", FsKind.Iso9660 => "ISO 9660",
-        FsKind.Xfs => "XFS", FsKind.Btrfs => "Btrfs", FsKind.F2fs => "F2FS", FsKind.Luks => "LUKS", FsKind.LvmPv => "LVM2",
+        FsKind.HfsPlus => "HFS+", FsKind.Apfs => "APFS", FsKind.LinuxSwap => L.T("Linux swap"), FsKind.Iso9660 => "ISO 9660",
+        FsKind.Xfs => "XFS", FsKind.Btrfs => L.T("Btrfs"), FsKind.F2fs => "F2FS", FsKind.Luks => "LUKS", FsKind.LvmPv => "LVM2",
         FsKind.MdRaid => "RAID (md)", FsKind.Zfs => "ZFS", FsKind.Bcachefs => "bcachefs", FsKind.Squashfs => "SquashFS",
         FsKind.Jfs => "JFS", FsKind.ReiserFs => "ReiserFS",
-        FsKind.Empty => "Não formatada", _ => "Desconhecido",
+        FsKind.Empty => L.T("Não formatada"), _ => L.T("Desconhecido"),
     };
 
     /// <summary>ext2, ext3 ou ext4, pelas marcas de recurso do superbloco (que fica 1024 bytes após o início).</summary>
@@ -105,7 +105,7 @@ public static class FsDetect
                         var b = vol.ReadBytes(0x10000, 4096);
                         long total = (long)U64(b, 0x70), used = (long)U64(b, 0x78);
                         string label = System.Text.Encoding.UTF8.GetString(b.AsSpan(0x12B, 256)).TrimEnd('\0');
-                        return new SuperInfo(label, UuidBe(b.AsSpan(0x20, 16)), total, Math.Max(0, total - used), U64(b, 0x88) > 1 ? $"Btrfs ({U64(b, 0x88)} dispositivos)" : "Btrfs");
+                        return new SuperInfo(label, UuidBe(b.AsSpan(0x20, 16)), total, Math.Max(0, total - used), U64(b, 0x88) > 1 ? L.T($"Btrfs ({U64(b, 0x88)} dispositivos)") : L.T("Btrfs"));
                     }
                 case FsKind.F2fs:
                     {

@@ -54,57 +54,57 @@ public static class PartitionTypes
 
     public static string GptName(Guid g)
     {
-        if (g == Esp) return "Sistema EFI";
-        if (g == Msr) return "Reservada da Microsoft";
-        if (g == BasicData) return "Dados básicos";
-        if (g == WinRecovery) return "Recuperação do Windows";
-        if (g == LdmMetadata) return "Metadados LDM (disco dinâmico)";
-        if (g == LdmData) return "Dados LDM (disco dinâmico)";
-        if (g == StorageSpaces) return "Espaços de Armazenamento";
-        if (g == LinuxFs) return "Linux";
-        if (g == LinuxSwap) return "Linux swap";
-        if (g == LinuxLvm) return "Linux LVM";
-        if (g == LinuxRaid) return "Linux RAID";
-        if (g == BiosBoot) return "BIOS boot";
-        if (g == LinuxLuks) return "Linux LUKS";
-        if (g == LinuxRootX64) return "Linux raiz (x86-64)";
-        if (g == LinuxRootArm64) return "Linux raiz (ARM64)";
-        if (g == LinuxHome) return "Linux /home";
-        if (g == LinuxSrv) return "Linux /srv";
-        if (g == LinuxVar) return "Linux /var";
-        if (g == LinuxXbootldr) return "Linux /boot (XBOOTLDR)";
-        if (g == LinuxReserved) return "Linux reservada";
-        if (g == ChromeOsKernel) return "ChromeOS kernel";
+        if (g == Esp) return L.T("Sistema EFI");
+        if (g == Msr) return L.T("Reservada da Microsoft");
+        if (g == BasicData) return L.T("Dados básicos");
+        if (g == WinRecovery) return L.T("Recuperação do Windows");
+        if (g == LdmMetadata) return L.T("Metadados LDM (disco dinâmico)");
+        if (g == LdmData) return L.T("Dados LDM (disco dinâmico)");
+        if (g == StorageSpaces) return L.T("Espaços de Armazenamento");
+        if (g == LinuxFs) return L.T("Linux");
+        if (g == LinuxSwap) return L.T("Linux swap");
+        if (g == LinuxLvm) return L.T("Linux LVM");
+        if (g == LinuxRaid) return L.T("Linux RAID");
+        if (g == BiosBoot) return L.T("BIOS boot");
+        if (g == LinuxLuks) return L.T("Linux LUKS");
+        if (g == LinuxRootX64) return L.T("Linux raiz (x86-64)");
+        if (g == LinuxRootArm64) return L.T("Linux raiz (ARM64)");
+        if (g == LinuxHome) return L.T("Linux /home");
+        if (g == LinuxSrv) return L.T("Linux /srv");
+        if (g == LinuxVar) return L.T("Linux /var");
+        if (g == LinuxXbootldr) return L.T("Linux /boot (XBOOTLDR)");
+        if (g == LinuxReserved) return L.T("Linux reservada");
+        if (g == ChromeOsKernel) return L.T("ChromeOS kernel");
         if (g == FreeBsdData) return "FreeBSD";
-        if (g == FreeBsdUfs) return "FreeBSD UFS";
-        if (g == FreeBsdZfs) return "FreeBSD ZFS";
-        if (g == SolarisZfs) return "ZFS (Solaris/Apple)";
-        if (g == AppleHfs) return "Apple HFS+";
-        if (g == AppleApfs) return "Apple APFS";
-        return "Tipo " + g.ToString().ToUpperInvariant();
+        if (g == FreeBsdUfs) return L.T("FreeBSD UFS");
+        if (g == FreeBsdZfs) return L.T("FreeBSD ZFS");
+        if (g == SolarisZfs) return L.T("ZFS (Solaris/Apple)");
+        if (g == AppleHfs) return L.T("Apple HFS+");
+        if (g == AppleApfs) return L.T("Apple APFS");
+        return L.T("Tipo ") + g.ToString().ToUpperInvariant();
     }
 
     public static string MbrName(byte t) => t switch
     {
-        0x00 => "Vazia",
+        0x00 => L.T("Vazia"),
         0x01 => "FAT12",
         0x04 or 0x06 or 0x0E => "FAT16",
-        0x05 or 0x0F or 0x85 => "Estendida",
-        0x07 => "NTFS / exFAT",
+        0x05 or 0x0F or 0x85 => L.T("Estendida"),
+        0x07 => L.T("NTFS / exFAT"),
         0x0B or 0x0C => "FAT32",
-        0x11 or 0x14 or 0x16 or 0x1B or 0x1C or 0x1E => "Oculta (FAT)",
-        0x17 => "Oculta (NTFS)",
-        0x27 => "Recuperação do Windows",
-        0x42 => "Disco dinâmico",
-        0x82 => "Linux swap",
-        0x83 => "Linux",
-        0x8E => "Linux LVM",
+        0x11 or 0x14 or 0x16 or 0x1B or 0x1C or 0x1E => L.T("Oculta (FAT)"),
+        0x17 => L.T("Oculta (NTFS)"),
+        0x27 => L.T("Recuperação do Windows"),
+        0x42 => L.T("Disco dinâmico"),
+        0x82 => L.T("Linux swap"),
+        0x83 => L.T("Linux"),
+        0x8E => L.T("Linux LVM"),
         0xA5 => "FreeBSD",
-        0xAF => "Apple HFS+",
-        0xEE => "GPT protetora",
-        0xEF => "Sistema EFI",
-        0xFD => "Linux RAID",
-        _ => $"Tipo 0x{t:X2}",
+        0xAF => L.T("Apple HFS+"),
+        0xEE => L.T("GPT protetora"),
+        0xEF => L.T("Sistema EFI"),
+        0xFD => L.T("Linux RAID"),
+        _ => L.T($"Tipo 0x{t:X2}"),
     };
 
     public static bool IsExtended(byte t) => t is 0x05 or 0x0F or 0x85;

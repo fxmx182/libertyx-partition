@@ -29,12 +29,12 @@ public static class Ui
 {
     public static bool IsWin => OperatingSystem.IsWindows();
     /// <summary>"Disco do Windows em uso." / "Disco do sistema em uso." — os filtros e avisos que bloqueiam o disco do sistema.</summary>
-    public static string SystemDiskInUse => IsWin ? "Disco do Windows em uso." : "Disco do sistema em uso (onde está o /).";
-    public static string SystemBadge => IsWin ? "Windows" : "Sistema";
+    public static string SystemDiskInUse => IsWin ? L.T("Disco do Windows em uso.") : L.T("Disco do sistema em uso (onde está o /).");
+    public static string SystemBadge => IsWin ? L.T("Windows") : L.T("Sistema");
     /// <summary>A opção de copiar um volume em uso sem pegá-lo no meio de uma gravação: VSS no Windows; LVM ou só leitura no Linux.</summary>
-    public static string SnapshotImage => IsWin ? "Instantâneo VSS dos volumes em uso" : "Cópia consistente dos volumes em uso (instantâneo LVM ou só leitura)";
-    public static string SnapshotPartition => IsWin ? "Instantâneo VSS se estiver em uso" : "Cópia consistente se estiver em uso (LVM ou só leitura)";
-    public static string SnapshotClone => IsWin ? "Instantâneo VSS (Windows em uso)" : "Cópia consistente (instantâneo LVM ou só leitura)";
+    public static string SnapshotImage => IsWin ? L.T("Instantâneo VSS dos volumes em uso") : L.T("Cópia consistente dos volumes em uso (instantâneo LVM ou só leitura)");
+    public static string SnapshotPartition => IsWin ? L.T("Instantâneo VSS se estiver em uso") : L.T("Cópia consistente se estiver em uso (LVM ou só leitura)");
+    public static string SnapshotClone => IsWin ? L.T("Instantâneo VSS (Windows em uso)") : L.T("Cópia consistente (instantâneo LVM ou só leitura)");
 
     public static Geometry? Icon(string key) =>
         Application.Current != null && Application.Current.TryGetResource("Ic" + key, null, out var v) ? v as Geometry : null;
@@ -70,7 +70,7 @@ public static class Ui
     public static IBrush Brush(Color c) => new SolidColorBrush(c);
 
     public static string HealthClass(HealthLevel h) => h switch { HealthLevel.Good => "green", HealthLevel.Caution => "orange", HealthLevel.Bad => "red", _ => "" };
-    public static string HealthText(HealthLevel h) => h switch { HealthLevel.Good => "Saudável", HealthLevel.Caution => "Atenção", HealthLevel.Bad => "Crítico", _ => "Saúde ?" };
+    public static string HealthText(HealthLevel h) => h switch { HealthLevel.Good => L.T("Saudável"), HealthLevel.Caution => L.T("Atenção"), HealthLevel.Bad => L.T("Crítico"), _ => L.T("Saúde ?") };
 }
 
 public static class Fmt
@@ -87,7 +87,7 @@ public static class Fmt
     public static string Speed(double bps) => Size((long)bps) + "/s";
     public static string Date(DateTime? d) => d == null ? "—" : d.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     public static string Num(long n) => n.ToString("N0");
-    public static string Duration(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}h{t.Minutes:00}" : t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}min {t.Seconds:00}s" : $"{t.Seconds}s";
+    public static string Duration(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}h{t.Minutes:00}" : t.TotalMinutes >= 1 ? L.T($"{(int)t.TotalMinutes}min {t.Seconds:00}s") : $"{t.Seconds}s";
 }
 
 public static class Conv

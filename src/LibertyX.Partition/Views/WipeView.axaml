@@ -1,28 +1,29 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:core="using:LibertyX.Partition.Core.Platform" x:Class="LibertyX.Partition.Views.WipeView" x:DataType="vm:WipeViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:core="using:LibertyX.Partition.Core.Platform" x:Class="LibertyX.Partition.Views.WipeView" x:DataType="vm:WipeViewModel">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Margin="0,4,0,18">
-      <TextBlock Classes="h1" Text="Limpar disco" />
-      <TextBlock Classes="muted" Text="Sobrescreve cada setor: para vender, doar ou descartar um disco sem deixar nada recuperável." />
+      <TextBlock Classes="h1" Text="{l:T 'Limpar disco'}" />
+      <TextBlock Classes="muted" Text="{l:T 'Sobrescreve cada setor: para vender, doar ou descartar um disco sem deixar nada recuperável.'}" />
     </StackPanel>
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="320" /><ColumnDefinition Width="20" /><ColumnDefinition Width="0.8*" MinWidth="270" MaxWidth="400" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="10"><TextBlock Classes="section" Text="O QUE LIMPAR" /><ContentControl Content="{Binding Picker}" /></StackPanel>
+        <StackPanel Spacing="10"><TextBlock Classes="section" Text="{l:T 'O QUE LIMPAR'}" /><ContentControl Content="{Binding Picker}" /></StackPanel>
       </ScrollViewer>
       <Border Grid.Column="2" Classes="card" VerticalAlignment="Top">
         <StackPanel Spacing="12">
-          <TextBlock Classes="section" Text="MÉTODO" />
+          <TextBlock Classes="section" Text="{l:T 'MÉTODO'}" />
           <ListBox ItemsSource="{Binding Methods}" SelectedIndex="{Binding Method}">
             <ListBox.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="13" /></DataTemplate></ListBox.ItemTemplate>
           </ListBox>
           <Border Classes="notice gold">
-            <TextBlock TextWrapping="Wrap" FontSize="12.5" Text="Em SSD, uma passada de zeros já basta: o controlador remapeia blocos e mais passadas só gastam a vida útil." />
+            <TextBlock TextWrapping="Wrap" FontSize="12.5" Text="{l:T 'Em SSD, uma passada de zeros já basta: o controlador remapeia blocos e mais passadas só gastam a vida útil.'}" />
           </Border>
           <Border Classes="notice danger">
-            <TextBlock TextWrapping="Wrap" FontSize="12.5" Text="Irreversível. Nenhuma recuperação traz de volta o que for sobrescrito aqui." />
+            <TextBlock TextWrapping="Wrap" FontSize="12.5" Text="{l:T 'Irreversível. Nenhuma recuperação traz de volta o que for sobrescrito aqui.'}" />
           </Border>
           <Button Classes="danger" Command="{Binding WipeCommand}" IsEnabled="{Binding CanWipe}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="16,12">
-            <StackPanel Orientation="Horizontal" Spacing="9"><PathIcon Data="{StaticResource IcWipe}" /><TextBlock Text="Limpar" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="9"><PathIcon Data="{StaticResource IcWipe}" /><TextBlock Text="{l:T 'Limpar'}" /></StackPanel>
           </Button>
         </StackPanel>
       </Border>

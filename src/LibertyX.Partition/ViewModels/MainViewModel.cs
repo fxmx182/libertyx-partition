@@ -27,8 +27,8 @@ public sealed class NavGroup(string title, params NavItem[] items)
     public List<NavItem> Items { get; } = [.. items];
 }
 
-/// <summary>Uma opção do menu "Tamanho da interface" (Linux).</summary>
-public sealed record ScaleItem(string Header, double? Value, bool Checked, IRelayCommand Choose);
+/// <summary>Uma opção do menu "Aa" (tamanho no Linux, idioma nos dois); Header "-" é o separador.</summary>
+public sealed record MenuChoice(string Header, object? Value, bool Checked, IRelayCommand? Choose);
 
 public sealed partial class MainViewModel : ViewModelBase
 {
@@ -43,7 +43,7 @@ public sealed partial class MainViewModel : ViewModelBase
     [ObservableProperty] private OperationViewModel? _operation;
     [ObservableProperty] private string? _toast;
     [ObservableProperty] private bool _loading;
-    [ObservableProperty] private string _loadingText = "Lendo discos…";
+    [ObservableProperty] private string _loadingText = L.T("Lendo discos…");
 
     public List<DiskInfo> Disks { get; private set; } = [];
     public bool IsAdmin { get; } = DiskSystem.Native.IsElevated;
@@ -59,7 +59,7 @@ public sealed partial class MainViewModel : ViewModelBase
             return "v" + parts[0] + (parts.Length > 1 && parts[1].Length >= 7 ? " · " + parts[1][..7] : "");
         }
     }
-    public string AdminText => IsAdmin ? (OperatingSystem.IsWindows() ? "Administrador" : "Administrador (root)") : "Sem privilégio de administrador";
+    public string AdminText => IsAdmin ? (OperatingSystem.IsWindows() ? L.T("Administrador") : L.T("Administrador (root)")) : L.T("Sem privilégio de administrador");
     /// <summary>Linux sem root: só imagens anexadas e leitura do que der — com o botão para pedir a senha.</summary>
     public bool CanElevate => !IsAdmin && OperatingSystem.IsLinux();
 
@@ -67,32 +67,45 @@ public sealed partial class MainViewModel : ViewModelBase
     private async Task Elevate()
     {
         if (!OperatingSystem.IsLinux()) return;
-        if (HasPending) { await Alert("Alterações pendentes", "Confirme ou cancele as alterações da fila antes."); return; }
-        ShowToast("Digite a senha de administrador na janela do sistema…");
+        if (HasPending) { await Alert(L.T("Alterações pendentes"), L.T("Confirme ou cancele as alterações da fila antes.")); return; }
+        ShowToast(L.T("Digite a senha de administrador na janela do sistema…"));
         var args = Environment.GetCommandLineArgs().Skip(1).Concat(DiskSystem.AttachedImages).Distinct().ToArray();
         bool ok = await Task.Run(() => Core.Platform.Linux.LinuxSession.RelaunchAsRoot(args));
         if (ok) { if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime l) l.Shutdown(); }
-        else await Alert("Sem permissão de administrador", "A senha foi cancelada ou o sistema não tem o pkexec (polkit). Também dá para abrir pelo terminal:\n\nsudo libertyx-partition", "warn");
+        else await Alert(L.T("Sem permissão de administrador"), L.T("A senha foi cancelada ou o sistema não tem o pkexec (polkit). Também dá para abrir pelo terminal:\n\nsudo libertyx-partition"), "warn");
     }
 
-    // ───────── tamanho da interface (Linux) ─────────
+    // ───────── tamanho (Linux) e idioma da interface ─────────
 
     public bool IsLinux { get; } = OperatingSystem.IsLinux();
-    /// <summary>No Linux a linha de status divide espaço com o botão "Aa"; no Windows fica como sempre foi.</summary>
-    public double StatusMaxWidth { get; } = OperatingSystem.IsLinux() ? 170 : 196;
+    /// <summary>A linha de status divide espaço com o botão "Aa".</summary>
+    public double StatusMaxWidth { get; } = 170;
+    public string InterfaceTip { get; } = OperatingSystem.IsLinux() ? L.T("Tamanho e idioma da interface") : L.T("Idioma da interface");
 
-    /// <summary>Automático (com o valor detectado) e os tamanhos fixos; o atual vem marcado.</summary>
-    public List<ScaleItem> ScaleItems
+    /// <summary>
+    /// Linux: automático (com o valor detectado) e os tamanhos fixos; depois, nos dois sistemas, o
+    /// idioma do sistema e os idiomas do app. O que vale agora vem marcado.
+    /// </summary>
+    public List<MenuChoice> InterfaceItems
     {
         get
         {
-            if (!OperatingSystem.IsLinux()) return [];
-            var auto = Core.Platform.Linux.LinuxDisplay.Auto;
-            double? saved = Core.Platform.Linux.LinuxDisplay.Saved;
-            var cmd = new AsyncRelayCommand<double?>(ChooseScale);
-            var l = new List<ScaleItem> { new($"Automático ({auto?.Percent ?? "100%"})", null, saved == null, cmd) };
-            foreach (var v in Core.Platform.Linux.LinuxDisplay.Choices)
-                l.Add(new(Core.Platform.Linux.LinuxDisplay.Pct(v), v, saved is { } sv && Math.Abs(sv - v) < 0.01, cmd));
+            var l = new List<MenuChoice>();
+            if (OperatingSystem.IsLinux())
+            {
+                var auto = Core.Platform.Linux.LinuxDisplay.Auto;
+                double? saved = Core.Platform.Linux.LinuxDisplay.Saved;
+                var cmd = new AsyncRelayCommand<double?>(ChooseScale);
+                l.Add(new(L.T($"Automático ({auto?.Percent ?? "100%"})"), null, saved == null, cmd));
+                foreach (var v in Core.Platform.Linux.LinuxDisplay.Choices)
+                    l.Add(new(Core.Platform.Linux.LinuxDisplay.Pct(v), v, saved is { } sv && Math.Abs(sv - v) < 0.01, cmd));
+                l.Add(new("-", null, false, null));
+            }
+            var lang = new AsyncRelayCommand<string?>(ChooseLanguage);
+            string? chosen = L.Saved;
+            string osName = L.Languages.First(x => x.Code == L.OsLang).Name;
+            l.Add(new(L.T($"Idioma do sistema ({osName})"), null, chosen == null, lang));
+            foreach (var (code, name) in L.Languages) l.Add(new(name, code, chosen == code, lang));
             return l;
         }
     }
@@ -101,22 +114,48 @@ public sealed partial class MainViewModel : ViewModelBase
     {
         if (!OperatingSystem.IsLinux()) return;
         if (value == Core.Platform.Linux.LinuxDisplay.Saved) return;
-        if (HasPending) { await Alert("Alterações pendentes", "Confirme ou cancele as alterações da fila antes — o app reabre para mudar o tamanho."); return; }
+        if (HasPending) { await Alert(L.T("Alterações pendentes"), L.T("Confirme ou cancele as alterações da fila antes — o app reabre para mudar o tamanho.")); return; }
         try { Core.Platform.Linux.LinuxDisplay.Save(value); }
-        catch (Exception ex) { await Alert("Não deu para salvar", ex.Message, "warn"); return; }
+        catch (Exception ex) { await Alert(L.T("Não deu para salvar"), ex.Message, "warn"); return; }
         var args = Environment.GetCommandLineArgs().Skip(1).Concat(DiskSystem.AttachedImages).Distinct();
         if (Core.Platform.Linux.LinuxSession.Restart(args))
         {
             if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime l) l.Shutdown();
         }
-        else await Alert("Tamanho salvo", "Feche e abra o LibertyX de novo para ver o novo tamanho.");
+        else await Alert(L.T("Tamanho salvo"), L.T("Feche e abra o LibertyX de novo para ver o novo tamanho."));
+    }
+
+    /// <summary>O idioma vale da abertura em diante: salva e reabre o app (sem pedir senha de novo).</summary>
+    private async Task ChooseLanguage(string? code)
+    {
+        if (code == L.Saved) return;
+        if (HasPending) { await Alert(L.T("Alterações pendentes"), L.T("Confirme ou cancele as alterações da fila antes — o app reabre para mudar o idioma.")); return; }
+        try { L.Save(code); }
+        catch (Exception ex) { await Alert(L.T("Não deu para salvar"), ex.Message, "warn"); return; }
+        var args = Environment.GetCommandLineArgs().Skip(1).Concat(DiskSystem.AttachedImages).Distinct();
+        bool ok = OperatingSystem.IsLinux() ? Core.Platform.Linux.LinuxSession.Restart(args) : RestartSelf(args);
+        if (ok)
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime l) l.Shutdown();
+        }
+        else await Alert(L.T("Idioma salvo"), L.T("Feche e abra o LibertyX de novo para ver o novo idioma."));
+    }
+
+    /// <summary>Windows: o processo já é administrador, então a cópia nova abre sem outro aviso do UAC.</summary>
+    private static bool RestartSelf(IEnumerable<string> args)
+    {
+        if (Environment.ProcessPath is not { } self) return false;
+        var psi = new System.Diagnostics.ProcessStartInfo(self) { UseShellExecute = false };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        try { return System.Diagnostics.Process.Start(psi) != null; }
+        catch { return false; }
     }
 
     // ───────── licença ─────────
 
     public LibertyX.Partition.Core.Licensing.LicenseManager License { get; } = OpenLicense();
     [ObservableProperty] private bool _isPremium;
-    public string EditionText => IsPremium ? "PREMIUM" : "BÁSICO";
+    public string EditionText => IsPremium ? "PREMIUM" : L.T("BÁSICO");
 
     private static LibertyX.Partition.Core.Licensing.LicenseManager OpenLicense()
     {
@@ -147,7 +186,7 @@ public sealed partial class MainViewModel : ViewModelBase
         var i = await Updater.Check();
         if (i == null || !Updater.IsNewer(i)) return;
         _update = i;
-        UpdateText = $"Versão {i.Version} disponível";
+        UpdateText = L.T($"Versão {i.Version} disponível");
         UpdateAvailable = true;
         if (!ask || _askedUpdate) return;
         _askedUpdate = true;
@@ -156,13 +195,13 @@ public sealed partial class MainViewModel : ViewModelBase
         if (Dialog != null || Operation != null) return;
         var f = new FormDialogViewModel
         {
-            Title = "Atualização disponível", IconKey = "Download", ConfirmText = "Atualizar agora", CancelText = "Depois",
-            Subtitle = $"Versão {i.Version} · você está na 1.0.{Updater.CurrentBuild}",
+            Title = L.T("Atualização disponível"), IconKey = "Download", ConfirmText = L.T("Atualizar agora"), CancelText = L.T("Depois"),
+            Subtitle = L.T($"Versão {i.Version} · você está na 1.0.{Updater.CurrentBuild}"),
         };
-        if (i.Notes.Length > 0) f.Note("O que mudou: " + i.Notes, "gold");
+        if (i.Notes.Length > 0) f.Note(L.T("O que mudou: ") + i.Notes, "gold");
         f.Note(Updater.IsInstalled
-            ? "O app baixa a versão nova, atualiza por cima e abre de novo sozinho. Licença, backups e configurações continuam."
-            : OperatingSystem.IsLinux() ? "Esta é a versão em pasta (tar.gz): o navegador baixa a nova para você substituir esta." : "Esta é a versão portátil: o navegador baixa o .exe novo para você substituir este.", "");
+            ? L.T("O app baixa a versão nova, atualiza por cima e abre de novo sozinho. Licença, backups e configurações continuam.")
+            : OperatingSystem.IsLinux() ? L.T("Esta é a versão em pasta (tar.gz): o navegador baixa a nova para você substituir esta.") : L.T("Esta é a versão portátil: o navegador baixa o .exe novo para você substituir este."), "");
         if (await ShowDialog(f)) await UpdateNow();
     }
 
@@ -178,19 +217,19 @@ public sealed partial class MainViewModel : ViewModelBase
             else try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
             return;
         }
-        if (HasPending) { await Alert("Alterações pendentes", "Confirme ou cancele as alterações da fila antes de atualizar."); return; }
+        if (HasPending) { await Alert(L.T("Alterações pendentes"), L.T("Confirme ou cancele as alterações da fila antes de atualizar.")); return; }
         string? setup = null;
-        bool ok = await Run($"Baixando a versão {i.Version}", async s =>
+        bool ok = await Run(L.T($"Baixando a versão {i.Version}"), async s =>
         {
-            setup = await Updater.Download(i, new Progress<double>(x => s.Progress(x, "Baixando o instalador")), s.Token);
+            setup = await Updater.Download(i, new Progress<double>(x => s.Progress(x, L.T("Baixando o instalador"))), s.Token);
             if (OperatingSystem.IsLinux())
             {
-                s.Progress(-1, "Instalando");
+                s.Progress(-1, L.T("Instalando"));
                 await Updater.InstallLinux(setup, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); }, s.Token);
-                s.Log("Instalado. O app vai abrir de novo na versão nova.");
+                s.Log(L.T("Instalado. O app vai abrir de novo na versão nova."));
             }
-            else s.Log("Download conferido. O instalador vai fechar o app, atualizar e abrir de novo.");
-        }, refresh: false, success: "Pronto para atualizar");
+            else s.Log(L.T("Download conferido. O instalador vai fechar o app, atualizar e abrir de novo."));
+        }, refresh: false, success: L.T("Pronto para atualizar"));
         if (!ok || setup == null) return;
         Operation = null;
         Updater.LaunchSetup(setup);
@@ -201,7 +240,7 @@ public sealed partial class MainViewModel : ViewModelBase
     public async Task<bool> RequirePremium(string feature, string why)
     {
         if (License.IsPremium) return true;
-        if (await Confirm($"{feature} é Premium", why + "\n\nO Premium é vitalício: paga uma vez, usa para sempre, com as atualizações.", "Conhecer o Premium", icon: "Crown"))
+        if (await Confirm(L.T($"{feature} é Premium"), why + L.T("\n\nO Premium é vitalício: paga uma vez, usa para sempre, com as atualizações."), L.T("Conhecer o Premium"), icon: "Crown"))
             Navigate("premium");
         return false;
     }
@@ -212,33 +251,33 @@ public sealed partial class MainViewModel : ViewModelBase
         HookPending();
         Nav =
         [
-            new("Painel", new NavItem("discos", "Discos e partições", "Dashboard"), new NavItem("premium", "LibertyX Premium", "Crown")),
-            new("Resgate",
-                new NavItem("recuperar", "Recuperar dados", "RecoverFiles"),
-                new NavItem("particoes", "Recuperar partição", "RecoverPartition"),
-                new NavItem("imagem", "Backup e imagem", "Backup"),
-                new NavItem("superficie", "Teste de superfície", "Surface"),
-                new NavItem("saude", "Saúde e propriedades", "Health")),
-            new("Disco",
-                new NavItem("migrar", "Migrar sistema para SSD", "Migrate", premium: true),
-                new NavItem("copiar-disco", "Copiar disco", "CopyDisk", premium: true),
-                new NavItem("copiar-particao", "Copiar partição", "CopyPartition"),
-                new NavItem("converter", "Converter GPT ⇄ MBR", "Convert"),
-                new NavItem("alinhar", "Alinhar partições", "Align"),
-                new NavItem("limpar", "Limpar disco", "Wipe"),
-                new NavItem("excluir-todas", "Excluir todas as partições", "DeleteAll")),
-            new("Utilidades",
-                OperatingSystem.IsWindows() ? new NavItem("bitlocker", "BitLocker", "BitLocker") : new NavItem("bitlocker", "Criptografia (LUKS, BitLocker)", "BitLocker"),
-                new NavItem("luks", "Detector de LUKS", "Lock"),
-                new NavItem("benchmark", "Benchmark de disco", "Benchmark"),
-                new NavItem("espaco", "Analisador de espaço", "Space"),
-                new NavItem("duplicados", "Limpador de duplicados", "Duplicates"),
-                new NavItem("boot", "Pendrive de boot e imagens", "Boot", premium: true)),
+            new(L.T("Painel"), new NavItem("discos", L.T("Discos e partições"), "Dashboard"), new NavItem("premium", L.T("LibertyX Premium"), "Crown")),
+            new(L.T("Resgate"),
+                new NavItem("recuperar", L.T("Recuperar dados"), "RecoverFiles"),
+                new NavItem("particoes", L.T("Recuperar partição"), "RecoverPartition"),
+                new NavItem("imagem", L.T("Backup e imagem"), "Backup"),
+                new NavItem("superficie", L.T("Teste de superfície"), "Surface"),
+                new NavItem("saude", L.T("Saúde e propriedades"), "Health")),
+            new(L.T("Disco"),
+                new NavItem("migrar", L.T("Migrar sistema para SSD"), "Migrate", premium: true),
+                new NavItem("copiar-disco", L.T("Copiar disco"), "CopyDisk", premium: true),
+                new NavItem("copiar-particao", L.T("Copiar partição"), "CopyPartition"),
+                new NavItem("converter", L.T("Converter GPT ⇄ MBR"), "Convert"),
+                new NavItem("alinhar", L.T("Alinhar partições"), "Align"),
+                new NavItem("limpar", L.T("Limpar disco"), "Wipe"),
+                new NavItem("excluir-todas", L.T("Excluir todas as partições"), "DeleteAll")),
+            new(L.T("Utilidades"),
+                OperatingSystem.IsWindows() ? new NavItem("bitlocker", "BitLocker", "BitLocker") : new NavItem("bitlocker", L.T("Criptografia (LUKS, BitLocker)"), "BitLocker"),
+                new NavItem("luks", L.T("Detector de LUKS"), "Lock"),
+                new NavItem("benchmark", L.T("Benchmark de disco"), "Benchmark"),
+                new NavItem("espaco", L.T("Analisador de espaço"), "Space"),
+                new NavItem("duplicados", L.T("Limpador de duplicados"), "Duplicates"),
+                new NavItem("boot", L.T("Pendrive de boot e imagens"), "Boot", premium: true)),
         ];
         if (OperatingSystem.IsLinux())
-            Nav.Add(new("Linux",
-                new NavItem("lvm", "LVM e RAID", "Layers"),
-                new NavItem("ferramentas", "Ferramentas do sistema", "Terminal")));
+            Nav.Add(new(L.T("Linux"),
+                new NavItem("lvm", L.T("LVM e RAID"), "Layers"),
+                new NavItem("ferramentas", L.T("Ferramentas do sistema"), "Terminal")));
         _factories = new()
         {
             ["discos"] = () => new DisksPageViewModel(),
@@ -277,7 +316,7 @@ public sealed partial class MainViewModel : ViewModelBase
         ut.Tick += async (_, _) => await CheckUpdate(ask: false);
         ut.Start();
         // chave da loja: reconfere de vez em quando, sem atrapalhar (sem internet, nada muda)
-        _ = Task.Run(async () => { try { if (await License.RevalidateIfDue()) Ui.Post(() => { LicenseChanged(); ShowToast("A licença da loja não vale mais (reembolso ou cancelamento) — voltou ao Básico."); }); } catch { } });
+        _ = Task.Run(async () => { try { if (await License.RevalidateIfDue()) Ui.Post(() => { LicenseChanged(); ShowToast(L.T("A licença da loja não vale mais (reembolso ou cancelamento) — voltou ao Básico.")); }); } catch { } });
         StartHotplug();
     }
 
@@ -307,10 +346,10 @@ public sealed partial class MainViewModel : ViewModelBase
                 var after = Disks.ToDictionary(d => (d.Number, d.IsImage), d => d);
                 var added = after.Where(kv => !before.ContainsKey(kv.Key) || before[kv.Key].Size != kv.Value.Size).Select(kv => kv.Value).ToList();
                 var removed = before.Where(kv => !after.ContainsKey(kv.Key)).Select(kv => kv.Value).ToList();
-                if (added.Count > 0) ShowToast($"Conectado: {string.Join(", ", added.Select(d => $"{d.Model} ({Fmt.Size(d.Size)})"))}");
-                else if (removed.Count > 0) ShowToast($"Removido: {string.Join(", ", removed.Select(d => d.Model))}" +
-                    (Pending.Any(o => removed.Any(r => r.Number == o.DiskNumber)) ? " — havia alterações pendentes para ele" : ""));
-                else ShowToast("Volumes mudaram — lista atualizada.");
+                if (added.Count > 0) ShowToast(L.T($"Conectado: {string.Join(", ", added.Select(d => $"{d.Model} ({Fmt.Size(d.Size)})"))}"));
+                else if (removed.Count > 0) ShowToast(L.T($"Removido: {string.Join(", ", removed.Select(d => d.Model))}") +
+                    (Pending.Any(o => removed.Any(r => r.Number == o.DiskNumber)) ? L.T(" — havia alterações pendentes para ele") : ""));
+                else ShowToast(L.T("Volumes mudaram — lista atualizada."));
             }
             finally { _checking = false; }
         };
@@ -342,7 +381,7 @@ public sealed partial class MainViewModel : ViewModelBase
     public async Task Refresh()
     {
         Loading = true;
-        LoadingText = "Lendo discos…";
+        LoadingText = L.T("Lendo discos…");
         try
         {
             Disks = await Task.Run(DiskSystem.Enumerate);
@@ -367,7 +406,7 @@ public sealed partial class MainViewModel : ViewModelBase
                 Ui.Post(() => { foreach (var p in _pages.Values) p.OnDisksChanged(); });
             });
         }
-        catch (Exception ex) { ShowToast("Erro ao ler discos: " + ex.Message); }
+        catch (Exception ex) { ShowToast(L.T("Erro ao ler discos: ") + ex.Message); }
         finally { Loading = false; }
     }
 
@@ -380,16 +419,16 @@ public sealed partial class MainViewModel : ViewModelBase
         finally { if (Dialog == d) Dialog = null; }
     }
 
-    public Task<bool> Confirm(string title, string text, string confirm = "Continuar", bool danger = false, string? phrase = null, string icon = "Alert")
+    public Task<bool> Confirm(string title, string text, string? confirm = null, bool danger = false, string? phrase = null, string icon = "Alert")
     {
-        var f = new FormDialogViewModel { Title = title, ConfirmText = confirm, Danger = danger, ConfirmPhrase = phrase, IconKey = icon };
+        var f = new FormDialogViewModel { Title = title, ConfirmText = confirm ?? L.T("Continuar"), Danger = danger, ConfirmPhrase = phrase, IconKey = icon };
         f.Note(text, danger ? "danger" : "");
         return ShowDialog(f);
     }
 
     public Task Alert(string title, string text, string kind = "") 
     {
-        var f = new FormDialogViewModel { Title = title, ConfirmText = "Entendi", IconKey = kind == "danger" ? "Alert" : "Info" };
+        var f = new FormDialogViewModel { Title = title, ConfirmText = L.T("Entendi"), IconKey = kind == "danger" ? "Alert" : "Info" };
         f.Note(text, kind);
         return ShowDialog(f);
     }
@@ -408,7 +447,7 @@ public sealed partial class MainViewModel : ViewModelBase
             op.Finish(true, success);
             ok = true;
         }
-        catch (OperationCanceledException) { op.Finish(false, "Cancelado pelo usuário."); ok = false; }
+        catch (OperationCanceledException) { op.Finish(false, L.T("Cancelado pelo usuário.")); ok = false; }
         catch (Exception ex)
         {
             CrashLog.Write(ex);
@@ -472,11 +511,11 @@ public sealed partial class MainViewModel : ViewModelBase
     [RelayCommand]
     public async Task OpenImage()
     {
-        var f = await PickFile("Abrir imagem de disco", ("Imagens de disco", ["*.img", "*.dd", "*.raw", "*.bin", "*.iso", "*.001"]));
+        var f = await PickFile(L.T("Abrir imagem de disco"), (L.T("Imagens de disco"), ["*.img", "*.dd", "*.raw", "*.bin", "*.iso", "*.001"]));
         if (f == null) return;
         if (!DiskSystem.AttachedImages.Contains(f)) DiskSystem.AttachedImages.Add(f);
         await Refresh();
-        ShowToast("Imagem anexada como disco (somente leitura).");
+        ShowToast(L.T("Imagem anexada como disco (somente leitura)."));
     }
 
     public static void OpenInExplorer(string path)

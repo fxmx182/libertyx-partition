@@ -19,9 +19,9 @@ public sealed partial class CryptoRow(LinuxCrypto.Volume v, LinuxCryptoViewModel
     public bool Closed => !V.IsOpen;
     public bool Mounted => V.MountedAt.Count > 0;
     public bool OpenNotMounted => V.IsOpen && !Mounted;
-    public string StateText => V.IsOpen ? "Aberto" : "Trancado";
+    public string StateText => V.IsOpen ? L.T("Aberto") : L.T("Trancado");
     public string Detail => $"{Fmt.Size(V.Part.Length)} · {V.Part.Disk.Model} ({V.Part.Disk.Title})" +
-        (V.IsOpen ? $"\nAberto como /dev/mapper/{V.MapperName}" + (Mounted ? $" · montado em {string.Join(", ", V.MountedAt)}" : " · não montado") : "") +
+        (V.IsOpen ? L.T($"\nAberto como /dev/mapper/{V.MapperName}") + (Mounted ? L.T($" · montado em {string.Join(", ", V.MountedAt)}") : L.T(" · não montado")) : "") +
         (V.Uuid != null ? $"\nUUID {V.Uuid}" : "");
     public IAsyncRelayCommand UnlockCmd => new AsyncRelayCommand(() => owner.Unlock(this));
     public IAsyncRelayCommand CloseCmd => new AsyncRelayCommand(() => owner.Close(this));
@@ -36,7 +36,7 @@ public sealed partial class CryptoRow(LinuxCrypto.Volume v, LinuxCryptoViewModel
 
 public sealed partial class LinuxCryptoViewModel : PageViewModel
 {
-    public override string Title => "Criptografia";
+    public override string Title => L.T("Criptografia");
     public override string IconKey => "BitLocker";
     public ObservableCollection<CryptoRow> Volumes { get; } = [];
     [ObservableProperty] private string _message = "";
@@ -51,7 +51,7 @@ public sealed partial class LinuxCryptoViewModel : PageViewModel
         Volumes.Clear();
         foreach (var v in LinuxCrypto.List(Main.Disks)) Volumes.Add(new CryptoRow(v, this));
         Message = !LinuxTools.Has("cryptsetup") ? LinuxTools.Missing("cryptsetup")!
-            : Volumes.Count == 0 ? "Nenhum volume LUKS ou BitLocker nos discos conectados. Para criar um, use Formatar ou Criar partição → “ext4 criptografado (LUKS2)”." : "";
+            : Volumes.Count == 0 ? L.T("Nenhum volume LUKS ou BitLocker nos discos conectados. Para criar um, use Formatar ou Criar partição → “ext4 criptografado (LUKS2)”.") : "";
     }
 
     [RelayCommand]
@@ -59,28 +59,28 @@ public sealed partial class LinuxCryptoViewModel : PageViewModel
 
     public async Task Unlock(CryptoRow r)
     {
-        var f = new FormDialogViewModel { Title = $"Desbloquear {r.Title}", Subtitle = r.Kind, IconKey = "Unlock", ConfirmText = "Desbloquear" };
-        var mode = f.Add(new ChoiceField { Label = "Com" });
-        mode.Options.Add("Senha");
-        mode.Options.Add(r.IsLuks ? "Arquivo-chave" : "Chave de recuperação (48 dígitos)");
-        var pw = f.Add(new TextField { Label = "Senha", Password = true });
-        var key = f.Add(new TextField { Label = "Chave de recuperação", Watermark = "000000-000000-000000-000000-000000-000000-000000-000000", IsVisible = false });
+        var f = new FormDialogViewModel { Title = L.T($"Desbloquear {r.Title}"), Subtitle = r.Kind, IconKey = "Unlock", ConfirmText = L.T("Desbloquear") };
+        var mode = f.Add(new ChoiceField { Label = L.T("Com") });
+        mode.Options.Add(L.T("Senha"));
+        mode.Options.Add(r.IsLuks ? "Arquivo-chave" : L.T("Chave de recuperação (48 dígitos)"));
+        var pw = f.Add(new TextField { Label = L.T("Senha"), Password = true });
+        var key = f.Add(new TextField { Label = L.T("Chave de recuperação"), Watermark = "000000-000000-000000-000000-000000-000000-000000-000000", IsVisible = false });
         var file = f.Add(new PathField { Label = "Arquivo-chave", Folder = false, PickerTitle = "Arquivo-chave", IsVisible = false });
         mode.Changed += i => { pw.IsVisible = i == 0; key.IsVisible = i == 1 && !r.IsLuks; file.IsVisible = i == 1 && r.IsLuks; };
-        var ro = f.Add(new ToggleField { Label = "Só leitura", Hint = "Para resgatar arquivos sem arriscar mudar nada no volume." });
-        var mount = f.Add(new ToggleField { Label = "Montar depois de abrir", Value = true });
-        f.Note("Aberto, o conteúdo decifrado aparece como volume próprio na lista de discos — a Recuperação de dados lê ali dentro, inclusive arquivos apagados.", "gold");
+        var ro = f.Add(new ToggleField { Label = L.T("Só leitura"), Hint = L.T("Para resgatar arquivos sem arriscar mudar nada no volume.") });
+        var mount = f.Add(new ToggleField { Label = L.T("Montar depois de abrir"), Value = true });
+        f.Note(L.T("Aberto, o conteúdo decifrado aparece como volume próprio na lista de discos — a Recuperação de dados lê ali dentro, inclusive arquivos apagados."), "gold");
         if (!await Main.ShowDialog(f)) return;
         string? secret = mode.SelectedIndex == 0 ? pw.Value : r.IsLuks ? null : key.Value.Trim();
         string? keyFile = mode.SelectedIndex == 1 && r.IsLuks ? file.Value : null;
         string? mp = null;
-        bool ok = await Main.Run($"Desbloqueando {r.Title}", async s =>
+        bool ok = await Main.Run(L.T($"Desbloqueando {r.Title}"), async s =>
         {
             string dev = await LinuxCrypto.Open(r.V, secret, keyFile, ro.Value, s);
-            s.Log($"Aberto em {dev}.");
+            s.Log(L.T($"Aberto em {dev}."));
             if (mount.Value) mp = await MountMapped(dev, r.V.Label, ro.Value, s);
-        }, success: "Desbloqueado");
-        if (ok) { Load(); if (mp != null) Main.ShowToast($"Montado em {mp}"); }
+        }, success: L.T("Desbloqueado"));
+        if (ok) { Load(); if (mp != null) Main.ShowToast(L.T($"Montado em {mp}")); }
     }
 
     private static async Task<string?> MountMapped(string dev, string? label, bool readOnly, OpSink s)
@@ -91,7 +91,7 @@ public sealed partial class LinuxCryptoViewModel : PageViewModel
             var k = Core.FileSystems.FsDetect.Detect(v);
             if (k == Core.FileSystems.FsKind.LvmPv)
             {
-                s.Log("Dentro há um grupo LVM: ativando os volumes lógicos (eles aparecem na lista de discos).");
+                s.Log(L.T("Dentro há um grupo LVM: ativando os volumes lógicos (eles aparecem na lista de discos)."));
                 if (LinuxTools.Has("lvm")) await Proc.Run("lvm", ["pvscan", "--cache", "-aay", dev], s.Token);
                 return null;
             }
@@ -104,71 +104,71 @@ public sealed partial class LinuxCryptoViewModel : PageViewModel
     public async Task MountInner(CryptoRow r)
     {
         string? mp = null;
-        if (await Main.Run("Montando", async s => { mp = await MountMapped("/dev/mapper/" + r.V.MapperName, r.V.Label, false, s); }, success: "Montado"))
-        { Load(); if (mp != null) Main.ShowToast($"Montado em {mp}"); }
+        if (await Main.Run(L.T("Montando"), async s => { mp = await MountMapped("/dev/mapper/" + r.V.MapperName, r.V.Label, false, s); }, success: L.T("Montado")))
+        { Load(); if (mp != null) Main.ShowToast(L.T($"Montado em {mp}")); }
     }
 
     public async Task Close(CryptoRow r)
     {
-        if (await Main.Run($"Trancando {r.Title}", s => LinuxCrypto.Close(r.V, s), success: "Trancado")) Load();
+        if (await Main.Run(L.T($"Trancando {r.Title}"), s => LinuxCrypto.Close(r.V, s), success: L.T("Trancado"))) Load();
     }
 
     public async Task Keys(CryptoRow r)
     {
-        if (!r.IsLuks) { await Main.Alert("BitLocker", "As senhas do BitLocker são gerenciadas pelo Windows (no LibertyX Partition para Windows: Utilidades → BitLocker). Aqui ele é aberto para ler e recuperar."); return; }
-        var f = new FormDialogViewModel { Title = $"Senhas de {r.Title}", IconKey = "Key", ConfirmText = "Aplicar" };
-        var act = f.Add(new ChoiceField { Label = "O que fazer" });
-        act.Options.Add("Adicionar outra senha (a atual continua valendo)");
-        act.Options.Add("Trocar uma senha");
-        act.Options.Add("Remover uma senha");
-        var cur = f.Add(new TextField { Label = "Senha atual", Password = true });
-        var nw = f.Add(new TextField { Label = "Senha nova", Password = true });
-        var nw2 = f.Add(new TextField { Label = "Repita a senha nova", Password = true });
-        act.Changed += i => { nw.IsVisible = nw2.IsVisible = i != 2; cur.Label = i == 2 ? "Senha a remover" : "Senha atual"; };
-        f.Note("O LUKS guarda até 32 senhas (slots). Remover a última deixa o volume inacessível para sempre — o app não deixa.", "warn");
-        f.Validate = () => cur.Value.Length == 0 ? "Digite a senha." : act.SelectedIndex != 2 && (nw.Value.Length < 8 || nw.Value != nw2.Value) ? (nw.Value.Length < 8 ? "Senha nova de pelo menos 8 caracteres." : "As senhas novas não conferem.") : null;
+        if (!r.IsLuks) { await Main.Alert("BitLocker", L.T("As senhas do BitLocker são gerenciadas pelo Windows (no LibertyX Partition para Windows: Utilidades → BitLocker). Aqui ele é aberto para ler e recuperar.")); return; }
+        var f = new FormDialogViewModel { Title = L.T($"Senhas de {r.Title}"), IconKey = "Key", ConfirmText = L.T("Aplicar") };
+        var act = f.Add(new ChoiceField { Label = L.T("O que fazer") });
+        act.Options.Add(L.T("Adicionar outra senha (a atual continua valendo)"));
+        act.Options.Add(L.T("Trocar uma senha"));
+        act.Options.Add(L.T("Remover uma senha"));
+        var cur = f.Add(new TextField { Label = L.T("Senha atual"), Password = true });
+        var nw = f.Add(new TextField { Label = L.T("Senha nova"), Password = true });
+        var nw2 = f.Add(new TextField { Label = L.T("Repita a senha nova"), Password = true });
+        act.Changed += i => { nw.IsVisible = nw2.IsVisible = i != 2; cur.Label = i == 2 ? L.T("Senha a remover") : L.T("Senha atual"); };
+        f.Note(L.T("O LUKS guarda até 32 senhas (slots). Remover a última deixa o volume inacessível para sempre — o app não deixa."), "warn");
+        f.Validate = () => cur.Value.Length == 0 ? L.T("Digite a senha.") : act.SelectedIndex != 2 && (nw.Value.Length < 8 || nw.Value != nw2.Value) ? (nw.Value.Length < 8 ? L.T("Senha nova de pelo menos 8 caracteres.") : L.T("As senhas novas não conferem.")) : null;
         if (!await Main.ShowDialog(f)) return;
         if (act.SelectedIndex == 2)
         {
             var (_, slots) = await LinuxCrypto.Dump(r.V);
-            if (slots.Count <= 1) { await Main.Alert("Última senha", "Esta é a única senha do volume. Adicione outra antes de remover esta.", "danger"); return; }
+            if (slots.Count <= 1) { await Main.Alert(L.T("Última senha"), L.T("Esta é a única senha do volume. Adicione outra antes de remover esta."), "danger"); return; }
         }
-        await Main.Run("Alterando as senhas", s => act.SelectedIndex switch
+        await Main.Run(L.T("Alterando as senhas"), s => act.SelectedIndex switch
         {
             0 => LinuxCrypto.AddKey(r.V, cur.Value, nw.Value, s),
             1 => LinuxCrypto.ChangeKey(r.V, cur.Value, nw.Value, s),
             _ => LinuxCrypto.RemoveKey(r.V, cur.Value, s),
-        }, refresh: false, success: "Feito");
+        }, refresh: false, success: L.T("Feito"));
     }
 
     public async Task BackupHeader(CryptoRow r)
     {
-        string folder = AppPaths.EnsureDocuments("Cabeçalhos LUKS");
+        string folder = AppPaths.EnsureDocuments(L.T("Cabeçalhos LUKS"));
         string? file = null;
-        if (await Main.Run("Salvando o cabeçalho", async s => { file = await LinuxCrypto.BackupHeader(r.V, folder, s); s.Log($"Salvo em {file}"); s.Log("Guarde uma cópia fora deste disco. Quem tem este arquivo e a senha abre o volume — trate como a própria senha."); }, refresh: false, success: "Cabeçalho salvo") && file != null)
+        if (await Main.Run(L.T("Salvando o cabeçalho"), async s => { file = await LinuxCrypto.BackupHeader(r.V, folder, s); s.Log(L.T($"Salvo em {file}")); s.Log(L.T("Guarde uma cópia fora deste disco. Quem tem este arquivo e a senha abre o volume — trate como a própria senha.")); }, refresh: false, success: L.T("Cabeçalho salvo")) && file != null)
             MainViewModel.OpenInExplorer(file);
     }
 
     public async Task RestoreHeader(CryptoRow r)
     {
-        var file = await MainViewModel.PickFile("Cópia do cabeçalho LUKS", ("Cabeçalho LUKS", ["*.img", "*.bin", "*"]));
+        var file = await MainViewModel.PickFile(L.T("Cópia do cabeçalho LUKS"), (L.T("Cabeçalho LUKS"), ["*.img", "*.bin", "*"]));
         if (file == null) return;
-        if (!await Main.Confirm("Restaurar cabeçalho", $"O cabeçalho de {r.Title} será substituído pela cópia. As senhas voltam a ser as que valiam quando a cópia foi feita.\n\nUse só se o cabeçalho atual estiver danificado (o volume não abre com a senha certa).", "Restaurar", true, phrase: "RESTAURAR")) return;
-        await Main.Run("Restaurando o cabeçalho", s => LinuxCrypto.RestoreHeader(r.V, file, s), success: "Cabeçalho restaurado");
+        if (!await Main.Confirm(L.T("Restaurar cabeçalho"), L.T($"O cabeçalho de {r.Title} será substituído pela cópia. As senhas voltam a ser as que valiam quando a cópia foi feita.\n\nUse só se o cabeçalho atual estiver danificado (o volume não abre com a senha certa)."), L.T("Restaurar"), true, phrase: "RESTAURAR")) return;
+        await Main.Run(L.T("Restaurando o cabeçalho"), s => LinuxCrypto.RestoreHeader(r.V, file, s), success: L.T("Cabeçalho restaurado"));
     }
 
     public async Task Info(CryptoRow r)
     {
         var (summary, slots) = await LinuxCrypto.Dump(r.V);
-        var f = new FormDialogViewModel { Title = r.Title, Subtitle = r.Kind, IconKey = "Info", ConfirmText = "Fechar" };
+        var f = new FormDialogViewModel { Title = r.Title, Subtitle = r.Kind, IconKey = "Info", ConfirmText = L.T("Fechar") };
         foreach (var line in summary.Split('\n', StringSplitOptions.RemoveEmptyEntries).Take(r.IsLuks ? 1 : 40)) f.Note(line.TrimEnd(), "");
-        foreach (var k in slots) f.Add(new InfoField { Label = $"Slot {k.Id}", Text = $"{k.Type}{(k.Kdf != null ? " · " + k.Kdf : "")}" });
+        foreach (var k in slots) f.Add(new InfoField { Label = L.T($"Slot {k.Id}"), Text = $"{k.Type}{(k.Kdf != null ? " · " + k.Kdf : "")}" });
         await Main.ShowDialog(f);
     }
 
     public void Recover(CryptoRow r)
     {
-        if (!r.V.IsOpen) { Main.ShowToast("Desbloqueie primeiro: a recuperação lê o conteúdo decifrado."); return; }
+        if (!r.V.IsOpen) { Main.ShowToast(L.T("Desbloqueie primeiro: a recuperação lê o conteúdo decifrado.")); return; }
         var mapped = Main.Disks.FirstOrDefault(d => d.IsVirtual && d.Model == r.V.MapperName);
         if (mapped != null) Main.Navigate("recuperar", mapped);
         else Main.Navigate("recuperar");
@@ -180,7 +180,7 @@ public sealed partial class LinuxCryptoViewModel : PageViewModel
 public sealed record VgRow(LinuxVolumes.Vg Vg, LinuxVolumesViewModel Owner)
 {
     public string Title => Vg.Name;
-    public string Detail => $"{Fmt.Size(Vg.Size)} · {Fmt.Size(Vg.Free)} livres · {Vg.Pvs} disco(s) físico(s) · {Vg.Lvs} volume(s)";
+    public string Detail => L.T($"{Fmt.Size(Vg.Size)} · {Fmt.Size(Vg.Free)} livres · {Vg.Pvs} disco(s) físico(s) · {Vg.Lvs} volume(s)");
     public IAsyncRelayCommand On => new AsyncRelayCommand(() => Owner.SetActive(Vg.Name, true));
     public IAsyncRelayCommand Off => new AsyncRelayCommand(() => Owner.SetActive(Vg.Name, false));
 }
@@ -202,7 +202,7 @@ public sealed record MdRow(LinuxVolumes.Md Md, LinuxVolumesViewModel Owner)
 
 public sealed partial class LinuxVolumesViewModel : PageViewModel
 {
-    public override string Title => "LVM e RAID";
+    public override string Title => L.T("LVM e RAID");
     public override string IconKey => "Layers";
     public ObservableCollection<VgRow> Groups { get; } = [];
     public ObservableCollection<LvRow> Logical { get; } = [];
@@ -219,14 +219,14 @@ public sealed partial class LinuxVolumesViewModel : PageViewModel
         foreach (var v in vgs) Groups.Add(new VgRow(v, this));
         foreach (var l in lvs) Logical.Add(new LvRow(l));
         foreach (var m in LinuxVolumes.Raid()) Arrays.Add(new MdRow(m, this));
-        Message = err ?? (vgs.Count == 0 && Arrays.Count == 0 ? "Nenhum grupo LVM nem RAID por software encontrado. Volumes ativos aparecem como discos na tela inicial, prontos para recuperar, verificar e formatar." : "");
+        Message = err ?? (vgs.Count == 0 && Arrays.Count == 0 ? L.T("Nenhum grupo LVM nem RAID por software encontrado. Volumes ativos aparecem como discos na tela inicial, prontos para recuperar, verificar e formatar.") : "");
     }
 
     public async Task SetActive(string vg, bool on)
     {
-        if (!on && !await Main.Confirm("Desativar grupo", $"Os volumes de {vg} somem do sistema até serem ativados de novo. Volumes montados precisam ser desmontados antes.", "Desativar")) return;
+        if (!on && !await Main.Confirm(L.T("Desativar grupo"), L.T($"Os volumes de {vg} somem do sistema até serem ativados de novo. Volumes montados precisam ser desmontados antes."), L.T("Desativar"))) return;
         var r = await LinuxVolumes.SetVgActive(vg, on);
-        Main.ShowToast(r.Ok ? (on ? $"{vg} ativado." : $"{vg} desativado.") : r.Message);
+        Main.ShowToast(r.Ok ? (on ? L.T($"{vg} ativado.") : L.T($"{vg} desativado.")) : r.Message);
         await Main.Refresh();
         await Load();
     }
@@ -234,20 +234,20 @@ public sealed partial class LinuxVolumesViewModel : PageViewModel
     [RelayCommand]
     private async Task Scan()
     {
-        if (!LinuxTools.Has("lvm") && !LinuxTools.Has("mdadm")) { await Main.Alert("Faltam ferramentas", LinuxTools.Missing("lvm", "mdadm")!); return; }
-        await Main.Run("Procurando grupos e conjuntos", async s =>
+        if (!LinuxTools.Has("lvm") && !LinuxTools.Has("mdadm")) { await Main.Alert(L.T("Faltam ferramentas"), LinuxTools.Missing("lvm", "mdadm")!); return; }
+        await Main.Run(L.T("Procurando grupos e conjuntos"), async s =>
         {
             if (LinuxTools.Has("lvm")) { var a = await LinuxVolumes.ScanAll(s.Token); s.Log(a.Message); var b = await Proc.Run("lvm", ["vgchange", "-ay"], s.Token); s.Log(b.Message); }
-            if (LinuxTools.Has("mdadm")) { var c = await LinuxVolumes.AssembleRaid(s.Token); s.Log(c.Message.Length > 0 ? c.Message : "Nenhum RAID novo para montar."); }
-        }, success: "Pronto");
+            if (LinuxTools.Has("mdadm")) { var c = await LinuxVolumes.AssembleRaid(s.Token); s.Log(c.Message.Length > 0 ? c.Message : L.T("Nenhum RAID novo para montar.")); }
+        }, success: L.T("Pronto"));
         await Load();
     }
 
     public async Task StopRaid(string md)
     {
-        if (!await Main.Confirm("Parar RAID", $"/dev/{md} será parado (os discos continuam intactos e podem ser montados de novo com Procurar).", "Parar")) return;
+        if (!await Main.Confirm(L.T("Parar RAID"), L.T($"/dev/{md} será parado (os discos continuam intactos e podem ser montados de novo com Procurar)."), L.T("Parar"))) return;
         var r = await LinuxVolumes.StopRaid(md);
-        Main.ShowToast(r.Ok ? $"{md} parado." : r.Message);
+        Main.ShowToast(r.Ok ? L.T($"{md} parado.") : r.Message);
         await Main.Refresh();
         await Load();
     }
@@ -262,18 +262,18 @@ public sealed record ToolRow(LinuxTools.Tool T)
     public string Package => LinuxTools.PackageOf(T.Exe);
     public bool Installed => LinuxTools.Has(T.Exe);
     public bool Missing => !Installed;
-    public string Where => LinuxTools.Find(T.Exe) ?? $"pacote {Package}";
+    public string Where => LinuxTools.Find(T.Exe) ?? L.T($"pacote {Package}");
 }
 
 public sealed record ToolGroup(string Title, List<ToolRow> Items)
 {
-    public string Summary => Items.All(i => i.Installed) ? "tudo instalado" : $"{Items.Count(i => i.Missing)} faltando";
+    public string Summary => Items.All(i => i.Installed) ? L.T("tudo instalado") : L.T($"{Items.Count(i => i.Missing)} faltando");
     public bool Complete => Items.All(i => i.Installed);
 }
 
 public sealed partial class LinuxToolsViewModel : PageViewModel
 {
-    public override string Title => "Ferramentas do sistema";
+    public override string Title => L.T("Ferramentas do sistema");
     public override string IconKey => "Terminal";
     public ObservableCollection<ToolGroup> Groups { get; } = [];
     [ObservableProperty] private string _distro = "";
@@ -290,8 +290,8 @@ public sealed partial class LinuxToolsViewModel : PageViewModel
         foreach (var g in LinuxTools.Catalog.GroupBy(t => t.Group)) Groups.Add(new ToolGroup(g.Key, g.Select(t => new ToolRow(t)).ToList()));
         var miss = LinuxTools.Catalog.Where(t => !LinuxTools.Has(t.Exe)).Select(t => t.Exe).ToList();
         AnyMissing = miss.Count > 0;
-        Distro = $"{LinuxTools.Current.Name} · família {LinuxTools.Current.Family} · kernel {Environment.OSVersion.Version}";
-        InstallLine = AnyMissing ? LinuxTools.InstallHint(miss) : "Todas as ferramentas estão instaladas.";
+        Distro = L.T($"{LinuxTools.Current.Name} · família {LinuxTools.Current.Family} · kernel {Environment.OSVersion.Version}");
+        InstallLine = AnyMissing ? LinuxTools.InstallHint(miss) : L.T("Todas as ferramentas estão instaladas.");
     }
 
     [RelayCommand]
@@ -299,12 +299,12 @@ public sealed partial class LinuxToolsViewModel : PageViewModel
     {
         var miss = LinuxTools.Catalog.Where(t => !LinuxTools.Has(t.Exe)).Select(t => t.Exe).ToList();
         if (miss.Count == 0) return;
-        if (!await Main.Confirm("Instalar ferramentas", $"Serão instalados pelo gerenciador de pacotes da distribuição:\n\n{string.Join(", ", miss.Select(LinuxTools.PackageOf).Distinct())}\n\nPrecisa de internet.", "Instalar")) return;
-        await Main.Run("Instalando ferramentas", async s =>
+        if (!await Main.Confirm(L.T("Instalar ferramentas"), L.T($"Serão instalados pelo gerenciador de pacotes da distribuição:\n\n{string.Join(", ", miss.Select(LinuxTools.PackageOf).Distinct())}\n\nPrecisa de internet."), L.T("Instalar"))) return;
+        await Main.Run(L.T("Instalando ferramentas"), async s =>
         {
             var r = await LinuxTools.Install(miss, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
-            if (!r.Ok) throw new InvalidOperationException("A instalação não terminou: " + r.Message.Split('\n').LastOrDefault());
-        }, refresh: false, success: "Instalado");
+            if (!r.Ok) throw new InvalidOperationException(L.T("A instalação não terminou: ") + r.Message.Split('\n').LastOrDefault());
+        }, refresh: false, success: L.T("Instalado"));
         Load();
     }
 }
@@ -315,9 +315,9 @@ public sealed partial class MigratePieceRow(LinuxMigrate.Piece p, LinuxMigrateVi
 {
     public LinuxMigrate.Piece P { get; } = p;
     public string Title => P.Title;
-    public string Detail => P.FsType == "swap" ? $"swap · {Fmt.Size(P.Size)} · {P.SourceDev}"
-        : $"{P.FsType} · {Fmt.Size(P.Used)} usados de {Fmt.Size(P.Size)} · {P.SourceDev}" + (P.Subvols.Count > 1 ? $" · subvolumes {string.Join(", ", P.Subvols.Select(s => s.subvol))}" : "");
-    public string TargetText => P.Include ? $"→ {Fmt.Size(P.TargetSize)}" : "fica no disco antigo";
+    public string Detail => P.FsType == "swap" ? L.T($"swap · {Fmt.Size(P.Size)} · {P.SourceDev}")
+        : L.T($"{P.FsType} · {Fmt.Size(P.Used)} usados de {Fmt.Size(P.Size)} · {P.SourceDev}") + (P.Subvols.Count > 1 ? L.T($" · subvolumes {string.Join(", ", P.Subvols.Select(s => s.subvol))}") : "");
+    public string TargetText => P.Include ? $"→ {Fmt.Size(P.TargetSize)}" : L.T("fica no disco antigo");
     public bool Optional => !P.Required;
     public bool Include
     {
@@ -328,9 +328,9 @@ public sealed partial class MigratePieceRow(LinuxMigrate.Piece p, LinuxMigrateVi
 
 public sealed partial class LinuxMigrateViewModel : PageViewModel
 {
-    public override string Title => "Migrar sistema para SSD/HD";
+    public override string Title => L.T("Migrar sistema para SSD/HD");
     public override string IconKey => "Migrate";
-    public string Description => "Leva o Linux em uso — sistema, programas, configurações e arquivos — para um disco novo, pronto para dar boot. Cria as partições do zero (do tamanho certo para o disco novo), copia tudo preservando dono, permissões e atributos, ajusta fstab e GRUB e reinstala o boot.";
+    public string Description => L.T("Leva o Linux em uso — sistema, programas, configurações e arquivos — para um disco novo, pronto para dar boot. Cria as partições do zero (do tamanho certo para o disco novo), copia tudo preservando dono, permissões e atributos, ajusta fstab e GRUB e reinstala o boot.");
     public PickerViewModel Target { get; }
     public ObservableCollection<MigratePieceRow> Pieces { get; } = [];
     public ObservableCollection<string> Notes { get; } = [];
@@ -345,7 +345,7 @@ public sealed partial class LinuxMigrateViewModel : PageViewModel
         Target = new PickerViewModel
         {
             ShowPartitions = false,
-            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.IsImage ? "Escolha um disco de verdade." : d.IsVirtual ? "Volume lógico: escolha um disco físico." : d.ReadOnly ? "Disco protegido contra gravação." : null,
+            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.IsImage ? L.T("Escolha um disco de verdade.") : d.IsVirtual ? L.T("Volume lógico: escolha um disco físico.") : d.ReadOnly ? L.T("Disco protegido contra gravação.") : null,
         };
         Target.Changed += _ => Replan(false);
     }
@@ -358,7 +358,7 @@ public sealed partial class LinuxMigrateViewModel : PageViewModel
         var t = Target.Selected?.Disk;
         var keep = keepChoices && _plan != null ? _plan.Pieces.ToDictionary(p => p.SourceDev + p.MountPoint, p => p.Include) : null;
         Pieces.Clear(); Notes.Clear(); Problem = null; CanRun = false; HasPlan = false;
-        if (t == null) { Summary = "Escolha o disco novo."; return; }
+        if (t == null) { Summary = L.T("Escolha o disco novo."); return; }
         _plan = LinuxMigrate.Analyze(t);
         if (keep != null)
         {
@@ -368,11 +368,11 @@ public sealed partial class LinuxMigrateViewModel : PageViewModel
         HasPlan = true;
         foreach (var p in _plan.Pieces) Pieces.Add(new MigratePieceRow(p, this));
         foreach (var n in _plan.Notes) Notes.Add(n);
-        Notes.Add($"{(_plan.Uefi ? "UEFI" : "BIOS")} · carregador {_plan.Loader} · tabela GPT nova.");
-        if (t.Partitions.Any(p => !p.IsUnallocated)) Notes.Add($"TUDO que existe hoje em {t.Title} ({t.Model}) será apagado.");
-        Notes.Add("Feche os programas que estiverem gravando muito (navegador baixando, máquinas virtuais): o sistema é copiado com ele rodando, em duas passadas.");
+        Notes.Add(L.T($"{(_plan.Uefi ? "UEFI" : "BIOS")} · carregador {_plan.Loader} · tabela GPT nova."));
+        if (t.Partitions.Any(p => !p.IsUnallocated)) Notes.Add(L.T($"TUDO que existe hoje em {t.Title} ({t.Model}) será apagado."));
+        Notes.Add(L.T("Feche os programas que estiverem gravando muito (navegador baixando, máquinas virtuais): o sistema é copiado com ele rodando, em duas passadas."));
         Problem = _plan.Problem;
-        Summary = $"Copiar {Fmt.Size(_plan.Need)} para {t.Title} ({Fmt.Size(t.Size)})";
+        Summary = L.T($"Copiar {Fmt.Size(_plan.Need)} para {t.Title} ({Fmt.Size(t.Size)})");
         CanRun = _plan.Problem == null;
     }
 
@@ -387,10 +387,10 @@ public sealed partial class LinuxMigrateViewModel : PageViewModel
     private async Task Run()
     {
         var plan = _plan; if (plan == null || plan.Problem != null) return;
-        if (!await Main.RequirePremium("Migrar sistema", "Levar o Linux inteiro para outro SSD ou HD, pronto para dar boot, é do Premium.")) return;
+        if (!await Main.RequirePremium(L.T("Migrar sistema"), L.T("Levar o Linux inteiro para outro SSD ou HD, pronto para dar boot, é do Premium."))) return;
         var t = plan.Target;
-        if (!await Main.Confirm("Migrar o sistema", $"O Linux em uso vai para {t.Title} ({t.Model}, {Fmt.Size(t.Size)}).\n\nTUDO que existe hoje nesse disco será apagado. O disco atual não é alterado.", "Adicionar", true, phrase: "MIGRAR")) return;
-        Main.Queue("Migrar sistema", $"Linux em uso → {t.Title} ({t.Model}) — apaga o conteúdo atual do destino", "Migrate", async s =>
+        if (!await Main.Confirm(L.T("Migrar o sistema"), L.T($"O Linux em uso vai para {t.Title} ({t.Model}, {Fmt.Size(t.Size)}).\n\nTUDO que existe hoje nesse disco será apagado. O disco atual não é alterado."), L.T("Adicionar"), true, phrase: "MIGRAR")) return;
+        Main.Queue(L.T("Migrar sistema"), L.T($"Linux em uso → {t.Title} ({t.Model}) — apaga o conteúdo atual do destino"), "Migrate", async s =>
         {
             var fresh = LinuxMigrate.Analyze(MainViewModel.Fresh(t));
             foreach (var p in fresh.Pieces) { var o = plan.Pieces.FirstOrDefault(x => x.SourceDev == p.SourceDev && x.MountPoint == p.MountPoint); if (o != null && !p.Required) p.Include = o.Include; }

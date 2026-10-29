@@ -18,7 +18,7 @@ namespace LibertyX.Partition.ViewModels;
 
 public sealed partial class SurfaceViewModel : PageViewModel
 {
-    public override string Title => "Teste de superfície";
+    public override string Title => L.T("Teste de superfície");
     public override string IconKey => "Surface";
     public PickerViewModel Picker { get; } = new() { AllowUnallocated = true };
     public const int CellCount = 2400;
@@ -74,7 +74,7 @@ public sealed partial class SurfaceViewModel : PageViewModel
             Version++;
             Fraction = (double)p.Done / p.Total;
             Speed = Fmt.Speed(p.BytesPerSecond);
-            Elapsed = Fmt.Duration(sw.Elapsed) + (Fraction > 0.01 ? $" · faltam ~{Fmt.Duration(TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * (1 - Fraction) / Fraction))}" : "");
+            Elapsed = Fmt.Duration(sw.Elapsed) + (Fraction > 0.01 ? L.T($" · faltam ~{Fmt.Duration(TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * (1 - Fraction) / Fraction))}") : "");
         });
         try
         {
@@ -86,14 +86,14 @@ public sealed partial class SurfaceViewModel : PageViewModel
             });
             Version++;
             Fraction = 1;
-            foreach (var b in res.BadSectors.Take(500)) BadSectors.Add($"setor {b:N0}");
-            Verdict = res.Bad > 0 ? $"{res.BadSectors.Count} setores ilegíveis. Faça uma imagem deste disco (Backup e imagem) antes de qualquer outra coisa — e não confie mais nele."
-                    : res.VerySlow > 0 ? $"Nenhum setor ilegível, mas {res.VerySlow} trechos muito lentos: sinal de setores fracos. Vale fazer backup."
-                    : "Superfície saudável: todos os blocos leram sem erro e em tempo normal.";
-            Elapsed = Fmt.Duration(res.Elapsed) + $" · média {res.AvgMBps:0} MB/s";
+            foreach (var b in res.BadSectors.Take(500)) BadSectors.Add(L.T($"setor {b:N0}"));
+            Verdict = res.Bad > 0 ? L.T($"{res.BadSectors.Count} setores ilegíveis. Faça uma imagem deste disco (Backup e imagem) antes de qualquer outra coisa — e não confie mais nele.")
+                    : res.VerySlow > 0 ? L.T($"Nenhum setor ilegível, mas {res.VerySlow} trechos muito lentos: sinal de setores fracos. Vale fazer backup.")
+                    : L.T("Superfície saudável: todos os blocos leram sem erro e em tempo normal.");
+            Elapsed = Fmt.Duration(res.Elapsed) + L.T($" · média {res.AvgMBps:0} MB/s");
         }
-        catch (OperationCanceledException) { Verdict = "Teste interrompido."; }
-        catch (Exception ex) { Verdict = "Erro: " + ex.Message; }
+        catch (OperationCanceledException) { Verdict = L.T("Teste interrompido."); }
+        catch (Exception ex) { Verdict = L.T("Erro: ") + ex.Message; }
         finally { Running = false; }
     }
 
@@ -103,16 +103,16 @@ public sealed partial class SurfaceViewModel : PageViewModel
     [RelayCommand]
     private async Task SaveReport()
     {
-        var f = await MainViewModel.SaveFile("Salvar relatório", $"Teste de superfície {DateTime.Now:yyyy-MM-dd HH-mm}.txt", "txt", "Texto");
+        var f = await MainViewModel.SaveFile(L.T("Salvar relatório"), L.T($"Teste de superfície {DateTime.Now:yyyy-MM-dd HH-mm}.txt"), "txt", L.T("Texto"));
         if (f == null) return;
         var sb = new StringBuilder();
-        sb.AppendLine($"LibertyX Partition — teste de superfície — {DateTime.Now:dd/MM/yyyy HH:mm}");
+        sb.AppendLine(L.T($"LibertyX Partition — teste de superfície — {DateTime.Now:dd/MM/yyyy HH:mm}"));
         sb.AppendLine(TargetText);
-        sb.AppendLine($"Bons: {Good} · Lentos: {Slow} · Muito lentos: {VerySlow} · Ilegíveis: {Bad}");
+        sb.AppendLine(L.T($"Bons: {Good} · Lentos: {Slow} · Muito lentos: {VerySlow} · Ilegíveis: {Bad}"));
         sb.AppendLine(Verdict);
         foreach (var b in BadSectors) sb.AppendLine(b);
         await File.WriteAllTextAsync(f, sb.ToString(), Encoding.UTF8);
-        Main.ShowToast("Relatório salvo.");
+        Main.ShowToast(L.T("Relatório salvo."));
     }
 }
 
@@ -120,7 +120,7 @@ public sealed partial class SurfaceViewModel : PageViewModel
 
 public sealed partial class HealthViewModel : PageViewModel
 {
-    public override string Title => "Saúde e propriedades";
+    public override string Title => L.T("Saúde e propriedades");
     public override string IconKey => "Health";
     public PickerViewModel Picker { get; } = new() { ShowPartitions = false };
     public ObservableCollection<SmartAttribute> Attributes { get; } = [];
@@ -164,17 +164,17 @@ public sealed partial class HealthViewModel : PageViewModel
         Attributes.Clear();
         foreach (var a in s.Attributes) Attributes.Add(a);
         Properties.Clear();
-        Properties.Add(new("Modelo", d.Model));
-        if (!string.IsNullOrEmpty(d.Serial)) Properties.Add(new("Nº de série", d.Serial));
-        if (!string.IsNullOrEmpty(d.Firmware)) Properties.Add(new("Firmware", d.Firmware));
-        Properties.Add(new("Interface", d.Bus + (d.Removable ? " · removível" : "")));
-        Properties.Add(new("Tipo", d.IsSsd == true ? "SSD (sem partes móveis)" : d.IsSsd == false ? "HD mecânico" : "—"));
-        Properties.Add(new("Capacidade", $"{Fmt.Size(d.Size)} · {d.Size:N0} bytes"));
-        Properties.Add(new("Setores", $"{d.Size / d.SectorSize:N0} de {d.SectorSize} B (físico {d.PhysicalSectorSize} B)"));
-        Properties.Add(new("Tabela", d.StyleText + (d.Table.Style == TableStyle.Gpt ? $" · GUID {d.Table.DiskGuid.ToString().ToUpperInvariant()}" : d.Table.Style == TableStyle.Mbr ? $" · assinatura {d.Table.DiskSignature:X8}" : "")));
-        Properties.Add(new("Partições", $"{d.Partitions.Count(p => !p.IsUnallocated)}"));
-        if (d.IsSystem) Properties.Add(new("Sistema", Ui.SystemDiskInUse.TrimEnd('.')));
-        foreach (var warn in d.Table.Warnings) Properties.Add(new("Aviso", warn));
+        Properties.Add(new(L.T("Modelo"), d.Model));
+        if (!string.IsNullOrEmpty(d.Serial)) Properties.Add(new(L.T("Nº de série"), d.Serial));
+        if (!string.IsNullOrEmpty(d.Firmware)) Properties.Add(new(L.T("Firmware"), d.Firmware));
+        Properties.Add(new(L.T("Interface"), d.Bus + (d.Removable ? L.T(" · removível") : "")));
+        Properties.Add(new(L.T("Tipo"), d.IsSsd == true ? L.T("SSD (sem partes móveis)") : d.IsSsd == false ? L.T("HD mecânico") : "—"));
+        Properties.Add(new(L.T("Capacidade"), L.T($"{Fmt.Size(d.Size)} · {d.Size:N0} bytes")));
+        Properties.Add(new(L.T("Setores"), L.T($"{d.Size / d.SectorSize:N0} de {d.SectorSize} B (físico {d.PhysicalSectorSize} B)")));
+        Properties.Add(new(L.T("Tabela"), d.StyleText + (d.Table.Style == TableStyle.Gpt ? $" · GUID {d.Table.DiskGuid.ToString().ToUpperInvariant()}" : d.Table.Style == TableStyle.Mbr ? L.T($" · assinatura {d.Table.DiskSignature:X8}") : "")));
+        Properties.Add(new(L.T("Partições"), $"{d.Partitions.Count(p => !p.IsUnallocated)}"));
+        if (d.IsSystem) Properties.Add(new(L.T("Sistema"), Ui.SystemDiskInUse.TrimEnd('.')));
+        foreach (var warn in d.Table.Warnings) Properties.Add(new(L.T("Aviso"), warn));
     }
 }
 
@@ -182,9 +182,9 @@ public sealed partial class HealthViewModel : PageViewModel
 
 public sealed partial class ConvertViewModel : PageViewModel
 {
-    public override string Title => "Converter GPT ⇄ MBR";
+    public override string Title => L.T("Converter GPT ⇄ MBR");
     public override string IconKey => "Convert";
-    public PickerViewModel Picker { get; } = new() { ShowPartitions = false, DiskFilter = d => d.Table.Style == TableStyle.None ? "Disco sem tabela de partições." : null };
+    public PickerViewModel Picker { get; } = new() { ShowPartitions = false, DiskFilter = d => d.Table.Style == TableStyle.None ? L.T("Disco sem tabela de partições.") : null };
     public ObservableCollection<string> Notes { get; } = [];
     [ObservableProperty] private string _from = "", _to = "";
     [ObservableProperty] private bool _ok;
@@ -205,7 +205,7 @@ public sealed partial class ConvertViewModel : PageViewModel
         var (ok, notes) = DiskOperations.AnalyzeConversion(d, target);
         foreach (var n in notes) Notes.Add(n);
         Ok = ok && !d.ReadOnly;
-        if (d.ReadOnly) Notes.Add("Imagem anexada só para leitura.");
+        if (d.ReadOnly) Notes.Add(L.T("Imagem anexada só para leitura."));
         OfferMbr2Gpt = d.IsSystem && target == TableStyle.Gpt && OperatingSystem.IsWindows();
     }
 
@@ -214,10 +214,10 @@ public sealed partial class ConvertViewModel : PageViewModel
     {
         var d = _d; if (d == null) return;
         // disco vazio converte de graça; levar as partições junto é do Premium
-        if (d.Table.Entries.Count > 0 && !await Main.RequirePremium("Converter sem perder dados",
-            "No Básico dá para converter um disco sem partições. Converter levando as partições e os dados junto é do Premium.")) return;
+        if (d.Table.Entries.Count > 0 && !await Main.RequirePremium(L.T("Converter sem perder dados"),
+            L.T("No Básico dá para converter um disco sem partições. Converter levando as partições e os dados junto é do Premium."))) return;
         var target = d.Table.Style == TableStyle.Gpt ? TableStyle.Mbr : TableStyle.Gpt;
-        Main.Queue($"Converter para {To}", $"{d.Title} ({d.Model}): {From} → {To}, sem apagar partições", "Convert", s => DiskOperations.ConvertStyle(MainViewModel.Fresh(d), target, s), d);
+        Main.Queue(L.T($"Converter para {To}"), L.T($"{d.Title} ({d.Model}): {From} → {To}, sem apagar partições"), "Convert", s => DiskOperations.ConvertStyle(MainViewModel.Fresh(d), target, s), d);
         await Task.CompletedTask;
     }
 
@@ -225,15 +225,15 @@ public sealed partial class ConvertViewModel : PageViewModel
     private async Task Mbr2Gpt()
     {
         var d = _d; if (d == null) return;
-        if (!await Main.RequirePremium("Converter o disco do Windows", "Converter o disco do sistema para GPT sem reinstalar o Windows é do Premium.")) return;
-        if (!await Main.Confirm("Converter o disco do Windows com MBR2GPT",
-            "O MBR2GPT é o conversor oficial da Microsoft: converte o disco do sistema sem perder dados e cria a partição EFI.\n\nDepois, é OBRIGATÓRIO entrar na configuração do firmware (BIOS) e trocar o modo de inicialização de Legado/CSM para UEFI, senão o Windows não inicia.", "Converter", true)) return;
-        Main.Queue("Converter o disco do Windows (MBR2GPT)", $"{d.Title} ({d.Model}) → GPT; depois mude o firmware para UEFI", "Convert", async s =>
+        if (!await Main.RequirePremium(L.T("Converter o disco do Windows"), L.T("Converter o disco do sistema para GPT sem reinstalar o Windows é do Premium."))) return;
+        if (!await Main.Confirm(L.T("Converter o disco do Windows com MBR2GPT"),
+            L.T("O MBR2GPT é o conversor oficial da Microsoft: converte o disco do sistema sem perder dados e cria a partição EFI.\n\nDepois, é OBRIGATÓRIO entrar na configuração do firmware (BIOS) e trocar o modo de inicialização de Legado/CSM para UEFI, senão o Windows não inicia."), L.T("Converter"), true)) return;
+        Main.Queue(L.T("Converter o disco do Windows (MBR2GPT)"), L.T($"{d.Title} ({d.Model}) → GPT; depois mude o firmware para UEFI"), "Convert", async s =>
         {
-            s.Progress(-1, "Validando e convertendo");
+            s.Progress(-1, L.T("Validando e convertendo"));
             var r = await WinCommands.Mbr2Gpt(d.Number, s.Token, l => { if (l.Trim().Length > 0) s.Log(l.Trim()); });
-            if (!r.Ok) throw new InvalidOperationException("O MBR2GPT recusou: " + r.Message);
-            s.Log("Pronto. Agora mude o firmware para UEFI antes de reiniciar.");
+            if (!r.Ok) throw new InvalidOperationException(L.T("O MBR2GPT recusou: ") + r.Message);
+            s.Log(L.T("Pronto. Agora mude o firmware para UEFI antes de reiniciar."));
         }, d, dangerous: true);
     }
 }
@@ -244,22 +244,22 @@ public sealed partial class AlignRow(PartitionInfo p) : ObservableObject
 {
     public PartitionInfo P { get; } = p;
     public string Title => (P.Letter ?? P.Label ?? "*") + $" · {FsDetect.Name(P.FileSystem)} · {Fmt.Size(P.Length)}";
-    public string Start => $"setor {P.StartLba:N0} (deslocamento {Fmt.Size(P.Offset)})";
+    public string Start => L.T($"setor {P.StartLba:N0} (deslocamento {Fmt.Size(P.Offset)})");
     public bool Aligned => DiskOperations.IsAligned(P);
     public bool Misaligned => !Aligned;
     public long? Target { get; } = DiskOperations.IsAligned(p) ? null : DiskOperations.AlignedTarget(p);
-    public string Plan => Aligned ? "Alinhada a 1 MB" : Target is { } t ? $"Vai para o setor {t:N0}" : "Sem espaço livre ao lado para alinhar";
+    public string Plan => Aligned ? L.T("Alinhada a 1 MB") : Target is { } t ? L.T($"Vai para o setor {t:N0}") : L.T("Sem espaço livre ao lado para alinhar");
     [ObservableProperty] private bool _isChecked = !DiskOperations.IsAligned(p) && !p.IsSystemCritical;
     public bool CanCheck => Misaligned && Target != null && !P.IsSystemCritical;
 }
 
 public sealed partial class AlignViewModel : PageViewModel
 {
-    public override string Title => "Alinhar partições";
+    public override string Title => L.T("Alinhar partições");
     public override string IconKey => "Align";
     public PickerViewModel Picker { get; } = new() { ShowPartitions = false };
     public ObservableCollection<AlignRow> Rows { get; } = [];
-    [ObservableProperty] private string _summary = "Escolha um disco à esquerda.";
+    [ObservableProperty] private string _summary = L.T("Escolha um disco à esquerda.");
     [ObservableProperty] private bool _canAlign;
     private DiskInfo? _d;
     public AlignViewModel() { Picker.Changed += it => Load(it?.Disk); }
@@ -272,7 +272,7 @@ public sealed partial class AlignViewModel : PageViewModel
         if (d == null) return;
         foreach (var p in d.Partitions.Where(p => p.Entry != null)) Rows.Add(new AlignRow(p));
         int mis = Rows.Count(r => r.Misaligned);
-        Summary = mis == 0 ? "Todas as partições já estão alinhadas a 1 MB. Nada a fazer." : $"{mis} partição(ões) desalinhada(s). Em SSD e discos de setor 4K, cada escrita nelas toca dois blocos físicos: mais lentidão e mais desgaste.";
+        Summary = mis == 0 ? L.T("Todas as partições já estão alinhadas a 1 MB. Nada a fazer.") : L.T($"{mis} partição(ões) desalinhada(s). Em SSD e discos de setor 4K, cada escrita nelas toca dois blocos físicos: mais lentidão e mais desgaste.");
         CanAlign = Rows.Any(r => r.CanCheck) && d.CanModify;
     }
 
@@ -282,14 +282,14 @@ public sealed partial class AlignViewModel : PageViewModel
         var d = _d; if (d == null) return;
         var todo = Rows.Where(r => r.IsChecked && r.CanCheck).ToList();
         if (todo.Count == 0) return;
-        Main.Queue("Alinhar partições", $"{todo.Count} partição(ões) de {d.Title} deslocadas até o limite de 1 MB (move os dados)", "Align", s =>
+        Main.Queue(L.T("Alinhar partições"), L.T($"{todo.Count} partição(ões) de {d.Title} deslocadas até o limite de 1 MB (move os dados)"), "Align", s =>
         {
             foreach (var r in todo)
             {
                 var fresh = DiskSystem.Enumerate().First(x => x.Number == d.Number && x.IsImage == d.IsImage);
                 var p = fresh.Partitions.First(x => x.Offset == r.P.Offset);
                 var target = DiskOperations.AlignedTarget(p);
-                if (target == null) { s.Log($"{r.Title}: sem espaço — pulada."); continue; }
+                if (target == null) { s.Log(L.T($"{r.Title}: sem espaço — pulada.")); continue; }
                 DiskOperations.MovePartition(p, target.Value, s);
             }
         }, d, canPause: true);
@@ -301,12 +301,12 @@ public sealed partial class AlignViewModel : PageViewModel
 
 public sealed partial class WipeViewModel : PageViewModel
 {
-    public override string Title => "Limpar disco";
+    public override string Title => L.T("Limpar disco");
     public override string IconKey => "Wipe";
     public PickerViewModel Picker { get; } = new()
     {
-        DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : null,
-        PartitionFilter = p => p.IsSystemCritical ? "Partição do sistema em uso." : p.Disk.ReadOnly ? "Imagem só para leitura." : null,
+        DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? L.T("Imagem só para leitura.") : null,
+        PartitionFilter = p => p.IsSystemCritical ? L.T("Partição do sistema em uso.") : p.Disk.ReadOnly ? L.T("Imagem só para leitura.") : null,
     };
     /// <summary>TRIM e o apagamento do fabricante só existem na camada do Linux.</summary>
     private static readonly List<WipeMethod> MethodValues = Enum.GetValues<WipeMethod>().Where(m => OperatingSystem.IsLinux() || m is not (WipeMethod.Discard or WipeMethod.Sanitize)).ToList();
@@ -329,13 +329,13 @@ public sealed partial class WipeViewModel : PageViewModel
         var m = MethodValues[Math.Clamp(Method, 0, MethodValues.Count - 1)];
         if (m == WipeMethod.Sanitize && (sel.Partition != null || Core.Platform.Linux.LinuxErase.CannotSanitize(sel.Disk) is not null))
         {
-            await Main.Alert("Apagamento do fabricante", sel.Partition != null ? "Esse apagamento é sempre do disco inteiro: escolha o disco, não uma partição." : Core.Platform.Linux.LinuxErase.CannotSanitize(sel.Disk)!, "warn");
+            await Main.Alert(L.T("Apagamento do fabricante"), sel.Partition != null ? L.T("Esse apagamento é sempre do disco inteiro: escolha o disco, não uma partição.") : Core.Platform.Linux.LinuxErase.CannotSanitize(sel.Disk)!, "warn");
             return;
         }
-        if (m == WipeMethod.Discard && sel.Disk.IsSsd == false) { await Main.Alert("HD mecânico", "TRIM só vale para SSD, cartões e pendrives. Num HD, use “Preencher com zeros”.", "warn"); return; }
-        string what = sel.Partition == null ? $"o disco {sel.Disk.Title} inteiro ({sel.Disk.Model}, {Fmt.Size(sel.Disk.Size)}), com todas as partições" : $"a partição {sel.Title} ({Fmt.Size(sel.Partition.Length)})";
+        if (m == WipeMethod.Discard && sel.Disk.IsSsd == false) { await Main.Alert(L.T("HD mecânico"), L.T("TRIM só vale para SSD, cartões e pendrives. Num HD, use “Preencher com zeros”."), "warn"); return; }
+        string what = sel.Partition == null ? L.T($"o disco {sel.Disk.Title} inteiro ({sel.Disk.Model}, {Fmt.Size(sel.Disk.Size)}), com todas as partições") : L.T($"a partição {sel.Title} ({Fmt.Size(sel.Partition.Length)})");
         var sd = sel.Disk; var sp = sel.Partition;
-        Main.Queue("Limpar (sobrescrever)", $"{what} — {Wiper.Describe(m)}. Sem volta: nenhuma recuperação traz os dados depois.", "Wipe", s =>
+        Main.Queue(L.T("Limpar (sobrescrever)"), L.T($"{what} — {Wiper.Describe(m)}. Sem volta: nenhuma recuperação traz os dados depois."), "Wipe", s =>
         {
             var pq = sp == null ? null : MainViewModel.FreshPart(sp);
             DiskOperations.Wipe(pq?.Disk ?? MainViewModel.Fresh(sd), pq, m, s);
@@ -351,22 +351,22 @@ public sealed class LuksRow(LuksFinding f, DiskInfo disk, LuksViewModel page)
     public LuksFinding F { get; } = f;
     public string Title => F.Title;
     public string StateText => F.StateText;
-    public string Where => "Onde: " + F.Where;
+    public string Where => L.T("Onde: ") + F.Where;
     public string Explain => F.Explain();
-    public string Details => $"Posição: {Fmt.Size(F.Start)} ({F.Start / disk.SectorSize:N0} setores) · cópias do cabeçalho em " + string.Join(", ", F.Headers.Keys.Select(h => h == F.Start ? "0" : "+" + Fmt.Size(h - F.Start)))
+    public string Details => L.T($"Posição: {Fmt.Size(F.Start)} ({F.Start / disk.SectorSize:N0} setores) · cópias do cabeçalho em ") + string.Join(", ", F.Headers.Keys.Select(h => h == F.Start ? "0" : "+" + Fmt.Size(h - F.Start)))
                              + (F.Uuid is { Length: > 0 } u ? $" · UUID {u}" : "");
     public bool IsActive => F.State == LuksState.Active;
     public bool IsOpenable => F.State == LuksState.Openable;
     public bool IsDead => F.State == LuksState.Dead;
     public bool IsInFile => F.State == LuksState.InFile;
     public bool CanErase => !IsInFile && !disk.ReadOnly;
-    public string EraseText => IsActive ? "Destruir este contêiner" : "Apagar este resto";
+    public string EraseText => IsActive ? L.T("Destruir este contêiner") : L.T("Apagar este resto");
     public IAsyncRelayCommand Erase => new AsyncRelayCommand(() => page.Erase(this));
 }
 
 public sealed partial class LuksViewModel : PageViewModel
 {
-    public override string Title => "Detector de LUKS";
+    public override string Title => L.T("Detector de LUKS");
     public override string IconKey => "Lock";
     public PickerViewModel Picker { get; } = new() { AllowUnallocated = true };
     [ObservableProperty] private bool _deep = true;
@@ -420,14 +420,14 @@ public sealed partial class LuksViewModel : PageViewModel
         Found = 0; Fraction = 0; Speed = "—"; Verdict = "";
         Running = true; HasRun = true;
         var mode = Deep ? LuksScanMode.Full : LuksScanMode.Quick;
-        TargetText = (sel.Partition == null ? $"{sel.Disk.Title} · {sel.Disk.Model}" : $"{sel.Title} · {sel.Disk.Title}") + (Deep ? " · completa" : " · rápida");
+        TargetText = (sel.Partition == null ? $"{sel.Disk.Title} · {sel.Disk.Model}" : $"{sel.Title} · {sel.Disk.Title}") + (Deep ? L.T(" · completa") : L.T(" · rápida"));
         var sw = Stopwatch.StartNew();
         var prog = new Progress<LuksProgress>(p =>
         {
             Fraction = p.Total == 0 ? 1 : (double)p.Done / p.Total;
             Found = p.Found;
             if (p.BytesPerSecond > 0) Speed = Fmt.Speed(p.BytesPerSecond);
-            Elapsed = Fmt.Duration(sw.Elapsed) + (Deep && Fraction is > 0.01 and < 1 ? $" · faltam ~{Fmt.Duration(TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * (1 - Fraction) / Fraction))}" : "");
+            Elapsed = Fmt.Duration(sw.Elapsed) + (Deep && Fraction is > 0.01 and < 1 ? L.T($" · faltam ~{Fmt.Duration(TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * (1 - Fraction) / Fraction))}") : "");
         });
         try
         {
@@ -445,14 +445,14 @@ public sealed partial class LuksViewModel : PageViewModel
             Elapsed = Fmt.Duration(sw.Elapsed);
             int open = res.Count(f => f.State == LuksState.Openable), active = res.Count(f => f.State == LuksState.Active), files = res.Count(f => f.State == LuksState.InFile);
             (Verdict, VerdictClass) = res.Count == 0
-                ? (Deep ? "Nenhum LUKS aqui: nem cabeçalho, nem a cópia reserva, em nenhum setor." : "Nada no começo das partições e dos espaços livres. Para ter certeza de que não sobrou nenhum pedaço, faça a busca completa.", "green")
-                : open > 0 ? ($"{open} {(open == 1 ? "resto ainda abre" : "restos ainda abrem")} com a senha: os dados antigos continuam acessíveis para quem a tiver. Apague se a ideia era sumir com eles.", "danger")
-                : active > 0 && res.Count == active ? ($"{(active == 1 ? "Um contêiner LUKS em uso" : $"{active} contêineres LUKS em uso")} e nenhum resto solto.", "gold")
-                : files > 0 && res.Count == files ? ("Só há LUKS dentro de arquivos de hoje (contêineres ou backups de cabeçalho). Apague esses arquivos pelo sistema, se não precisar deles.", "gold")
-                : ("Sobraram restos de LUKS que não abrem mais (sem chave inteira). Não dão acesso aos dados, mas revelam que o disco foi criptografado — apague se quiser o disco limpo.", "gold");
+                ? (Deep ? L.T("Nenhum LUKS aqui: nem cabeçalho, nem a cópia reserva, em nenhum setor.") : L.T("Nada no começo das partições e dos espaços livres. Para ter certeza de que não sobrou nenhum pedaço, faça a busca completa."), "green")
+                : open > 0 ? (L.T($"{open} {(open == 1 ? L.T("resto ainda abre") : L.T("restos ainda abrem"))} com a senha: os dados antigos continuam acessíveis para quem a tiver. Apague se a ideia era sumir com eles."), "danger")
+                : active > 0 && res.Count == active ? (L.T($"{(active == 1 ? L.T("Um contêiner LUKS em uso") : L.T($"{active} contêineres LUKS em uso"))} e nenhum resto solto."), "gold")
+                : files > 0 && res.Count == files ? (L.T("Só há LUKS dentro de arquivos de hoje (contêineres ou backups de cabeçalho). Apague esses arquivos pelo sistema, se não precisar deles."), "gold")
+                : (L.T("Sobraram restos de LUKS que não abrem mais (sem chave inteira). Não dão acesso aos dados, mas revelam que o disco foi criptografado — apague se quiser o disco limpo."), "gold");
         }
-        catch (OperationCanceledException) { Verdict = "Busca interrompida."; VerdictClass = "gold"; }
-        catch (Exception ex) { Verdict = "Erro: " + ex.Message; VerdictClass = "danger"; }
+        catch (OperationCanceledException) { Verdict = L.T("Busca interrompida."); VerdictClass = "gold"; }
+        catch (Exception ex) { Verdict = L.T("Erro: ") + ex.Message; VerdictClass = "danger"; }
         finally { Running = false; }
     }
 
@@ -462,28 +462,28 @@ public sealed partial class LuksViewModel : PageViewModel
     {
         var d = Main.Disks.FirstOrDefault(x => x.Number == _last?.Disk.Number && x.IsImage == _last.Disk.IsImage) ?? _last?.Disk;
         if (d == null) return;
-        if (r.F.Area is { Critical: true } && r.F.Area.Offset == r.F.Start) { await Main.Alert("Em uso pelo sistema", "Esse contêiner é o do sistema que está rodando. Para destruí-lo, inicie por um pendrive.", "warn"); return; }
+        if (r.F.Area is { Critical: true } && r.F.Area.Offset == r.F.Start) { await Main.Alert(L.T("Em uso pelo sistema"), L.T("Esse contêiner é o do sistema que está rodando. Para destruí-lo, inicie por um pendrive."), "warn"); return; }
         string detail = r.IsActive
-            ? $"{r.Title} em {r.F.Where}: o cabeçalho e as chaves são zerados — o volume e tudo o que há nele ficam ilegíveis para sempre, mesmo com a senha."
-            : $"{r.Title} em {r.F.Where}: zera as cópias do cabeçalho e as áreas das chaves. Só escreve onde não há nada de hoje (espaço livre); o que estiver em uso fica como está.";
+            ? L.T($"{r.Title} em {r.F.Where}: o cabeçalho e as chaves são zerados — o volume e tudo o que há nele ficam ilegíveis para sempre, mesmo com a senha.")
+            : L.T($"{r.Title} em {r.F.Where}: zera as cópias do cabeçalho e as áreas das chaves. Só escreve onde não há nada de hoje (espaço livre); o que estiver em uso fica como está.");
         var f = r.F;
         _recheck = true;
-        Main.Queue(r.IsActive ? "Destruir contêiner LUKS" : "Apagar resto de LUKS", detail, "Lock", s => DiskOperations.EraseLuks(MainViewModel.Fresh(d), f, s), d, dangerous: true);
-        Main.ShowToast("Na fila. Aplique as alterações pendentes; depois a busca roda de novo sozinha para conferir.");
+        Main.Queue(r.IsActive ? L.T("Destruir contêiner LUKS") : L.T("Apagar resto de LUKS"), detail, "Lock", s => DiskOperations.EraseLuks(MainViewModel.Fresh(d), f, s), d, dangerous: true);
+        Main.ShowToast(L.T("Na fila. Aplique as alterações pendentes; depois a busca roda de novo sozinha para conferir."));
     }
 
     [RelayCommand]
     private async Task SaveReport()
     {
-        var file = await MainViewModel.SaveFile("Salvar relatório", $"Detector de LUKS {DateTime.Now:yyyy-MM-dd HH-mm}.txt", "txt", "Texto");
+        var file = await MainViewModel.SaveFile(L.T("Salvar relatório"), L.T($"Detector de LUKS {DateTime.Now:yyyy-MM-dd HH-mm}.txt"), "txt", L.T("Texto"));
         if (file == null) return;
         var sb = new StringBuilder();
-        sb.AppendLine($"LibertyX Partition — detector de LUKS — {DateTime.Now:dd/MM/yyyy HH:mm}");
+        sb.AppendLine(L.T($"LibertyX Partition — detector de LUKS — {DateTime.Now:dd/MM/yyyy HH:mm}"));
         sb.AppendLine(TargetText);
         sb.AppendLine(Verdict);
         foreach (var r in Results) { sb.AppendLine(); sb.AppendLine($"{r.Title} — {r.StateText}"); sb.AppendLine(r.Where); sb.AppendLine(r.Details); sb.AppendLine(r.Explain); }
         await File.WriteAllTextAsync(file, sb.ToString(), Encoding.UTF8);
-        Main.ShowToast("Relatório salvo.");
+        Main.ShowToast(L.T("Relatório salvo."));
     }
 }
 
@@ -491,9 +491,9 @@ public sealed partial class LuksViewModel : PageViewModel
 
 public sealed partial class DeleteAllViewModel : PageViewModel
 {
-    public override string Title => "Excluir todas as partições";
+    public override string Title => L.T("Excluir todas as partições");
     public override string IconKey => "DeleteAll";
-    public PickerViewModel Picker { get; } = new() { ShowPartitions = false, DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : d.Table.Entries.Count == 0 ? "Não há partições." : null };
+    public PickerViewModel Picker { get; } = new() { ShowPartitions = false, DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? L.T("Imagem só para leitura.") : d.Table.Entries.Count == 0 ? L.T("Não há partições.") : null };
     public ObservableCollection<PartitionVM> Parts { get; } = [];
     public bool CanDelete => Picker.Selected != null;
     public DeleteAllViewModel()
@@ -512,7 +512,7 @@ public sealed partial class DeleteAllViewModel : PageViewModel
     private async Task Delete()
     {
         var d = Picker.Selected?.Disk; if (d == null) return;
-        Main.Queue("Excluir todas as partições", $"As {d.Table.Entries.Count} partições de {d.Title} ({d.Model}) saem da tabela (Recuperar partição traz de volta)", "DeleteAll",
+        Main.Queue(L.T("Excluir todas as partições"), L.T($"As {d.Table.Entries.Count} partições de {d.Title} ({d.Model}) saem da tabela (Recuperar partição traz de volta)"), "DeleteAll",
             s => DiskOperations.DeleteAllPartitions(MainViewModel.Fresh(d), s), d, dangerous: true);
         await Task.CompletedTask;
     }

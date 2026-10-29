@@ -31,18 +31,18 @@ public static class LicenseKey
     {
         error = null;
         var s = Normalize(text);
-        if (!s.StartsWith(Prefix, StringComparison.Ordinal)) { error = "A chave deve começar com LXP1."; return null; }
+        if (!s.StartsWith(Prefix, StringComparison.Ordinal)) { error = L.T("A chave deve começar com LXP1."); return null; }
         var raw = Decode(s[Prefix.Length..]);
-        if (raw == null || raw.Length != 76) { error = "Chave incompleta ou com caracteres trocados — copie e cole de novo."; return null; }
+        if (raw == null || raw.Length != 76) { error = L.T("Chave incompleta ou com caracteres trocados — copie e cole de novo."); return null; }
         var data = raw.AsSpan(0, 12);
         var sig = raw.AsSpan(12, 64);
         using var ec = ECDsa.Create();
         ec.ImportSubjectPublicKeyInfo(TestPublicKey ?? Convert.FromBase64String(PublicKey), out _);
-        if (!ec.VerifyData(data, sig, HashAlgorithmName.SHA256)) { error = "Chave inválida."; return null; }
+        if (!ec.VerifyData(data, sig, HashAlgorithmName.SHA256)) { error = L.T("Chave inválida."); return null; }
         // data[1] é o produto: 1 = Partition, 9 = pacote com todos os apps LibertyX. As chaves do
         // Player (2) e do Folder (3) saem da mesma loja e com a mesma assinatura, mas não valem aqui.
-        if (data[0] == 1 && data[1] is 2 or 3) { error = "Esta chave é de outro app LibertyX (Player ou Folder), não do Partition."; return null; }
-        if (data[0] != 1 || data[1] is not (1 or 9)) { error = "Chave de uma versão que este app não conhece — atualize o app."; return null; }
+        if (data[0] == 1 && data[1] is 2 or 3) { error = L.T("Esta chave é de outro app LibertyX (Player ou Folder), não do Partition."); return null; }
+        if (data[0] != 1 || data[1] is not (1 or 9)) { error = L.T("Chave de uma versão que este app não conhece — atualize o app."); return null; }
         var issued = Epoch.AddDays(BinaryPrimitives.ReadUInt16BigEndian(data[2..]));
         return new Parsed(Convert.ToHexString(data[4..12]), issued, Edition.Premium);
     }
@@ -126,12 +126,12 @@ public static class StoreLicense
 
     public static async Task<Result> Activate(string key, string machine, CancellationToken ct = default)
     {
-        if (!Configured) return new(false, "A venda com cartão ainda não foi aberta — use uma chave LXP1.", null, null);
+        if (!Configured) return new(false, L.T("A venda com cartão ainda não foi aberta — use uma chave LXP1."), null, null);
         var r = await Post("activate", new() { ["license_key"] = key.Trim(), ["instance_name"] = machine }, ct);
-        if (r == null) return new(false, "Sem conexão com a loja. A ativação de chave da loja precisa de internet uma vez.", null, null);
-        if (!Mine(r)) return new(false, "Esta chave é de outro produto.", null, null);
+        if (r == null) return new(false, L.T("Sem conexão com a loja. A ativação de chave da loja precisa de internet uma vez."), null, null);
+        if (!Mine(r)) return new(false, L.T("Esta chave é de outro produto."), null, null);
         bool ok = r.RootElement.TryGetProperty("activated", out var a) && a.GetBoolean();
-        if (!ok) return new(false, Error(r) ?? "A loja recusou a chave.", null, null);
+        if (!ok) return new(false, Error(r) ?? L.T("A loja recusou a chave."), null, null);
         string? inst = r.RootElement.GetProperty("instance").GetProperty("id").GetString();
         return new(true, null, inst, Holder(r));
     }
@@ -234,7 +234,7 @@ public sealed class LicenseManager
     public async Task<string?> Activate(string text, CancellationToken ct = default)
     {
         text = text.Trim();
-        if (text.Length == 0) return "Cole a chave.";
+        if (text.Length == 0) return L.T("Cole a chave.");
         if (LicenseKey.LooksLikeSigned(text))
         {
             var p = LicenseKey.Verify(text, out var err);
@@ -248,7 +248,7 @@ public sealed class LicenseManager
             State.Key = text; State.Kind = "loja"; State.InstanceId = r.InstanceId; State.Holder = r.Holder; State.LicenseId = null;
             State.LastValidated = DateTime.UtcNow;
         }
-        else return "Isto não parece uma chave do LibertyX Partition.";
+        else return L.T("Isto não parece uma chave do LibertyX Partition.");
         State.ActivatedAt = DateTime.UtcNow;
         State.Edition = Edition.Premium;
         Save();

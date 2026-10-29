@@ -19,9 +19,9 @@ public sealed partial class FoundRow : ObservableObject
     [ObservableProperty] private bool _isChecked;
     partial void OnIsCheckedChanged(bool value) => _owner.Changed();
     public string FsText => F.Variant ?? FsDetect.Name(F.FileSystem);
-    public string LabelText => string.IsNullOrEmpty(F.Label) ? (F.LooksLikeEsp ? "Sistema EFI" : F.LooksLikeRecovery ? "Recuperação" : "Sem rótulo") : F.Label!;
+    public string LabelText => string.IsNullOrEmpty(F.Label) ? (F.LooksLikeEsp ? L.T("Sistema EFI") : F.LooksLikeRecovery ? L.T("Recuperação") : L.T("Sem rótulo")) : F.Label!;
     public string SizeText => Fmt.Size(F.SectorCount * SectorSize);
-    public string RangeText => $"setores {F.StartLba:N0} – {F.EndLba:N0}";
+    public string RangeText => L.T($"setores {F.StartLba:N0} – {F.EndLba:N0}");
     public string Evidence => F.Evidence;
     public bool Verified => F.Verified;
     public bool NotVerified => !F.Verified;
@@ -35,7 +35,7 @@ public sealed partial class FoundRow : ObservableObject
 /// <summary>Procura partições perdidas pelos setores de boot e devolve-as à tabela (ou só explora os arquivos).</summary>
 public sealed partial class PartitionRecoveryViewModel : PageViewModel
 {
-    public override string Title => "Recuperar partição";
+    public override string Title => L.T("Recuperar partição");
     public override string IconKey => "RecoverPartition";
 
     public PickerViewModel Picker { get; } = new() { ShowPartitions = false };
@@ -79,7 +79,7 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
         if (sel == null) return;
         _disk = sel.Disk;
         _cts = new CancellationTokenSource();
-        Step = 1; Fraction = 0; FoundCount = 0; Phase = "Procurando setores de boot";
+        Step = 1; Fraction = 0; FoundCount = 0; Phase = L.T("Procurando setores de boot");
         var sw = Stopwatch.StartNew();
         var prog = new Progress<ScanProgress>(p =>
         {
@@ -96,11 +96,11 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
             });
         }
         catch (OperationCanceledException) { Step = 0; return; }
-        catch (Exception ex) { await Main.Alert("Não foi possível ler o disco", ex.Message, "danger"); Step = 0; return; }
+        catch (Exception ex) { await Main.Alert(L.T("Não foi possível ler o disco"), ex.Message, "danger"); Step = 0; return; }
         Found.Clear();
         foreach (var f in found) Found.Add(new FoundRow(f, this, _disk.SectorSize));
         StyleIndex = _disk.Table.Style == TableStyle.Mbr ? 1 : 0;
-        ResultText = found.Count == 0 ? "Nenhuma partição encontrada" : $"{found.Count} partição(ões) encontrada(s)";
+        ResultText = found.Count == 0 ? L.T("Nenhuma partição encontrada") : L.T($"{found.Count} partição(ões) encontrada(s)");
         Changed();
         Step = 2;
     }
@@ -114,7 +114,7 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
     {
         if (_disk == null) return;
         var chosen = Found.Where(f => f.IsChecked).Select(f => f.F).ToList();
-        RestoreBlock = _disk.IsSystem && Ui.IsWin ? "Disco do Windows em uso: restaure a tabela pela mídia inicializável." : _disk.IsVirtual ? $"Volume {_disk.VirtualKind}: não tem tabela de partições — use Explorar para tirar os arquivos." : _disk.ReadOnly ? "Imagem anexada só para leitura — use Explorar para tirar os arquivos." : null;
+        RestoreBlock = _disk.IsSystem && Ui.IsWin ? L.T("Disco do Windows em uso: restaure a tabela pela mídia inicializável.") : _disk.IsVirtual ? L.T($"Volume {_disk.VirtualKind}: não tem tabela de partições — use Explorar para tirar os arquivos.") : _disk.ReadOnly ? L.T("Imagem anexada só para leitura — use Explorar para tirar os arquivos.") : null;
         // prévia: como o disco ficará
         Preview.Clear();
         try
@@ -150,12 +150,12 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
     private async Task Restore()
     {
         if (_disk == null) return;
-        if (!await Main.RequirePremium("Restaurar partições",
-            "No Básico você acha as partições perdidas e explora os arquivos delas. Gravar as partições de volta na tabela, com tudo como estava, é do Premium.")) return;
+        if (!await Main.RequirePremium(L.T("Restaurar partições"),
+            L.T("No Básico você acha as partições perdidas e explora os arquivos delas. Gravar as partições de volta na tabela, com tudo como estava, é do Premium."))) return;
         var chosen = Found.Where(f => f.IsChecked).Select(f => f.F).ToList();
         var style = StyleIndex == 0 ? TableStyle.Gpt : TableStyle.Mbr;
         var d = _disk;
-        Main.Queue("Restaurar partições", $"{chosen.Count} partição(ões) gravadas na tabela {(style == TableStyle.Gpt ? "GPT" : "MBR")} de {d.Title} — só a tabela é escrita", "RecoverPartition",
+        Main.Queue(L.T("Restaurar partições"), L.T($"{chosen.Count} partição(ões) gravadas na tabela {(style == TableStyle.Gpt ? "GPT" : "MBR")} de {d.Title} — só a tabela é escrita"), "RecoverPartition",
             s => DiskOperations.RestoreFound(MainViewModel.Fresh(d), chosen, style, s), d);
         await Task.CompletedTask;
     }
@@ -164,11 +164,11 @@ public sealed partial class PartitionRecoveryViewModel : PageViewModel
     private async Task RestoreBackup()
     {
         var d = Picker.Selected?.Disk ?? _disk;
-        if (d == null) { Main.ShowToast("Escolha o disco primeiro."); return; }
-        var file = await MainViewModel.PickFile("Backup de tabela", ("Backup do LibertyX Partition", ["*.lxbak"]));
+        if (d == null) { Main.ShowToast(L.T("Escolha o disco primeiro.")); return; }
+        var file = await MainViewModel.PickFile(L.T("Backup de tabela"), (L.T("Backup do LibertyX Partition"), ["*.lxbak"]));
         if (file == null) return;
         var info = TableBackup.Describe(file);
-        Main.Queue("Restaurar backup de tabela", $"{d.Title}: tabela de {info.when:dd/MM/yyyy HH:mm} (antes de: {info.reason})", "Restore",
+        Main.Queue(L.T("Restaurar backup de tabela"), L.T($"{d.Title}: tabela de {info.when:dd/MM/yyyy HH:mm} (antes de: {info.reason})"), "Restore",
             s => DiskOperations.RestoreTableBackup(MainViewModel.Fresh(d), file, s), d, dangerous: true);
     }
 }

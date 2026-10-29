@@ -31,9 +31,9 @@ public static class BootMedia
     /// </summary>
     public static void WriteImage(ImageSource src, DiskInfo usb, bool verify, OpSink sink)
     {
-        if (usb.IsSystem) throw new InvalidOperationException("Esse é o disco do Windows.");
+        if (usb.IsSystem) throw new InvalidOperationException(L.T("Esse é o disco do Windows."));
         if (src.Length is { } need && need > usb.Size)
-            throw new InvalidOperationException($"A imagem ({DiskOperations.Size(need)}) não cabe em {usb.Title} ({DiskOperations.Size(usb.Size)}).");
+            throw new InvalidOperationException(L.T($"A imagem ({DiskOperations.Size(need)}) não cabe em {usb.Title} ({DiskOperations.Size(usb.Size)})."));
         int ss = Math.Max(512, usb.SectorSize);
         const int Chunk = 4 << 20;
         var buf = GC.AllocateUninitializedArray<byte>(Chunk);
@@ -52,23 +52,23 @@ public static class BootMedia
                 sink.Token.ThrowIfCancellationRequested();
                 int n = ImageSource.ReadFull(st, buf, Chunk);
                 if (n <= 0) break;
-                if (written + n > dev.Length) throw new InvalidOperationException($"A imagem descompactada passa do tamanho de {usb.Title} ({DiskOperations.Size(dev.Length)}).");
+                if (written + n > dev.Length) throw new InvalidOperationException(L.T($"A imagem descompactada passa do tamanho de {usb.Title} ({DiskOperations.Size(dev.Length)})."));
                 sha.AppendData(buf, 0, n);
                 int w = (n + ss - 1) / ss * ss;
                 if (w > n) Array.Clear(buf, n, w - n);
                 dev.Write(written, buf.AsSpan(0, w));
                 written += n;
-                double f = src.Length is { } L && L > 0 ? (double)written / L : (double)raw.Position / Math.Max(1, src.FileLength);
+                double f = src.Length is { } len && len > 0 ? (double)written / len : (double)raw.Position / Math.Max(1, src.FileLength);
                 double speed = written / Math.Max(0.001, sw.Elapsed.TotalSeconds);
-                sink.Progress(verify ? f * 0.6 : f, "Gravando", $"{DiskOperations.Size(written)}{(src.Length is { } t ? " de " + DiskOperations.Size(t) : "")} · {DiskOperations.Size((long)speed)}/s");
+                sink.Progress(verify ? f * 0.6 : f, L.T("Gravando"), $"{DiskOperations.Size(written)}{(src.Length is { } t ? " de " + DiskOperations.Size(t) : "")} · {DiskOperations.Size((long)speed)}/s");
             }
             dev.Flush();
             hash = sha.GetHashAndReset();
         }
-        sink.Log($"Gravados {DiskOperations.Size(written)} em {sw.Elapsed:hh\\:mm\\:ss} · SHA-256 {Convert.ToHexStringLower(hash)}");
+        sink.Log(L.T($"Gravados {DiskOperations.Size(written)} em {sw.Elapsed:hh\\:mm\\:ss} · SHA-256 {Convert.ToHexStringLower(hash)}"));
         if (verify)
         {
-            sink.Log("Verificando: relendo o que foi gravado…");
+            sink.Log(L.T("Verificando: relendo o que foi gravado…"));
             var vw = System.Diagnostics.Stopwatch.StartNew();
             using var dev = DiskSystem.OpenDisk(usb, false);
             using var sha = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
@@ -80,17 +80,17 @@ public static class BootMedia
                 dev.ReadBytes(pos, buf.AsSpan(0, r));
                 sha.AppendData(buf, 0, n);
                 pos += n;
-                sink.Progress(0.6 + 0.4 * pos / written, "Verificando", $"{DiskOperations.Size(pos)} de {DiskOperations.Size(written)} · {DiskOperations.Size((long)(pos / Math.Max(0.001, vw.Elapsed.TotalSeconds)))}/s");
+                sink.Progress(0.6 + 0.4 * pos / written, L.T("Verificando"), $"{DiskOperations.Size(pos)} de {DiskOperations.Size(written)} · {DiskOperations.Size((long)(pos / Math.Max(0.001, vw.Elapsed.TotalSeconds)))}/s");
             }
             var back = sha.GetHashAndReset();
             if (!back.AsSpan().SequenceEqual(hash))
-                throw new InvalidOperationException("A verificação falhou: o que está no pendrive é diferente do que foi gravado. O pendrive/cartão pode estar com defeito ou ser falsificado (anuncia mais espaço do que tem). Tente outro.");
-            sink.Log("Verificado ✓ — o pendrive tem exatamente a imagem.");
+                throw new InvalidOperationException(L.T("A verificação falhou: o que está no pendrive é diferente do que foi gravado. O pendrive/cartão pode estar com defeito ou ser falsificado (anuncia mais espaço do que tem). Tente outro."));
+            sink.Log(L.T("Verificado ✓ — o pendrive tem exatamente a imagem."));
         }
         DiskSystem.Native.Rescan(usb);
         sink.Log(src.Kind == ImageKind.DiskImage
-            ? "Pronto. O Windows pode pedir para formatar o cartão (partições de Linux) — não formate."
-            : "Pronto. O pendrive pode aparecer \"ilegível\" no Windows — é normal para ISOs de Linux.");
+            ? L.T("Pronto. O Windows pode pedir para formatar o cartão (partições de Linux) — não formate.")
+            : L.T("Pronto. O pendrive pode aparecer \"ilegível\" no Windows — é normal para ISOs de Linux."));
     }
 
     /// <summary>Compatibilidade: grava uma ISO direto, sem verificação.</summary>
@@ -106,19 +106,19 @@ public static class BootMedia
     public static async Task WriteFiles(string iso, DiskInfo usb, string label, bool gpt, bool windows, WindowsSetupOptions? opts, OpSink sink)
     {
         if (OperatingSystem.IsLinux()) { await WriteFilesLinux(iso, usb, label, gpt, windows, opts, sink); return; }
-        if (usb.IsSystem) throw new InvalidOperationException("Esse é o disco do Windows.");
-        sink.Progress(-1, "Montando a ISO");
+        if (usb.IsSystem) throw new InvalidOperationException(L.T("Esse é o disco do Windows."));
+        sink.Progress(-1, L.T("Montando a ISO"));
         string? src = await WinCommands.MountIso(iso, sink.Token);
-        if (src == null) throw new InvalidOperationException("O Windows não conseguiu montar a ISO.");
+        if (src == null) throw new InvalidOperationException(L.T("O Windows não conseguiu montar a ISO."));
         try
         {
             if (windows && !File.Exists(Path.Combine(src + "\\", "sources", "install.wim")) && !File.Exists(Path.Combine(src + "\\", "sources", "install.esd")))
-                throw new InvalidOperationException("Esta ISO não parece ser de instalação do Windows (sem sources\\install.wim/esd). Use a gravação direta.");
+                throw new InvalidOperationException(L.T("Esta ISO não parece ser de instalação do Windows (sem sources\\install.wim/esd). Use a gravação direta."));
             var files = new DirectoryInfo(src + "\\").EnumerateFiles("*", SearchOption.AllDirectories).ToList();
             long need = files.Sum(f => f.Length);
-            if (need + (64L << 20) > usb.Size) throw new InvalidOperationException($"Os arquivos precisam de {DiskOperations.Size(need)}; o pendrive tem {DiskOperations.Size(usb.Size)}.");
+            if (need + (64L << 20) > usb.Size) throw new InvalidOperationException(L.T($"Os arquivos precisam de {DiskOperations.Size(need)}; o pendrive tem {DiskOperations.Size(usb.Size)}."));
             if (!windows && files.FirstOrDefault(f => f.Length >= 4L << 30) is { } big)
-                throw new InvalidOperationException($"{big.Name} tem {DiskOperations.Size(big.Length)} — o FAT32 não guarda arquivos de 4 GB ou mais. Use a gravação direta.");
+                throw new InvalidOperationException(L.T($"{big.Name} tem {DiskOperations.Size(big.Length)} — o FAT32 não guarda arquivos de 4 GB ou mais. Use a gravação direta."));
 
             int ss = usb.SectorSize;
             long start = 1024 * 1024 / ss;
@@ -129,14 +129,14 @@ public static class BootMedia
             t.Entries.Add(gpt
                 ? new PartitionEntry { StartLba = start, SectorCount = count, TypeGuid = PartitionTypes.BasicData, UniqueGuid = Guid.NewGuid(), Name = label }
                 : new PartitionEntry { StartLba = start, SectorCount = count, MbrType = 0x0C, Active = true });
-            sink.Log($"Criando a tabela {(gpt ? "GPT (UEFI)" : "MBR (BIOS e UEFI)")} e formatando em FAT32…");
+            sink.Log(L.T($"Criando a tabela {(gpt ? L.T("GPT (UEFI)") : L.T("MBR (BIOS e UEFI)"))} e formatando em FAT32…"));
             using (var dev = DiskSystem.OpenDisk(usb, true))
             using (DiskSystem.Native.LockVolumes(usb))
             {
                 dev.Write(0, new byte[1 << 20]);
                 // a cópia de uma GPT antiga no fim do disco confunde quem lê a tabela depois
                 dev.Write((dev.Length - (1 << 20)) / ss * ss, new byte[1 << 20]);
-                Fat32Formatter.Format(new SubDevice(dev, start * ss, count * ss), label, 0, start, new Progress<double>(x => sink.Progress(x * 0.05, "Formatando FAT32")));
+                Fat32Formatter.Format(new SubDevice(dev, start * ss, count * ss), label, 0, start, new Progress<double>(x => sink.Progress(x * 0.05, L.T("Formatando FAT32"))));
                 PartitionCodec.Write(dev, t);
                 DiskSystem.Native.Rescan(usb);
             }
@@ -144,30 +144,30 @@ public static class BootMedia
             await Task.Delay(3000, sink.Token);
             var lr = await WinCommands.AssignTemporaryLetter(usb.Number, start * ss);
             string letter = lr.Output.Trim();
-            if (!lr.Ok || letter.Length != 1) throw new InvalidOperationException("O Windows não montou o pendrive novo: " + lr.Message);
+            if (!lr.Ok || letter.Length != 1) throw new InvalidOperationException(L.T("O Windows não montou o pendrive novo: ") + lr.Message);
             string dst = letter + ":";
 
             string wim = Path.Combine(src + "\\", "sources", "install.wim");
             bool split = File.Exists(wim) && new FileInfo(wim).Length >= (4L << 30) - 1;
-            sink.Log($"Copiando os arquivos da instalação para {dst}…");
-            sink.Progress(-1, "Copiando arquivos");
+            sink.Log(L.T($"Copiando os arquivos da instalação para {dst}…"));
+            sink.Progress(-1, L.T("Copiando arquivos"));
             var r = split
                 ? await WinCommands.RobocopyExcluding(src + "\\", dst + "\\", "install.wim", sink.Token, l => { if (l.Contains('%')) return; if (l.Trim().Length > 0) sink.Log(l.Trim()); })
                 : await WinCommands.Robocopy(src + "\\", dst + "\\", sink.Token, l => { if (l.Trim().Length > 0) sink.Log(l.Trim()); });
-            if (r.ExitCode >= 8) throw new InvalidOperationException($"A cópia falhou (robocopy {r.ExitCode}).");
+            if (r.ExitCode >= 8) throw new InvalidOperationException(L.T($"A cópia falhou (robocopy {r.ExitCode})."));
             if (split)
             {
-                sink.Log("install.wim passa de 4 GB (limite do FAT32): dividindo em partes .swm com o DISM…");
-                sink.Progress(-1, "Dividindo install.wim");
+                sink.Log(L.T("install.wim passa de 4 GB (limite do FAT32): dividindo em partes .swm com o DISM…"));
+                sink.Progress(-1, L.T("Dividindo install.wim"));
                 var d = await WinCommands.SplitWim(wim, Path.Combine(dst + "\\", "sources", "install.swm"), sink.Token, l => { if (l.Trim().Length > 0 && !l.Contains('%')) sink.Log(l.Trim()); });
-                if (!d.Ok) throw new InvalidOperationException("O DISM não conseguiu dividir o install.wim: " + d.Message);
+                if (!d.Ok) throw new InvalidOperationException(L.T("O DISM não conseguiu dividir o install.wim: ") + d.Message);
             }
             if (windows && opts is { Any: true })
             {
                 File.WriteAllText(Path.Combine(dst + "\\", "autounattend.xml"), Unattend.Build(opts), new System.Text.UTF8Encoding(false));
-                sink.Log("autounattend.xml gravado: " + opts.Summary);
+                sink.Log(L.T("autounattend.xml gravado: ") + opts.Summary);
             }
-            sink.Log(gpt ? "Pendrive pronto: inicia em computadores UEFI." : "Pendrive pronto: inicia em computadores UEFI e BIOS.");
+            sink.Log(gpt ? L.T("Pendrive pronto: inicia em computadores UEFI.") : L.T("Pendrive pronto: inicia em computadores UEFI e BIOS."));
         }
         finally { await WinCommands.DismountIso(iso); }
     }
@@ -180,27 +180,27 @@ public static class BootMedia
     [System.Runtime.Versioning.SupportedOSPlatform("linux")]
     private static async Task WriteFilesLinux(string iso, DiskInfo usb, string label, bool gpt, bool windows, WindowsSetupOptions? opts, OpSink sink)
     {
-        if (usb.IsSystem) throw new InvalidOperationException("Esse é o disco do sistema em uso.");
+        if (usb.IsSystem) throw new InvalidOperationException(L.T("Esse é o disco do sistema em uso."));
         string isoMp = Path.Combine("/run/libertyx", "iso-" + Guid.NewGuid().ToString("N")[..8]);
         string usbMp = Path.Combine("/run/libertyx", "usb-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(isoMp);
-        sink.Progress(-1, "Montando a ISO");
+        sink.Progress(-1, L.T("Montando a ISO"));
         var m = await Proc.Run("mount", ["-o", "loop,ro", iso, isoMp], sink.Token);
-        if (!m.Ok) { try { Directory.Delete(isoMp); } catch { } throw new InvalidOperationException("O Linux não conseguiu montar a ISO: " + m.Message); }
+        if (!m.Ok) { try { Directory.Delete(isoMp); } catch { } throw new InvalidOperationException(L.T("O Linux não conseguiu montar a ISO: ") + m.Message); }
         bool usbMounted = false;
         try
         {
             string wim = Path.Combine(isoMp, "sources", "install.wim");
             if (windows && !File.Exists(wim) && !File.Exists(Path.Combine(isoMp, "sources", "install.esd")))
-                throw new InvalidOperationException("Esta ISO não parece ser de instalação do Windows (sem sources/install.wim ou .esd). Use a gravação direta.");
+                throw new InvalidOperationException(L.T("Esta ISO não parece ser de instalação do Windows (sem sources/install.wim ou .esd). Use a gravação direta."));
             var files = new DirectoryInfo(isoMp).EnumerateFiles("*", SearchOption.AllDirectories).ToList();
             long need = files.Sum(f => f.Length);
-            if (need + (64L << 20) > usb.Size) throw new InvalidOperationException($"Os arquivos precisam de {DiskOperations.Size(need)}; o pendrive tem {DiskOperations.Size(usb.Size)}.");
+            if (need + (64L << 20) > usb.Size) throw new InvalidOperationException(L.T($"Os arquivos precisam de {DiskOperations.Size(need)}; o pendrive tem {DiskOperations.Size(usb.Size)}."));
             bool split = File.Exists(wim) && new FileInfo(wim).Length >= (4L << 30) - 1;
             if (split && Platform.Linux.LinuxTools.Missing("wimlib-imagex") is { } miss)
-                throw new InvalidOperationException("O install.wim desta ISO passa de 4 GB e precisa ser dividido. " + miss);
+                throw new InvalidOperationException(L.T("O install.wim desta ISO passa de 4 GB e precisa ser dividido. ") + miss);
             if (!windows && files.FirstOrDefault(f => f.Length >= 4L << 30) is { } big)
-                throw new InvalidOperationException($"{big.Name} tem {DiskOperations.Size(big.Length)} — o FAT32 não guarda arquivos de 4 GB ou mais. Use a gravação direta.");
+                throw new InvalidOperationException(L.T($"{big.Name} tem {DiskOperations.Size(big.Length)} — o FAT32 não guarda arquivos de 4 GB ou mais. Use a gravação direta."));
 
             int ss = usb.SectorSize;
             long start = 1024 * 1024 / ss;
@@ -210,28 +210,28 @@ public static class BootMedia
             t.Entries.Add(gpt
                 ? new PartitionEntry { StartLba = start, SectorCount = count, TypeGuid = PartitionTypes.BasicData, UniqueGuid = Guid.NewGuid(), Name = label }
                 : new PartitionEntry { StartLba = start, SectorCount = count, MbrType = 0x0C, Active = true });
-            sink.Log($"Criando a tabela {(gpt ? "GPT (UEFI)" : "MBR (BIOS e UEFI)")} e formatando em FAT32…");
+            sink.Log(L.T($"Criando a tabela {(gpt ? L.T("GPT (UEFI)") : L.T("MBR (BIOS e UEFI)"))} e formatando em FAT32…"));
             using (var dev = DiskSystem.OpenDisk(usb, true))
             using (DiskSystem.Native.LockVolumes(usb))
             {
                 dev.Write(0, new byte[1 << 20]);
                 // a cópia de uma GPT antiga no fim do disco confunde quem lê a tabela depois
                 dev.Write((dev.Length - (1 << 20)) / ss * ss, new byte[1 << 20]);
-                Fat32Formatter.Format(new SubDevice(dev, start * ss, count * ss), label, 0, start, new Progress<double>(x => sink.Progress(x * 0.05, "Formatando FAT32")));
+                Fat32Formatter.Format(new SubDevice(dev, start * ss, count * ss), label, 0, start, new Progress<double>(x => sink.Progress(x * 0.05, L.T("Formatando FAT32"))));
                 PartitionCodec.Write(dev, t);
                 DiskSystem.Native.Rescan(usb);
             }
-            string node = Platform.Linux.KernelSync.WaitPartitionNode(usb, start * ss) ?? throw new InvalidOperationException("O kernel não criou o /dev do pendrive novo — tire e ponha de novo e tente outra vez.");
+            string node = Platform.Linux.KernelSync.WaitPartitionNode(usb, start * ss) ?? throw new InvalidOperationException(L.T("O kernel não criou o /dev do pendrive novo — tire e ponha de novo e tente outra vez."));
             Directory.CreateDirectory(usbMp);
             var mu = await Proc.Run("mount", ["-t", "vfat", "-o", "flush,shortname=mixed,utf8", node, usbMp], sink.Token);
-            if (!mu.Ok) throw new InvalidOperationException("O pendrive novo não montou: " + mu.Message);
+            if (!mu.Ok) throw new InvalidOperationException(L.T("O pendrive novo não montou: ") + mu.Message);
             usbMounted = true;
 
             // cópia própria, com progresso por bytes (o grosso é o install.wim/esd)
             var toCopy = files.Where(f => !(split && f.FullName == wim)).ToList();
             long total = toCopy.Sum(f => f.Length), done = 0;
             var buf = new byte[4 << 20];
-            sink.Log($"Copiando {toCopy.Count:N0} arquivos ({DiskOperations.Size(total)}) para o pendrive…");
+            sink.Log(L.T($"Copiando {toCopy.Count:N0} arquivos ({DiskOperations.Size(total)}) para o pendrive…"));
             foreach (var f in toCopy)
             {
                 sink.Token.ThrowIfCancellationRequested();
@@ -246,27 +246,27 @@ public static class BootMedia
                     {
                         await o.WriteAsync(buf.AsMemory(0, n), sink.Token);
                         done += n;
-                        sink.Progress(0.05 + 0.9 * done / Math.Max(1, total), "Copiando arquivos", $"{DiskOperations.Size(done)} de {DiskOperations.Size(total)} · {rel}");
+                        sink.Progress(0.05 + 0.9 * done / Math.Max(1, total), L.T("Copiando arquivos"), $"{DiskOperations.Size(done)} de {DiskOperations.Size(total)} · {rel}");
                     }
                 }
                 sink.PauseGate.Wait(sink.Token);
             }
             if (split)
             {
-                sink.Log("install.wim passa de 4 GB (limite do FAT32): dividindo em partes .swm com o wimlib…");
-                sink.Progress(-1, "Dividindo install.wim");
+                sink.Log(L.T("install.wim passa de 4 GB (limite do FAT32): dividindo em partes .swm com o wimlib…"));
+                sink.Progress(-1, L.T("Dividindo install.wim"));
                 var d = await Proc.Run("wimlib-imagex", ["split", wim, Path.Combine(usbMp, "sources", "install.swm"), "3800"], sink.Token, l => { if (l.Trim().Length > 0 && !l.Contains('%')) sink.Log(l.Trim()); });
-                if (!d.Ok) throw new InvalidOperationException("O wimlib não conseguiu dividir o install.wim: " + d.Message);
+                if (!d.Ok) throw new InvalidOperationException(L.T("O wimlib não conseguiu dividir o install.wim: ") + d.Message);
             }
             if (windows && opts is { Any: true })
             {
                 File.WriteAllText(Path.Combine(usbMp, "autounattend.xml"), Unattend.Build(opts), new System.Text.UTF8Encoding(false));
-                sink.Log("autounattend.xml gravado: " + opts.Summary);
+                sink.Log(L.T("autounattend.xml gravado: ") + opts.Summary);
             }
-            sink.Progress(-1, "Gravando o cache no pendrive");
-            sink.Log("Esvaziando o cache para o pendrive (pode levar alguns minutos em pendrive lento)…");
+            sink.Progress(-1, L.T("Gravando o cache no pendrive"));
+            sink.Log(L.T("Esvaziando o cache para o pendrive (pode levar alguns minutos em pendrive lento)…"));
             await Proc.Run("sync", [], sink.Token);
-            sink.Log(gpt ? "Pendrive pronto: inicia em computadores UEFI." : "Pendrive pronto: inicia em computadores UEFI e BIOS.");
+            sink.Log(gpt ? L.T("Pendrive pronto: inicia em computadores UEFI.") : L.T("Pendrive pronto: inicia em computadores UEFI e BIOS."));
         }
         finally
         {

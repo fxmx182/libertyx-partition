@@ -88,14 +88,14 @@ public sealed class HfsVolume
     public static HfsVolume? Open(IBlockDevice dev, out string? error)
     {
         error = null;
-        if (dev.Length < 4096) { error = "Volume pequeno demais para HFS+."; return null; }
+        if (dev.Length < 4096) { error = L.T("Volume pequeno demais para HFS+."); return null; }
         var v = new HfsVolume(dev);
         byte[] h = dev.ReadBytes(1024, 512);
         if (!IsHeader(h))
         {
             // cabeçalho destruído: a cópia fica 1024 bytes antes do fim do volume
             var alt = dev.ReadBytes(dev.Length - 1024, 512);
-            if (!IsHeader(alt)) { error = "Cabeçalho do HFS+ não encontrado (nem a cópia do fim do volume)."; return null; }
+            if (!IsHeader(alt)) { error = L.T("Cabeçalho do HFS+ não encontrado (nem a cópia do fim do volume)."); return null; }
             h = alt; v.UsedAlternateHeader = true;
         }
         v.IsHfsx = h[1] == (byte)'X';
@@ -118,8 +118,8 @@ public sealed class HfsVolume
             v.Catalog = new BTree(v, v.ForkSource(4, v._catFork, 0));
             if (v._attrFork.LogicalSize > 0) v._attributes = new BTree(v, v.ForkSource(8, v._attrFork, 0));
         }
-        catch (Exception ex) { error = "Catálogo do HFS+ ilegível: " + ex.Message; return null; }
-        if (v.Catalog.NodeSize < 512) { error = "Catálogo do HFS+ com cabeçalho inválido."; return null; }
+        catch (Exception ex) { error = L.T("Catálogo do HFS+ ilegível: ") + ex.Message; return null; }
+        if (v.Catalog.NodeSize < 512) { error = L.T("Catálogo do HFS+ com cabeçalho inválido."); return null; }
         // o nome do volume é o nome da pasta raiz (id 2), cujo fio fica no registro de chave (2, "")
         foreach (var r in v.Catalog.LeafRecords().Select(x => ParseRecord(x.node, x.ofs, x.end)).Take(64))
             if (r is { Id: 2 } && (r.IsThread || r.IsFolder) && r.Name.Length > 0) { v.Label = r.Name; break; }
@@ -212,7 +212,7 @@ public sealed class HfsVolume
                 else if (x.Length >= 16) size = (long)U64(x, 8);
                 return src;
             }
-            note = "comprimido pelo macOS, atributo de compressão não encontrado";
+            note = L.T("comprimido pelo macOS, atributo de compressão não encontrado");
             return null;
         }
         return r.Data == null ? null : ForkSource(r.Id, r.Data, 0);
@@ -299,7 +299,7 @@ public sealed class HfsVolume
                 from = U16BE(node, ns - 2 * (nrec + 1));
             }
             else if (used) continue;
-            foreach (var r in Carve(node, from, ns - 2)) yield return (r, used ? "sobra de nó do catálogo" : "nó livre do catálogo");
+            foreach (var r in Carve(node, from, ns - 2)) yield return (r, used ? L.T("sobra de nó do catálogo") : L.T("nó livre do catálogo"));
         }
         foreach (var (buf, _) in JournalChunks())
         {
@@ -408,12 +408,12 @@ public sealed class HfsVolume
             _file = file;
             var head = new byte[512];
             file.Read(0, head);
-            if ((sbyte)head[8] != 1) throw new InvalidDataException("nó de cabeçalho ausente");
+            if ((sbyte)head[8] != 1) throw new InvalidDataException(L.T("nó de cabeçalho ausente"));
             Root = U32BE(head, 16);
             FirstLeaf = U32BE(head, 24);
             NodeSize = U16BE(head, 32);
             TotalNodes = U32BE(head, 36);
-            if (NodeSize is < 512 or > 32768 || (NodeSize & (NodeSize - 1)) != 0) throw new InvalidDataException("tamanho de nó inválido");
+            if (NodeSize is < 512 or > 32768 || (NodeSize & (NodeSize - 1)) != 0) throw new InvalidDataException(L.T("tamanho de nó inválido"));
             var hn = ReadNode(0);
             int mapOfs = U16BE(hn, NodeSize - 6), mapEnd = U16BE(hn, NodeSize - 8);
             var map = new List<byte>(hn.AsSpan(mapOfs, Math.Max(0, Math.Min(mapEnd, NodeSize) - mapOfs)).ToArray());

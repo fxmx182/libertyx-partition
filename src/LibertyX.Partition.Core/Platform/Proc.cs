@@ -53,7 +53,7 @@ public static class Proc
         {
             try { p.Kill(true); } catch { }
             if (ct.IsCancellationRequested) throw;
-            return new CommandResult(124, outB.ToString(), $"{Path.GetFileName(exe)} não respondeu em {timeout!.Value.TotalSeconds:0} s.");
+            return new CommandResult(124, outB.ToString(), L.T($"{Path.GetFileName(exe)} não respondeu em {timeout!.Value.TotalSeconds:0} s."));
         }
         p.WaitForExit();
         return new CommandResult(p.ExitCode, outB.ToString(), errB.ToString());

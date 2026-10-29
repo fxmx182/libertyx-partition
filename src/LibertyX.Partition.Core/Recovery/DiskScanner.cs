@@ -29,7 +29,7 @@ public static class DiskScanner
             var vol = disk.Slice(ofs, len);
             var sub = FileSystemScanner.Scan(vol, o, progress, ct);
             sub.Root.Name = name + $" ({sub.FileSystem})";
-            if (lost) { sub.Root.Origin = ItemOrigin.Orphan; sub.Root.Note = "partição perdida: não está na tabela"; }
+            if (lost) { sub.Root.Origin = ItemOrigin.Orphan; sub.Root.Note = L.T("partição perdida: não está na tabela"); }
             master.Attach(master.Root, sub.Root);
             master.Items.AddRange(sub.Items.Where(i => i != sub.Root));
             master.Log.AddRange(sub.Log.Select(l => $"{name}: {l}"));
@@ -46,12 +46,12 @@ public static class DiskScanner
                 long ofs = e.StartLba * ss, len = e.SectorCount * ss;
                 if (ofs + len > disk.Length) continue;
                 var fs = FsDetect.Detect(disk.Slice(ofs, len));
-                if (FsDetect.CanRead(fs) || fs == FsKind.Unknown) AddVolume(ofs, len, $"Partição {e.Slot}", false, opt);
+                if (FsDetect.CanRead(fs) || fs == FsKind.Unknown) AddVolume(ofs, len, L.T($"Partição {e.Slot}"), false, opt);
                 else { covered.Add((ofs, len)); carve.Add((ofs, len)); }
             }
 
         // 2. volumes perdidos (fora da tabela)
-        progress?.Report(new("Procurando partições perdidas", 0, master.Items.Count, 0, 1));
+        progress?.Report(new(L.T("Procurando partições perdidas"), 0, master.Items.Count, 0, 1));
         List<FoundPartition> found;
         using (var view = new SubDevice(disk, 0, disk.Length))
             found = PartitionFinder.Scan(view, opt.DeepScan, progress, ct);
@@ -63,12 +63,12 @@ public static class DiskScanner
             if (covered.Any(c => ofs < c.start + c.length && c.start < ofs + len)) continue;
             lostCount++;
             string label = string.IsNullOrEmpty(f.Label) ? DiskOperationsSize(len) : f.Label!;
-            AddVolume(ofs, len, $"Partição perdida · {label}", true, new ScanOptions
+            AddVolume(ofs, len, L.T($"Partição perdida · {label}"), true, new ScanOptions
             {
                 IncludeLive = true, DeepScan = false, CarveFreeSpaceOnly = opt.CarveFreeSpaceOnly, OrphanMftRecords = opt.OrphanMftRecords,
             });
         }
-        if (lostCount > 0) master.Log.Insert(0, $"{lostCount} partição(ões) perdida(s) encontrada(s) e lida(s) com a árvore completa.");
+        if (lostCount > 0) master.Log.Insert(0, L.T($"{lostCount} partição(ões) perdida(s) encontrada(s) e lida(s) com a árvore completa."));
 
         // 3. o que sobrou da região, sem sistema de arquivos que explique
         long cur = regionStart;

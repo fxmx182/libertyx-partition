@@ -15,13 +15,13 @@ public static class Decmpfs
 
     public static string? Unsupported(ReadOnlySpan<byte> xattr)
     {
-        if (xattr.Length < 16 || U32(xattr, 0) != Magic) return "atributo de compressão inválido";
+        if (xattr.Length < 16 || U32(xattr, 0) != Magic) return L.T("atributo de compressão inválido");
         return U32(xattr, 4) switch
         {
             1 or 3 or 4 or 9 or 10 => null,
-            7 or 8 => "comprimido pelo macOS em LZVN — ainda não suportado",
-            11 or 12 => "comprimido pelo macOS em LZFSE — ainda não suportado",
-            var t => $"comprimido pelo macOS (tipo {t}) — não suportado",
+            7 or 8 => L.T("comprimido pelo macOS em LZVN — ainda não suportado"),
+            11 or 12 => L.T("comprimido pelo macOS em LZFSE — ainda não suportado"),
+            var t => L.T($"comprimido pelo macOS (tipo {t}) — não suportado"),
         };
     }
 
@@ -46,14 +46,14 @@ public static class Decmpfs
                     }
                 case 4 or 10:
                     {
-                        if (rsrc == null || rsrc.Length < 260) { note = "resource fork da compressão ausente"; return null; }
+                        if (rsrc == null || rsrc.Length < 260) { note = L.T("resource fork da compressão ausente"); return null; }
                         var head = new byte[16];
                         rsrc.Read(0, head);
                         long dataOfs = U32BE(head, 0);
                         var cnt = new byte[8];
                         rsrc.Read(dataOfs + 4, cnt);
                         uint n = U32(cnt, 0);
-                        if (n == 0 || n > 1 << 20) { note = "tabela de blocos da compressão inválida"; return null; }
+                        if (n == 0 || n > 1 << 20) { note = L.T("tabela de blocos da compressão inválida"); return null; }
                         var table = new byte[n * 8];
                         rsrc.Read(dataOfs + 8, table);
                         var blocks = new (long ofs, int len)[n];
@@ -62,7 +62,7 @@ public static class Decmpfs
                     }
             }
         }
-        catch (Exception ex) { note = "compressão ilegível: " + ex.Message; }
+        catch (Exception ex) { note = L.T("compressão ilegível: ") + ex.Message; }
         return null;
     }
 

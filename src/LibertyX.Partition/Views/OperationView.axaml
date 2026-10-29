@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:LibertyX.Partition.ViewModels"
              xmlns:c="using:LibertyX.Partition.Controls"
@@ -36,12 +37,12 @@
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
         <Button IsVisible="{Binding CanPause}" Command="{Binding TogglePauseCommand}" IsEnabled="{Binding Running}">
           <Panel>
-            <TextBlock Text="Pausar" IsVisible="{Binding !Paused}" />
-            <TextBlock Text="Continuar" IsVisible="{Binding Paused}" />
+            <TextBlock Text="{l:T 'Pausar'}" IsVisible="{Binding !Paused}" />
+            <TextBlock Text="{l:T 'Continuar'}" IsVisible="{Binding Paused}" />
           </Panel>
         </Button>
-        <Button Classes="danger" Content="Cancelar" Command="{Binding CancelCommand}" IsVisible="{Binding Running}" />
-        <Button Classes="primary" Content="Fechar" Command="{Binding CloseCommand}" IsVisible="{Binding Done}" MinWidth="110" HorizontalContentAlignment="Center" />
+        <Button Classes="danger" Content="{l:T 'Cancelar'}" Command="{Binding CancelCommand}" IsVisible="{Binding Running}" />
+        <Button Classes="primary" Content="{l:T 'Fechar'}" Command="{Binding CloseCommand}" IsVisible="{Binding Done}" MinWidth="110" HorizontalContentAlignment="Center" />
       </StackPanel>
     </StackPanel>
   </Border>

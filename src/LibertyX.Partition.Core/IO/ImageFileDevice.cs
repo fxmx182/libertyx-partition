@@ -47,7 +47,7 @@ public sealed class ImageFileDevice : IBlockDevice
 
     public void Write(long offset, ReadOnlySpan<byte> buffer)
     {
-        if (!CanWrite) throw new IOException("imagem aberta só para leitura");
+        if (!CanWrite) throw new IOException(L.T("imagem aberta só para leitura"));
         RandomAccess.Write(_h, buffer, offset);
         if (offset + buffer.Length > Length) Length = offset + buffer.Length;
     }

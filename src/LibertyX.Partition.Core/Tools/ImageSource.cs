@@ -46,7 +46,7 @@ public sealed class ImageSource
             using var z = ZipFile.OpenRead(path);
             // a maior entrada que pareça imagem (há zips com um README junto)
             var e = z.Entries.Where(x => x.Length > 0).OrderByDescending(x => x.Length).FirstOrDefault()
-                    ?? throw new InvalidDataException("O ZIP está vazio.");
+                    ?? throw new InvalidDataException(L.T("O ZIP está vazio."));
             s.ZipEntry = e.FullName;
             s.Length = e.Length;
         }
@@ -95,7 +95,7 @@ public sealed class ImageSource
             case "ZIP":
                 {
                     var z = new ZipArchive(f, ZipArchiveMode.Read);
-                    var e = z.GetEntry(ZipEntry!) ?? throw new InvalidDataException("Entrada sumiu do ZIP.");
+                    var e = z.GetEntry(ZipEntry!) ?? throw new InvalidDataException(L.T("Entrada sumiu do ZIP."));
                     return new OwnerStream(e.Open(), z);
                 }
             default: throw new NotSupportedException(Compression);
@@ -107,14 +107,14 @@ public sealed class ImageSource
     {
         string kind = Kind switch
         {
-            ImageKind.WindowsIso => "ISO de instalação do Windows",
-            ImageKind.HybridIso => "ISO híbrida (Linux e ferramentas): grava direto, inicia em BIOS e UEFI",
-            ImageKind.PlainIso => "ISO comum (sem boot híbrido)",
-            ImageKind.DiskImage => HasGpt ? "Imagem de disco (GPT)" : HasMbr ? "Imagem de disco (MBR)" : "Imagem de disco",
-            _ => "Formato não reconhecido",
+            ImageKind.WindowsIso => L.T("ISO de instalação do Windows"),
+            ImageKind.HybridIso => L.T("ISO híbrida (Linux e ferramentas): grava direto, inicia em BIOS e UEFI"),
+            ImageKind.PlainIso => L.T("ISO comum (sem boot híbrido)"),
+            ImageKind.DiskImage => HasGpt ? L.T("Imagem de disco (GPT)") : HasMbr ? L.T("Imagem de disco (MBR)") : L.T("Imagem de disco"),
+            _ => L.T("Formato não reconhecido"),
         };
-        string size = Length is { } l ? DiskOperations_Size(l) : "tamanho final desconhecido";
-        return $"{kind} · {size}" + (Compression != null ? $" · compactada ({Compression}, {DiskOperations_Size(FileLength)})" : "")
+        string size = Length is { } l ? DiskOperations_Size(l) : L.T("tamanho final desconhecido");
+        return $"{kind} · {size}" + (Compression != null ? L.T($" · compactada ({Compression}, {DiskOperations_Size(FileLength)})") : "")
                + (VolumeLabel is { Length: > 0 } v ? $" · “{v}”" : "");
     }
 

@@ -15,13 +15,13 @@ namespace LibertyX.Partition.ViewModels;
 
 public sealed partial class CopyPartitionViewModel : PageViewModel
 {
-    public override string Title => "Copiar partição";
+    public override string Title => L.T("Copiar partição");
     public override string IconKey => "CopyPartition";
     public PickerViewModel Source { get; } = new() { AllowDisks = false };
     public PickerViewModel Target { get; } = new()
     {
         AllowDisks = false, AllowUnallocated = true,
-        PartitionFilter = p => !p.IsUnallocated ? "Escolha um espaço não alocado." : p.Disk.ReadOnly ? "Imagem só para leitura." : p.Disk.Table.Style == TableStyle.None ? "Inicialize o disco primeiro." : null,
+        PartitionFilter = p => !p.IsUnallocated ? L.T("Escolha um espaço não alocado.") : p.Disk.ReadOnly ? L.T("Imagem só para leitura.") : p.Disk.Table.Style == TableStyle.None ? L.T("Inicialize o disco primeiro.") : null,
     };
     [ObservableProperty] private bool _usedOnly = true;
     [ObservableProperty] private bool _useVss = true;
@@ -39,9 +39,9 @@ public sealed partial class CopyPartitionViewModel : PageViewModel
         var s = Source.Selected?.Partition;
         var t = Target.Selected?.Partition;
         Problem = s == null || t == null ? null
-            : t.Length < s.Length + 1024 * 1024 ? $"O espaço livre ({Fmt.Size(t.Length)}) é menor que a partição ({Fmt.Size(s.Length)})."
-            : s.Disk.SectorSize != t.Disk.SectorSize ? "Discos com tamanhos de setor diferentes (512 × 4096)."
-            : t.Disk.Table.Style == TableStyle.Mbr && t.Disk.Table.Entries.Count(e => !e.IsLogical) >= 4 ? "O disco de destino (MBR) já tem 4 partições primárias." : null;
+            : t.Length < s.Length + 1024 * 1024 ? L.T($"O espaço livre ({Fmt.Size(t.Length)}) é menor que a partição ({Fmt.Size(s.Length)}).")
+            : s.Disk.SectorSize != t.Disk.SectorSize ? L.T("Discos com tamanhos de setor diferentes (512 × 4096).")
+            : t.Disk.Table.Style == TableStyle.Mbr && t.Disk.Table.Entries.Count(e => !e.IsLogical) >= 4 ? L.T("O disco de destino (MBR) já tem 4 partições primárias.") : null;
         OnPropertyChanged(nameof(CanCopy));
     }
 
@@ -59,7 +59,7 @@ public sealed partial class CopyPartitionViewModel : PageViewModel
         var t = Target.Selected!.Partition!;
         long start = (t.Offset + 1024 * 1024 - 1) / (1024 * 1024) * (1024 * 1024);
         bool used = UsedOnly, vss = UseVss;
-        Main.Queue("Copiar partição", $"{Source.Selected.Title} ({Fmt.Size(s.Length)}) → espaço livre de {t.Disk.Title}, em {Fmt.Size(start)}", "CopyPartition", async sink =>
+        Main.Queue(L.T("Copiar partição"), L.T($"{Source.Selected.Title} ({Fmt.Size(s.Length)}) → espaço livre de {t.Disk.Title}, em {Fmt.Size(start)}"), "CopyPartition", async sink =>
         {
             var sq = MainViewModel.FreshPart(s);
             var tq = MainViewModel.FreshPart(t);
@@ -77,11 +77,11 @@ public sealed partial class CloneViewModel : PageViewModel
     public CloneViewModel(bool migrate)
     {
         _migrate = migrate;
-        Source = new PickerViewModel { ShowPartitions = false, DiskFilter = d => migrate && !d.IsSystem ? "Só o disco do Windows." : d.IsImage ? "Para imagem, use Restaurar imagem." : null };
+        Source = new PickerViewModel { ShowPartitions = false, DiskFilter = d => migrate && !d.IsSystem ? L.T("Só o disco do Windows.") : d.IsImage ? L.T("Para imagem, use Restaurar imagem.") : null };
         Target = new PickerViewModel
         {
             ShowPartitions = false,
-            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : Source?.Selected?.Disk.Number == d.Number && !d.IsImage ? "É o disco de origem." : null,
+            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? L.T("Imagem só para leitura.") : Source?.Selected?.Disk.Number == d.Number && !d.IsImage ? L.T("É o disco de origem.") : null,
         };
         Source.Changed += _ => { Target.Load(Main.Disks); Replan(); };
         Target.Changed += _ => Replan();
@@ -89,11 +89,11 @@ public sealed partial class CloneViewModel : PageViewModel
         _makeBootable = migrate;
     }
     public bool Migrate => _migrate;
-    public override string Title => _migrate ? "Migrar sistema para SSD/HD" : "Copiar disco";
+    public override string Title => _migrate ? L.T("Migrar sistema para SSD/HD") : L.T("Copiar disco");
     public override string IconKey => _migrate ? "Migrate" : "CopyDisk";
     public string Description => _migrate
-        ? "Leva o Windows, com programas e arquivos, para um disco novo — com o Windows rodando, via instantâneo VSS. Depois é só trocar o disco de inicialização."
-        : "Cópia completa de um disco para outro, partição por partição, com as que estão em uso copiadas por instantâneo VSS.";
+        ? L.T("Leva o Windows, com programas e arquivos, para um disco novo — com o Windows rodando, via instantâneo VSS. Depois é só trocar o disco de inicialização.")
+        : L.T("Cópia completa de um disco para outro, partição por partição, com as que estão em uso copiadas por instantâneo VSS.");
 
     public PickerViewModel Source { get; }
     public PickerViewModel Target { get; }
@@ -154,29 +154,29 @@ public sealed partial class CloneViewModel : PageViewModel
         if (t.Size / ss - cur > 2048) TargetMap.Add(new PartitionVM(new PartitionInfo { Disk = fake, Offset = cur * ss, Length = t.Size - cur * ss }, fvm));
 
         long need = plan.Items.Sum(i => i.src.Length);
-        Notes.Add($"Serão copiadas {plan.Items.Count} partições ({Fmt.Size(need)}); em uso: {Fmt.Size(plan.Items.Sum(i => i.src.Used ?? i.src.Length))}.");
-        if (plan.Grow != null) Notes.Add($"{plan.Grow.Letter ?? plan.Grow.Label} vai crescer {Fmt.Size(plan.GrowBy)} para usar o disco novo inteiro.");
-        if (t.Partitions.Any(p => !p.IsUnallocated)) Notes.Add($"TUDO que existe hoje em {t.Title} ({t.Model}) será apagado.");
-        if (t.SectorSize != s.SectorSize) { Notes.Add("Os discos têm setores de tamanhos diferentes (512 × 4096): a cópia setor a setor não é possível."); return; }
+        Notes.Add(L.T($"Serão copiadas {plan.Items.Count} partições ({Fmt.Size(need)}); em uso: {Fmt.Size(plan.Items.Sum(i => i.src.Used ?? i.src.Length))}."));
+        if (plan.Grow != null) Notes.Add(L.T($"{plan.Grow.Letter ?? plan.Grow.Label} vai crescer {Fmt.Size(plan.GrowBy)} para usar o disco novo inteiro."));
+        if (t.Partitions.Any(p => !p.IsUnallocated)) Notes.Add(L.T($"TUDO que existe hoje em {t.Title} ({t.Model}) será apagado."));
+        if (t.SectorSize != s.SectorSize) { Notes.Add(L.T("Os discos têm setores de tamanhos diferentes (512 × 4096): a cópia setor a setor não é possível.")); return; }
         if (plan.Deficit > 0)
         {
-            Notes.Add($"Não cabe: faltam {Fmt.Size(plan.Deficit)} no disco de destino.");
+            Notes.Add(L.T($"Não cabe: faltam {Fmt.Size(plan.Deficit)} no disco de destino."));
             if (plan.ShrinkCandidate is { } sc && OperatingSystem.IsWindows() && sc.Letter != null)
             {
                 CanShrink = true;
-                ShrinkText = $"Reduzir {sc.Letter} em {Fmt.Size(plan.Deficit + (1L << 30))} (pelo próprio Windows, sem perder dados)";
+                ShrinkText = L.T($"Reduzir {sc.Letter} em {Fmt.Size(plan.Deficit + (1L << 30))} (pelo próprio Windows, sem perder dados)");
             }
             else if (plan.ShrinkCandidate is { } lc && OperatingSystem.IsLinux() && !lc.Disk.IsImage)
             {
                 // Linux: encolhe o sistema de arquivos e a partição (resize2fs, ntfsresize, btrfs) — só fora de uso
                 if (lc.IsMounted && (lc.IsSystemVolume || lc.IsSystemCritical))
-                    Notes.Add($"{lc.DisplayName} é o sistema em uso e não encolhe com ele rodando. Use Migrar sistema: ele copia só os arquivos e cabe num disco menor.");
+                    Notes.Add(L.T($"{lc.DisplayName} é o sistema em uso e não encolhe com ele rodando. Use Migrar sistema: ele copia só os arquivos e cabe num disco menor."));
                 else if (!Core.Platform.Linux.LinuxFs.CanResize(lc, shrink: true, out var why) && why != null && !why.StartsWith("Desmonte"))
                     Notes.Add(why);
                 else
                 {
                     CanShrink = true;
-                    ShrinkText = $"Reduzir {lc.DisplayName} em {Fmt.Size(plan.Deficit + (1L << 30))} (sem perder dados)";
+                    ShrinkText = L.T($"Reduzir {lc.DisplayName} em {Fmt.Size(plan.Deficit + (1L << 30))} (sem perder dados)");
                 }
             }
             return;
@@ -194,10 +194,10 @@ public sealed partial class CloneViewModel : PageViewModel
             var min = await Core.Platform.Linux.LinuxFs.MinSize(sc);
             if (min != null && newSize < min.Value)
             {
-                await Main.Alert("Não dá para reduzir tanto", $"{sc.DisplayName} tem dados demais: o menor tamanho seguro é {Fmt.Size(min.Value)}. Libere espaço, escolha um disco maior, ou use Migrar sistema (copia só os arquivos).", "warn");
+                await Main.Alert(L.T("Não dá para reduzir tanto"), L.T($"{sc.DisplayName} tem dados demais: o menor tamanho seguro é {Fmt.Size(min.Value)}. Libere espaço, escolha um disco maior, ou use Migrar sistema (copia só os arquivos)."), "warn");
                 return;
             }
-            Main.Queue("Reduzir " + sc.DisplayName, $"{sc.DisplayName}: {Fmt.Size(sc.Length)} → {Fmt.Size(newSize)} (encolhe o sistema de arquivos e a partição, sem perder dados)", "Resize", async s =>
+            Main.Queue(L.T("Reduzir ") + sc.DisplayName, L.T($"{sc.DisplayName}: {Fmt.Size(sc.Length)} → {Fmt.Size(newSize)} (encolhe o sistema de arquivos e a partição, sem perder dados)"), "Resize", async s =>
             {
                 var q = MainViewModel.FreshPart(sc);
                 await ActionsBuilder.ApplyGeometryLinux(q, q.Offset, newSize, s);
@@ -207,10 +207,10 @@ public sealed partial class CloneViewModel : PageViewModel
         var sup = await WinCommands.SupportedSize(sc.Disk.Number, sc.Offset);
         if (sup != null && newSize < sup.Value.min)
         {
-            await Main.Alert("Não dá para reduzir tanto", $"O Windows consegue reduzir {sc.Letter} só até {Fmt.Size(sup.Value.min)} (há arquivos fixos no fim do volume). Libere espaço ou escolha um disco maior.", "warn");
+            await Main.Alert(L.T("Não dá para reduzir tanto"), L.T($"O Windows consegue reduzir {sc.Letter} só até {Fmt.Size(sup.Value.min)} (há arquivos fixos no fim do volume). Libere espaço ou escolha um disco maior."), "warn");
             return;
         }
-        Main.Queue("Reduzir " + sc.Letter, $"{sc.Letter}: {Fmt.Size(sc.Length)} → {Fmt.Size(newSize)} (Diminuir volume do Windows, sem perder dados)", "Resize", async s =>
+        Main.Queue(L.T("Reduzir ") + sc.Letter, L.T($"{sc.Letter}: {Fmt.Size(sc.Length)} → {Fmt.Size(newSize)} (Diminuir volume do Windows, sem perder dados)"), "Resize", async s =>
         {
             var q = MainViewModel.FreshPart(sc);
             var r = await WinCommands.Resize(q.Disk.Number, q.Offset, newSize, s.Token);
@@ -222,12 +222,12 @@ public sealed partial class CloneViewModel : PageViewModel
     private async Task Run()
     {
         var plan = _plan; if (plan == null) return;
-        if (!await Main.RequirePremium(_migrate ? "Migrar sistema" : "Copiar disco",
-            _migrate ? "Levar o Windows inteiro para outro SSD ou HD, pronto para dar boot, é do Premium."
-                     : "Clonar um disco inteiro para outro é do Premium. Copiar uma partição continua grátis.")) return;
+        if (!await Main.RequirePremium(_migrate ? L.T("Migrar sistema") : L.T("Copiar disco"),
+            _migrate ? L.T("Levar o Windows inteiro para outro SSD ou HD, pronto para dar boot, é do Premium.")
+                     : L.T("Clonar um disco inteiro para outro é do Premium. Copiar uma partição continua grátis."))) return;
         bool used = UsedOnly, vss = UseVss, boot = MakeBootable, sysOnly = SystemOnly, fit = FitToTarget;
         var src = plan.Source; var dst = plan.Target;
-        Main.Queue(_migrate ? "Migrar sistema" : "Copiar disco", $"{src.Title} ({src.Model}) → {dst.Title} ({dst.Model}) — apaga o conteúdo atual do destino", IconKey, async s =>
+        Main.Queue(_migrate ? L.T("Migrar sistema") : L.T("Copiar disco"), L.T($"{src.Title} ({src.Model}) → {dst.Title} ({dst.Model}) — apaga o conteúdo atual do destino"), IconKey, async s =>
         {
             var fresh = DiskOperations.PlanClone(MainViewModel.Fresh(src), MainViewModel.Fresh(dst), sysOnly, fit);
             await DiskOperations.Clone(fresh, used, vss, boot, s);
@@ -241,7 +241,7 @@ public sealed partial class CloneViewModel : PageViewModel
 
 public sealed partial class BackupViewModel : PageViewModel
 {
-    public override string Title => "Backup e imagem";
+    public override string Title => L.T("Backup e imagem");
     public override string IconKey => "Backup";
     [ObservableProperty] private int _tab;
 
@@ -259,8 +259,8 @@ public sealed partial class BackupViewModel : PageViewModel
     [ObservableProperty] private string _restoreInfo = "";
     public PickerViewModel RestoreTarget { get; } = new()
     {
-        DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? "Imagem só para leitura." : null,
-        PartitionFilter = p => p.IsSystemCritical ? "Partição do sistema em uso." : p.IsUnallocated ? null : p.Disk.ReadOnly ? "Imagem só para leitura." : null,
+        DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.ReadOnly ? L.T("Imagem só para leitura.") : null,
+        PartitionFilter = p => p.IsSystemCritical ? L.T("Partição do sistema em uso.") : p.IsUnallocated ? null : p.Disk.ReadOnly ? L.T("Imagem só para leitura.") : null,
         AllowUnallocated = false,
     };
     public bool CanRestore => RestoreFile.Length > 0 && RestoreTarget.Selected != null;
@@ -296,7 +296,7 @@ public sealed partial class BackupViewModel : PageViewModel
     {
         var sel = ImageSource.Selected;
         string name = sel == null ? "imagem" : RecoveryNames.Safe($"{sel.Disk.Model} {(sel.Partition != null ? sel.Title : "disco")} {DateTime.Now:yyyy-MM-dd}");
-        var f = await MainViewModel.SaveFile("Salvar imagem como", name + ".img", "img", "Imagem de disco");
+        var f = await MainViewModel.SaveFile(L.T("Salvar imagem como"), name + ".img", "img", L.T("Imagem de disco"));
         if (f != null) ImagePath = f;
     }
 
@@ -308,32 +308,32 @@ public sealed partial class BackupViewModel : PageViewModel
         string? root = Path.GetPathRoot(ImagePath)?.TrimEnd('\\');
         if (OperatingSystem.IsWindows() && !sel.Disk.IsImage && sel.Disk.Partitions.Any(p => string.Equals(p.Letter, root, StringComparison.OrdinalIgnoreCase)))
         {
-            if (!await Main.Confirm("Destino dentro da origem", $"A imagem seria gravada em {root}, que fica no próprio disco que está sendo copiado. Num disco com defeito isso acelera a perda — use outro disco.", "Continuar mesmo assim", true)) return;
+            if (!await Main.Confirm(L.T("Destino dentro da origem"), L.T($"A imagem seria gravada em {root}, que fica no próprio disco que está sendo copiado. Num disco com defeito isso acelera a perda — use outro disco."), L.T("Continuar mesmo assim"), true)) return;
         }
         if (OperatingSystem.IsLinux() && !sel.Disk.IsImage && ActionsBuilder.MountOnDisk(ImagePath, sel.Disk) is { } mp)
         {
             if (sel.Partition != null && sel.Partition.MountPoints.Contains(mp))
             {
-                await Main.Alert("Destino dentro da origem", $"A imagem seria gravada em {mp}, dentro da própria partição que está sendo copiada — ela cresceria enquanto é lida. Escolha outro disco.", "warn");
+                await Main.Alert(L.T("Destino dentro da origem"), L.T($"A imagem seria gravada em {mp}, dentro da própria partição que está sendo copiada — ela cresceria enquanto é lida. Escolha outro disco."), "warn");
                 return;
             }
-            if (!await Main.Confirm("Destino dentro da origem", $"A imagem seria gravada em {mp}, que fica no próprio disco que está sendo copiado. Num disco com defeito isso acelera a perda — use outro disco.", "Continuar mesmo assim", true)) return;
+            if (!await Main.Confirm(L.T("Destino dentro da origem"), L.T($"A imagem seria gravada em {mp}, que fica no próprio disco que está sendo copiado. Num disco com defeito isso acelera a perda — use outro disco."), L.T("Continuar mesmo assim"), true)) return;
         }
         string path = ImagePath; bool hash = Hash, vss = UseVss; int retries = Retries;
-        await Main.Run("Criando imagem", s => DiskOperations.CreateImage(sel.Disk, sel.Partition, path, vss, hash, retries, s), refresh: false, canPause: true, success: $"Imagem salva em {path}");
+        await Main.Run(L.T("Criando imagem"), s => DiskOperations.CreateImage(sel.Disk, sel.Partition, path, vss, hash, retries, s), refresh: false, canPause: true, success: L.T($"Imagem salva em {path}"));
     }
 
     [RelayCommand]
     private async Task PickRestoreFile()
     {
-        var f = await MainViewModel.PickFile("Imagem para restaurar", ("Imagens de disco", ["*.img", "*.dd", "*.raw", "*.bin", "*.iso"]));
+        var f = await MainViewModel.PickFile(L.T("Imagem para restaurar"), (L.T("Imagens de disco"), ["*.img", "*.dd", "*.raw", "*.bin", "*.iso"]));
         if (f == null) return;
         RestoreFile = f;
         string info = $"{Fmt.Size(new FileInfo(f).Length)}";
         try
         {
             var meta = JsonSerializer.Deserialize<DiskOperations.ImageMeta>(await File.ReadAllTextAsync(f + ".json"));
-            if (meta != null) info = $"{meta.Source} · {meta.Model} · {Fmt.Size(meta.Size)} · criada em {meta.Created:dd/MM/yyyy HH:mm}" + (meta.BadSectors > 0 ? $" · {meta.BadSectors} setores ilegíveis" : "");
+            if (meta != null) info = L.T($"{meta.Source} · {meta.Model} · {Fmt.Size(meta.Size)} · criada em {meta.Created:dd/MM/yyyy HH:mm}") + (meta.BadSectors > 0 ? L.T($" · {meta.BadSectors} setores ilegíveis") : "");
         }
         catch { }
         RestoreInfo = info;
@@ -343,11 +343,11 @@ public sealed partial class BackupViewModel : PageViewModel
     private async Task Restore()
     {
         var t = RestoreTarget.Selected; if (t == null) return;
-        if (!await Main.RequirePremium("Restaurar imagem", "Criar imagens de disco é grátis; gravar uma imagem de volta num disco ou partição é do Premium.")) return;
-        string what = t.Partition == null ? $"o disco {t.Disk.Title} ({t.Disk.Model}) inteiro" : $"a partição {t.Title}";
+        if (!await Main.RequirePremium(L.T("Restaurar imagem"), L.T("Criar imagens de disco é grátis; gravar uma imagem de volta num disco ou partição é do Premium."))) return;
+        string what = t.Partition == null ? L.T($"o disco {t.Disk.Title} ({t.Disk.Model}) inteiro") : L.T($"a partição {t.Title}");
         string file = RestoreFile;
         var td = t.Disk; var tp = t.Partition;
-        Main.Queue("Restaurar imagem", $"{Path.GetFileName(file)} sobrescreve {what}", "Restore", s =>
+        Main.Queue(L.T("Restaurar imagem"), L.T($"{Path.GetFileName(file)} sobrescreve {what}"), "Restore", s =>
         {
             var pq = tp == null ? null : MainViewModel.FreshPart(tp);
             DiskOperations.RestoreImage(file, pq?.Disk ?? MainViewModel.Fresh(td), pq, s);
@@ -358,7 +358,7 @@ public sealed partial class BackupViewModel : PageViewModel
     [RelayCommand]
     private async Task AddFolder()
     {
-        var f = await MainViewModel.PickFolder("Pasta para o backup");
+        var f = await MainViewModel.PickFolder(L.T("Pasta para o backup"));
         if (f != null && !Folders.Contains(f)) Folders.Add(f);
     }
 
@@ -367,7 +367,7 @@ public sealed partial class BackupViewModel : PageViewModel
     [RelayCommand]
     private async Task PickZip()
     {
-        var f = await MainViewModel.SaveFile("Salvar backup como", $"Backup {DateTime.Now:yyyy-MM-dd}.zip", "zip", "Arquivo ZIP");
+        var f = await MainViewModel.SaveFile(L.T("Salvar backup como"), L.T($"Backup {DateTime.Now:yyyy-MM-dd}.zip"), "zip", L.T("Arquivo ZIP"));
         if (f != null) ZipPath = f;
     }
 
@@ -376,9 +376,9 @@ public sealed partial class BackupViewModel : PageViewModel
     {
         var folders = Folders.ToList();
         string zip = ZipPath;
-        await Main.Run("Backup de pastas", s =>
+        await Main.Run(L.T("Backup de pastas"), s =>
         {
-            s.Progress(-1, "Listando arquivos");
+            s.Progress(-1, L.T("Listando arquivos"));
             var opts = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint };
             var files = folders.SelectMany(f => new DirectoryInfo(f).EnumerateFiles("*", opts).Select(x => (root: f, file: x))).ToList();
             long total = files.Sum(f => f.file.Length), done = 0;
@@ -398,13 +398,13 @@ public sealed partial class BackupViewModel : PageViewModel
                     e.LastWriteTime = file.LastWriteTime;
                     using var dst = e.Open();
                     int n;
-                    while ((n = src.Read(buf)) > 0) { dst.Write(buf, 0, n); done += n; s.Progress(total == 0 ? 1 : (double)done / total, $"{files.Count:N0} arquivos", rel); }
+                    while ((n = src.Read(buf)) > 0) { dst.Write(buf, 0, n); done += n; s.Progress(total == 0 ? 1 : (double)done / total, L.T($"{files.Count:N0} arquivos"), rel); }
                 }
-                catch (IOException ex) { skipped++; s.Log($"Pulado (em uso): {file.FullName} — {ex.Message}"); }
-                catch (UnauthorizedAccessException) { skipped++; s.Log($"Pulado (sem permissão): {file.FullName}"); }
+                catch (IOException ex) { skipped++; s.Log(L.T($"Pulado (em uso): {file.FullName} — {ex.Message}")); }
+                catch (UnauthorizedAccessException) { skipped++; s.Log(L.T($"Pulado (sem permissão): {file.FullName}")); }
             }
             }
-            s.Log($"{files.Count - skipped:N0} arquivos em {zip} ({Fmt.Size(new FileInfo(zip).Length)} compactado).");
+            s.Log(L.T($"{files.Count - skipped:N0} arquivos em {zip} ({Fmt.Size(new FileInfo(zip).Length)} compactado)."));
         }, refresh: false);
     }
 }

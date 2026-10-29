@@ -72,7 +72,7 @@ public sealed class XfsVolume
             var c = new XfsVolume(dev);
             if (c.Parse(b) && probe % (c.AgBlocks * c.BlockSize) == 0) { c.UsedSecondarySuperblock = true; return c; }
         }
-        err = "Superbloco XFS ilegível.";
+        err = L.T("Superbloco XFS ilegível.");
         return null;
     }
 

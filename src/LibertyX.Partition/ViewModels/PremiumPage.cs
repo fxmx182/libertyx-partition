@@ -17,23 +17,23 @@ public sealed partial class PremiumViewModel : PageViewModel
     public const string CardUrl = "";
     public const string TelegramUrl = "https://t.me/libertx_partition_bot?start=partition";
 
-    public override string Title => "LibertyX Premium";
+    public override string Title => L.T("LibertyX Premium");
     public override string IconKey => "Crown";
 
     public List<FeatureRow> Rows { get; } =
     [
-        new("Criar, formatar, redimensionar, mover e excluir partições", "✓", "✓", true, false),
-        new("Saúde, teste de superfície, benchmark, espaço e duplicados", "✓", "✓", true, false),
-        new("Procurar e pré-visualizar arquivos apagados", "✓", "✓", true, false),
-        new("Recuperar arquivos", "até 1 GB", "sem limite", false, false),
-        new("Achar partições perdidas e explorar os arquivos", "✓", "✓", true, false),
-        new("Restaurar partições perdidas", "—", "✓", false, true),
-        new("Converter MBR ⇄ GPT sem perder dados", "disco vazio", "com os dados", false, false),
-        new("Migrar o sistema para outro SSD/HD", "—", "✓", false, true),
-        new("Copiar disco inteiro", "—", "✓", false, true),
-        new("Criar imagem de disco", "✓", "✓", true, false),
-        new("Restaurar imagem de disco", "—", "✓", false, true),
-        new("Pendrive de boot e gravar imagens (como Rufus e balenaEtcher)", "—", "✓", false, true),
+        new(L.T("Criar, formatar, redimensionar, mover e excluir partições"), "✓", "✓", true, false),
+        new(L.T("Saúde, teste de superfície, benchmark, espaço e duplicados"), "✓", "✓", true, false),
+        new(L.T("Procurar e pré-visualizar arquivos apagados"), "✓", "✓", true, false),
+        new(L.T("Recuperar arquivos"), L.T("até 1 GB"), L.T("sem limite"), false, false),
+        new(L.T("Achar partições perdidas e explorar os arquivos"), "✓", "✓", true, false),
+        new(L.T("Restaurar partições perdidas"), "—", "✓", false, true),
+        new(L.T("Converter MBR ⇄ GPT sem perder dados"), L.T("disco vazio"), L.T("com os dados"), false, false),
+        new(L.T("Migrar o sistema para outro SSD/HD"), "—", "✓", false, true),
+        new(L.T("Copiar disco inteiro"), "—", "✓", false, true),
+        new(L.T("Criar imagem de disco"), "✓", "✓", true, false),
+        new(L.T("Restaurar imagem de disco"), "—", "✓", false, true),
+        new(L.T("Pendrive de boot e gravar imagens (como Rufus e balenaEtcher)"), "—", "✓", false, true),
     ];
 
     [ObservableProperty] private string _keyText = "";
@@ -47,8 +47,8 @@ public sealed partial class PremiumViewModel : PageViewModel
 
     public bool CanBuyCard => CardUrl.Length > 0;
     public bool CanBuyCrypto => TelegramUrl.Length > 0;
-    public string CardLabel => CanBuyCard ? "Comprar com cartão" : "Cartão — em breve";
-    public string CryptoLabel => CanBuyCrypto ? "Bitcoin ou USDT pelo Telegram" : "Bitcoin ou USDT — em breve";
+    public string CardLabel => CanBuyCard ? L.T("Comprar com cartão") : L.T("Cartão — em breve");
+    public string CryptoLabel => CanBuyCrypto ? L.T("Bitcoin ou USDT pelo Telegram") : L.T("Bitcoin ou USDT — em breve");
 
     public PremiumViewModel() => Refresh();
     public override void OnShown(object? arg) => Refresh();
@@ -60,18 +60,18 @@ public sealed partial class PremiumViewModel : PageViewModel
         var st = lic.State;
         if (IsPremium)
         {
-            StatusTitle = "Premium ativo";
-            string how = st.Kind == "loja" ? "comprada na loja" : "chave LibertyX";
-            StatusText = $"Licença {lic.ShortKey} ({how})" + (st.Holder is { Length: > 0 } h ? $" · {h}" : "")
-                         + (st.ActivatedAt is { } a ? $" · ativada em {a.ToLocalTime():dd/MM/yyyy}" : "") + ". Obrigado por apoiar o LibertyX.";
+            StatusTitle = L.T("Premium ativo");
+            string how = st.Kind == "loja" ? L.T("comprada na loja") : L.T("chave LibertyX");
+            StatusText = L.T($"Licença {lic.ShortKey} ({how})") + (st.Holder is { Length: > 0 } h ? $" · {h}" : "")
+                         + (st.ActivatedAt is { } a ? L.T($" · ativada em {a.ToLocalTime():dd/MM/yyyy}") : "") + L.T(". Obrigado por apoiar o LibertyX.");
         }
         else
         {
-            StatusTitle = "Você está no Básico";
-            StatusText = "Tudo para cuidar dos discos, e a recuperação mostra tudo o que dá para salvar. O Premium leva sem limite e libera as ferramentas de resgate completas.";
+            StatusTitle = L.T("Você está no Básico");
+            StatusText = L.T("Tudo para cuidar dos discos, e a recuperação mostra tudo o que dá para salvar. O Premium leva sem limite e libera as ferramentas de resgate completas.");
         }
         QuotaUsed = Math.Min(1, (double)st.FreeRecoveredBytes / LicenseManager.FreeLimit);
-        QuotaText = $"{Fmt.Size(Math.Min(st.FreeRecoveredBytes, LicenseManager.FreeLimit))} de {Fmt.Size(LicenseManager.FreeLimit)} já recuperados no Básico";
+        QuotaText = L.T($"{Fmt.Size(Math.Min(st.FreeRecoveredBytes, LicenseManager.FreeLimit))} de {Fmt.Size(LicenseManager.FreeLimit)} já recuperados no Básico");
     }
 
     [RelayCommand]
@@ -85,7 +85,7 @@ public sealed partial class PremiumViewModel : PageViewModel
             if (err != null) { Error = err; return; }
             KeyText = "";
             Main.LicenseChanged();
-            Main.ShowToast("Premium ativado. Bom proveito!");
+            Main.ShowToast(L.T("Premium ativado. Bom proveito!"));
         }
         finally { Busy = false; Refresh(); }
     }
@@ -101,8 +101,8 @@ public sealed partial class PremiumViewModel : PageViewModel
     [RelayCommand]
     private async Task Deactivate()
     {
-        if (!await Main.Confirm("Desativar neste computador",
-            "O Premium sai deste computador e você pode ativar a mesma chave em outro. Guarde a chave antes de continuar.", "Desativar", icon: "Key")) return;
+        if (!await Main.Confirm(L.T("Desativar neste computador"),
+            L.T("O Premium sai deste computador e você pode ativar a mesma chave em outro. Guarde a chave antes de continuar."), L.T("Desativar"), icon: "Key")) return;
         await Main.License.Deactivate();
         Main.LicenseChanged();
         Refresh();

@@ -162,7 +162,7 @@ public static class WinCommands
     public static async Task<(string id, string device)?> CreateShadow(string volumeRoot, CancellationToken ct)
     {
         var r = await PowerShell($"$r=Invoke-CimMethod -ClassName Win32_ShadowCopy -MethodName Create -Arguments @{{Volume={Q(volumeRoot)};Context='ClientAccessible'}}; if($r.ReturnValue -ne 0){{throw \"VSS falhou (código $($r.ReturnValue))\"}}; $s=Get-CimInstance Win32_ShadowCopy | Where-Object {{ $_.ID -eq $r.ShadowID }}; Write-Output \"$($s.ID)|$($s.DeviceObject)\"", ct);
-        if (!r.Ok) throw new IOException("Não foi possível criar o instantâneo VSS: " + r.Message);
+        if (!r.Ok) throw new IOException(L.T("Não foi possível criar o instantâneo VSS: ") + r.Message);
         var f = r.Output.Trim().Split('|');
         return f.Length == 2 ? (f[0], f[1]) : null;
     }

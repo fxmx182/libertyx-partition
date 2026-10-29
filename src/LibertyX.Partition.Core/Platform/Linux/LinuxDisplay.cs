@@ -79,11 +79,12 @@ public static class LinuxDisplay
         Environment.SetEnvironmentVariable("AVALONIA_SCREEN_SCALE_FACTORS", per ? Applied.Spec : null);
     }
 
-    /// <summary>Os argumentos para reabrir o app: sem a escala antiga, com a automática desta sessão.</summary>
+    /// <summary>Os argumentos para reabrir o app: sem a escala antiga, com a automática e o idioma do sistema desta sessão.</summary>
     public static List<string> RelaunchArgs(IEnumerable<string> args)
     {
-        var l = args.Where(a => !a.StartsWith("--escala=")).ToList();
+        var l = args.Where(a => !a.StartsWith("--escala=") && !a.StartsWith("--idioma=")).ToList();
         if (Auto != null) l.Add("--escala=" + Auto.Spec);
+        l.Add("--idioma=" + L.OsLang);
         return l;
     }
 
@@ -101,18 +102,18 @@ public static class LinuxDisplay
         try
         {
             dpy = XOpenDisplay(IntPtr.Zero);
-            if (dpy == IntPtr.Zero) return new Scale("1", "sem tela");
+            if (dpy == IntPtr.Zero) return new Scale("1", L.T("sem tela"));
             // Xft.dpi: o "tamanho do texto" do GNOME, KDE, Xfce, Cinnamon… (96 = 100%)
             if (XftDpi(dpy) is { } dpi && dpi > 100) return new Scale(Fmt(Snap(dpi / 96.0, 0.05)), $"Xft.dpi {dpi:0}");
             // nada configurado: o tamanho físico de cada monitor decide
             var mons = Monitors(dpy);
             var guess = mons.Select(m => (m.Name, s: Physical(m))).ToList();
-            if (guess.Count == 0 || guess.All(g => g.s <= 1)) return new Scale("1", "monitor comum");
+            if (guess.Count == 0 || guess.All(g => g.s <= 1)) return new Scale("1", L.T("monitor comum"));
             if (guess.Select(g => g.s).Distinct().Count() == 1 || guess.Any(g => string.IsNullOrEmpty(g.Name)))
                 return new Scale(Fmt(guess.Max(g => g.s)), Describe(mons));
             return new Scale(string.Join(';', guess.Select(g => $"{g.Name}={Fmt(g.s)}")), Describe(mons));
         }
-        catch { return new Scale("1", "sem tela"); }
+        catch { return new Scale("1", L.T("sem tela")); }
         finally { if (dpy != IntPtr.Zero) XCloseDisplay(dpy); }
     }
 
@@ -123,20 +124,20 @@ public static class LinuxDisplay
         foreach (var k in new[] { "GDK_SCALE", "GDK_DPI_SCALE", "QT_SCALE_FACTOR", "QT_SCREEN_SCALE_FACTORS", "AVALONIA_GLOBAL_SCALE_FACTOR", "AVALONIA_SCREEN_SCALE_FACTORS", "XDG_SESSION_TYPE", "XDG_CURRENT_DESKTOP" })
             sb.AppendLine($"{k}={Environment.GetEnvironmentVariable(k)}");
         IntPtr dpy = XOpenDisplay(IntPtr.Zero);
-        if (dpy == IntPtr.Zero) sb.AppendLine("sem conexão com o X");
+        if (dpy == IntPtr.Zero) sb.AppendLine(L.T("sem conexão com o X"));
         else
         {
             try
             {
-                sb.AppendLine($"Xft.dpi={XftDpi(dpy)?.ToString(CultureInfo.InvariantCulture) ?? "(não definido)"}");
+                sb.AppendLine($"Xft.dpi={XftDpi(dpy)?.ToString(CultureInfo.InvariantCulture) ?? L.T("(não definido)")}");
                 foreach (var m in Monitors(dpy))
-                    sb.AppendLine($"monitor {m.Name}: {m.Width}×{m.Height} px, {m.WidthMm}×{m.HeightMm} mm → {Pct(Physical(m))}");
+                    sb.AppendLine(L.T($"monitor {m.Name}: {m.Width}×{m.Height} px, {m.WidthMm}×{m.HeightMm} mm → {Pct(Physical(m))}"));
             }
             finally { XCloseDisplay(dpy); }
         }
-        sb.AppendLine($"escolhida no app: {(Saved is { } s ? Pct(s) : "automático")}");
+        sb.AppendLine(L.T($"escolhida no app: {(Saved is { } s ? Pct(s) : L.T("automático"))}"));
         var d = Detect();
-        sb.AppendLine($"automático: {d.Spec} ({d.Source})");
+        sb.AppendLine(L.T($"automático: {d.Spec} ({d.Source})"));
         return sb.ToString();
     }
 

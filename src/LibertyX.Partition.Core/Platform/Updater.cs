@@ -132,7 +132,7 @@ public static partial class Updater
             }
             catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                throw new IOException("A versão nova está sendo publicada neste momento. Tente de novo em alguns minutos.");
+                throw new IOException(L.T("A versão nova está sendo publicada neste momento. Tente de novo em alguns minutos."));
             }
         }
     }
@@ -158,7 +158,7 @@ public static partial class Updater
                 if (total > 0) progress?.Report((double)done / total);
             }
         }
-        if (i.SetupSize > 0 && new FileInfo(dest).Length != i.SetupSize) throw new IOException("O download veio incompleto — tente de novo.");
+        if (i.SetupSize > 0 && new FileInfo(dest).Length != i.SetupSize) throw new IOException(L.T("O download veio incompleto — tente de novo."));
         return dest;
     }
 
@@ -185,14 +185,14 @@ public static partial class Updater
                     File.SetUnixFileMode(tmp, (UnixFileMode)0b111_101_101);
                     File.Move(tmp, target, true);
                     Linux.LinuxSession.GiveBack(target, false);
-                    log($"AppImage atualizado: {target}");
+                    log(L.T($"AppImage atualizado: {target}"));
                     break;
                 }
             case LinuxKind.Deb:
                 {
                     var r = Linux.LinuxTools.Has("apt-get") ? await Proc.Run("apt-get", ["install", "-y", "--allow-downgrades", Path.GetFullPath(file)], ct, log, env: new Dictionary<string, string> { ["DEBIAN_FRONTEND"] = "noninteractive" })
                                                             : await Proc.Run("dpkg", ["-i", file], ct, log);
-                    if (!r.Ok) throw new IOException("O apt não instalou o pacote: " + r.Message);
+                    if (!r.Ok) throw new IOException(L.T("O apt não instalou o pacote: ") + r.Message);
                     break;
                 }
             case LinuxKind.Rpm:
@@ -200,7 +200,7 @@ public static partial class Updater
                     var r = Linux.LinuxTools.Has("dnf") ? await Proc.Run("dnf", ["install", "-y", file], ct, log)
                           : Linux.LinuxTools.Has("zypper") ? await Proc.Run("zypper", ["--non-interactive", "install", "--allow-unsigned-rpm", file], ct, log)
                           : await Proc.Run("rpm", ["-U", "--force", file], ct, log);
-                    if (!r.Ok) throw new IOException("O pacote não foi instalado: " + r.Message);
+                    if (!r.Ok) throw new IOException(L.T("O pacote não foi instalado: ") + r.Message);
                     break;
                 }
         }

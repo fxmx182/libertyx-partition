@@ -168,7 +168,7 @@ public sealed class PartitionRibbon : Control
         if (h != _hover)
         {
             _hover = h;
-            ToolTip.SetTip(this, h == null ? null : $"{h.Title}\n{h.FsText} · {h.SizeText}" + (h.HasUsage ? $" · {h.UsagePercent} usado" : ""));
+            ToolTip.SetTip(this, h == null ? null : $"{h.Title}\n{h.FsText} · {h.SizeText}" + (h.HasUsage ? L.T($" · {h.UsagePercent} usado") : ""));
             InvalidateVisual();
         }
         base.OnPointerMoved(e);

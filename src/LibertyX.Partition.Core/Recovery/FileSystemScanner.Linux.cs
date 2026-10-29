@@ -16,11 +16,11 @@ public static partial class FileSystemScanner
     {
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = (long)v.RootIno, Name = v.Label.Length > 0 ? v.Label : "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            Root = new RecoveredItem { Id = (long)v.RootIno, Name = v.Label.Length > 0 ? v.Label : L.T("Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
             FileSystem = v.V5 ? "XFS v5" : "XFS", Label = v.Label, ClusterSize = v.BlockSize,
         };
-        if (v.UsedSecondarySuperblock) res.Log.Add("Superbloco principal destruído — usada a cópia de um grupo de alocação.");
-        progress?.Report(new("Lendo o mapa de espaço livre", 0, 0, 0, 1));
+        if (v.UsedSecondarySuperblock) res.Log.Add(L.T("Superbloco principal destruído — usada a cópia de um grupo de alocação."));
+        progress?.Report(new(L.T("Lendo o mapa de espaço livre"), 0, 0, 0, 1));
         byte[]? free = null;
         try
         {
@@ -28,10 +28,10 @@ public static partial class FileSystemScanner
             var f = free;
             res.Allocation = new AllocationMap(0, v.BlockSize, (long)v.AgCount * v.AgBlocks, c => !XfsVolume.IsFree(f, c));
         }
-        catch (Exception ex) { res.Log.Add("Mapa de espaço livre ilegível: " + ex.Message); }
-        progress?.Report(new("Lendo o log", 0.02, 0, 0, 1));
+        catch (Exception ex) { res.Log.Add(L.T("Mapa de espaço livre ilegível: ") + ex.Message); }
+        progress?.Report(new(L.T("Lendo o log"), 0.02, 0, 0, 1));
         Dictionary<ulong, XfsVolume.Historic> hist = [];
-        try { hist = v.HistoricInodes(); } catch (Exception ex) { res.Log.Add("Log ilegível: " + ex.Message); }
+        try { hist = v.HistoricInodes(); } catch (Exception ex) { res.Log.Add(L.T("Log ilegível: ") + ex.Message); }
 
         Condition Eval(List<XfsVolume.Bmbt> ext)
         {
@@ -47,7 +47,7 @@ public static partial class FileSystemScanner
         }
 
         var root = v.ReadInode(v.RootIno);
-        if (root == null || !root.IsDir) { res.Log.Add("Inode raiz ilegível."); return res; }
+        if (root == null || !root.IsDir) { res.Log.Add(L.T("Inode raiz ilegível.")); return res; }
         var visited = new HashSet<ulong> { v.RootIno };
         var queue = new Queue<(XfsInode dir, RecoveredItem item, bool deleted)>();
         queue.Enqueue((root, res.Root, false));
@@ -58,7 +58,7 @@ public static partial class FileSystemScanner
             var (dir, parent, delDir) = queue.Dequeue();
             List<XfsVolume.DirEntry> entries;
             try { entries = v.ReadDirectory(dir, history: true); }
-            catch (MediaReadException) { res.Log.Add($"Pasta ilegível: {parent.FullPath}"); continue; }
+            catch (MediaReadException) { res.Log.Add(L.T($"Pasta ilegível: {parent.FullPath}")); continue; }
             // pasta pequena: os nomes apagados não ficam no disco, mas as versões antigas dela, no log
             if (v.HistoricDirForks.TryGetValue(dir.Ino, out var olds))
                 foreach (var fork in olds)
@@ -107,7 +107,7 @@ public static partial class FileSystemScanner
                 if (!reused && hist.TryGetValue(e.Ino, out var h) && (h.Mode & 0xF000) == (isDir ? 0x4000 : 0x8000))
                 {
                     item.Modified = h.Mtime;
-                    item.Note = "mapa de blocos recuperado do log";
+                    item.Note = L.T("mapa de blocos recuperado do log");
                     fromLog++;
                     var fake = v.ParseInode(BuildInode(v, h), h.Ino);
                     if (isDir && fake != null)
@@ -124,29 +124,29 @@ public static partial class FileSystemScanner
                         {
                             // o arquivo mudou de mapa depois da versão usada: parte pode não ser mais dele
                             item.Condition = Condition.Partial;
-                            item.Note = "mapa de blocos do log, mas o arquivo mudou depois dele (trechos soltos ou reescritos): confira o conteúdo";
+                            item.Note = L.T("mapa de blocos do log, mas o arquivo mudou depois dele (trechos soltos ou reescritos): confira o conteúdo");
                         }
                     }
                 }
                 else if (isDir)
                 {
                     item.Condition = Condition.Good;
-                    item.Note = "pasta apagada: o conteúdo dela aparece na varredura profunda";
+                    item.Note = L.T("pasta apagada: o conteúdo dela aparece na varredura profunda");
                 }
                 else
                 {
                     item.Condition = Condition.Overwritten;
-                    item.Note = reused ? "inode já reaproveitado por outro arquivo" : "nome achado; o XFS apaga o mapa de blocos — o conteúdo aparece na varredura profunda";
+                    item.Note = reused ? L.T("inode já reaproveitado por outro arquivo") : L.T("nome achado; o XFS apaga o mapa de blocos — o conteúdo aparece na varredura profunda");
                     nameOnly++;
                 }
                 res.Attach(parent, item);
             }
             dirs++;
-            progress?.Report(new("Lendo pastas", Math.Min(0.99, dirs / (double)(dirs + queue.Count + 1)), res.Items.Count, dirs, dirs + queue.Count));
+            progress?.Report(new(L.T("Lendo pastas"), Math.Min(0.99, dirs / (double)(dirs + queue.Count + 1)), res.Items.Count, dirs, dirs + queue.Count));
         }
         if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
-        res.Log.Add($"Log do XFS: {v.LogRecords:N0} registros; {hist.Count:N0} inodes com mapa de blocos; {fromLog} apagado(s) reconstruído(s) a partir dele.");
-        if (nameOnly > 0) res.Log.Add($"{nameOnly} apagado(s) só com o nome: o mapa de blocos já saiu do log. Use a varredura profunda (ela lê só o espaço livre).");
+        res.Log.Add(L.T($"Log do XFS: {v.LogRecords:N0} registros; {hist.Count:N0} inodes com mapa de blocos; {fromLog} apagado(s) reconstruído(s) a partir dele."));
+        if (nameOnly > 0) res.Log.Add(L.T($"{nameOnly} apagado(s) só com o nome: o mapa de blocos já saiu do log. Use a varredura profunda (ela lê só o espaço livre)."));
         return res;
     }
 
@@ -187,11 +187,11 @@ public static partial class FileSystemScanner
     {
         var res = new ScanResult
         {
-            Root = new RecoveredItem { Id = 256, Name = v.Label.Length > 0 ? v.Label : "Raiz", IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
-            FileSystem = "Btrfs", Label = v.Label, ClusterSize = v.SectorSize,
+            Root = new RecoveredItem { Id = 256, Name = v.Label.Length > 0 ? v.Label : L.T("Raiz"), IsDirectory = true, Origin = ItemOrigin.Live, Condition = Condition.Excellent },
+            FileSystem = L.T("Btrfs"), Label = v.Label, ClusterSize = v.SectorSize,
         };
-        if (v.UsedMirrorSuperblock) res.Log.Add("Superbloco principal destruído — usada a cópia de 64 MiB.");
-        progress?.Report(new("Lendo as árvores", 0, 0, 0, 1));
+        if (v.UsedMirrorSuperblock) res.Log.Add(L.T("Superbloco principal destruído — usada a cópia de 64 MiB."));
+        progress?.Report(new(L.T("Lendo as árvores"), 0, 0, 0, 1));
         var roots = v.Roots();
         var live = new Dictionary<ulong, BtrfsVolume.FsTree>();
         foreach (var r in roots) { ct.ThrowIfCancellationRequested(); live[r.Id] = v.LoadTree(r); }
@@ -225,7 +225,7 @@ public static partial class FileSystemScanner
         int leaves = 0;
         try
         {
-            foreach (var leaf in v.StaleLeaves(new Progress<double>(x => progress?.Report(new("Procurando versões antigas da árvore", 0.05 + 0.6 * x, 0, 0, 1))), ct))
+            foreach (var leaf in v.StaleLeaves(new Progress<double>(x => progress?.Report(new(L.T("Procurando versões antigas da árvore"), 0.05 + 0.6 * x, 0, 0, 1))), ct))
             {
                 leaves++;
                 if (leaf.Owner == 7)
@@ -239,7 +239,7 @@ public static partial class FileSystemScanner
             }
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { res.Log.Add("Leitura das folhas antigas interrompida: " + ex.Message); }
+        catch (Exception ex) { res.Log.Add(L.T("Leitura das folhas antigas interrompida: ") + ex.Message); }
 
         // checksum de cada setor de um trecho no disco, se a folha (atual ou antiga) ainda existir
         bool? Verify(ulong bytenr, ulong len)
@@ -310,7 +310,7 @@ public static partial class FileSystemScanner
                 }
                 if (e.FileType is not (0 or 1) || ino == null || !ino.IsFile)
                 {
-                    if (deleted && e.FileType == 1) { item.Condition = Condition.Overwritten; item.Note = "nome achado; o inode já não está em nenhuma folha antiga"; res.Attach(parent, item); }
+                    if (deleted && e.FileType == 1) { item.Condition = Condition.Overwritten; item.Note = L.T("nome achado; o inode já não está em nenhuma folha antiga"); res.Attach(parent, item); }
                     continue;
                 }
                 SortedDictionary<ulong, BtrfsVolume.FileExtent>? ex = null;
@@ -336,10 +336,10 @@ public static partial class FileSystemScanner
                             if (r == false) { ok = false; break; }
                             if (r == null) ok = null;
                         }
-                        if (ok == true) { item.Note = "conteúdo conferido pelo checksum do Btrfs"; verified++; }
-                        else if (ok == false) { item.Condition = Condition.Overwritten; item.Note = "o espaço foi reaproveitado (checksum não confere)"; }
+                        if (ok == true) { item.Note = L.T("conteúdo conferido pelo checksum do Btrfs"); verified++; }
+                        else if (ok == false) { item.Condition = Condition.Overwritten; item.Note = L.T("o espaço foi reaproveitado (checksum não confere)"); }
                     }
-                    if (list.Count == 0 && ino.Size > 0) item.Note = "sem mapa de extents nas folhas antigas — tente a varredura profunda";
+                    if (list.Count == 0 && ino.Size > 0) item.Note = L.T("sem mapa de extents nas folhas antigas — tente a varredura profunda");
                 }
                 res.Attach(parent, item);
             }
@@ -348,8 +348,8 @@ public static partial class FileSystemScanner
         visitedTrees.Add(5);
         Walk(5, 256, res.Root, false, 0);
         if (!opt.IncludeLive) { Prune(res.Root); res.Items.Clear(); Flatten(res.Root, res.Items); }
-        res.Log.Add($"Btrfs geração {v.Generation:N0} · {roots.Count} árvore(s) de arquivos · {v.Chunks.Count} chunks · {leaves:N0} folhas válidas no espaço de metadados (atuais e antigas).");
-        res.Log.Add($"{deletedFiles} apagado(s) achado(s) nas versões antigas da árvore; {verified} conferido(s) pelo checksum do próprio Btrfs.");
+        res.Log.Add(L.T($"Btrfs geração {v.Generation:N0} · {roots.Count} árvore(s) de arquivos · {v.Chunks.Count} chunks · {leaves:N0} folhas válidas no espaço de metadados (atuais e antigas)."));
+        res.Log.Add(L.T($"{deletedFiles} apagado(s) achado(s) nas versões antigas da árvore; {verified} conferido(s) pelo checksum do próprio Btrfs."));
         return res;
     }
 }

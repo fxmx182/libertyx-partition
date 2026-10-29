@@ -43,7 +43,7 @@ public sealed class FatVolume
             var b6 = dev.ReadBytes(6 * 512, 512);
             if (FsDetect.FatKindFromBpb(b6) == FsKind.Fat32) { b = b6; kind = FsKind.Fat32; backup = true; }
         }
-        if (kind == FsKind.Unknown) { error = "Setor de boot FAT inválido."; return null; }
+        if (kind == FsKind.Unknown) { error = L.T("Setor de boot FAT inválido."); return null; }
         var v = new FatVolume(dev) { Kind = kind, UsedBackupBoot = backup };
         int bps = U16(b, 11), spc = b[13], rsv = U16(b, 14);
         v.BytesPerSector = bps;
@@ -327,10 +327,10 @@ public sealed class ExFatVolume
                 var bb = dev.ReadBytes(12L << shift, 512);
                 if (Match(bb, 3, "EXFAT   "u8) && bb[108] == shift) { b = bb; backup = true; }
             }
-            if (!backup) { error = "Setor de boot exFAT inválido."; return null; }
+            if (!backup) { error = L.T("Setor de boot exFAT inválido."); return null; }
         }
         int bpsShift = b[108], spcShift = b[109];
-        if (bpsShift < 9 || bpsShift > 12 || bpsShift + spcShift > 25) { error = "Parâmetros exFAT inválidos."; return null; }
+        if (bpsShift < 9 || bpsShift > 12 || bpsShift + spcShift > 25) { error = L.T("Parâmetros exFAT inválidos."); return null; }
         var v = new ExFatVolume(dev)
         {
             UsedBackupBoot = backup,

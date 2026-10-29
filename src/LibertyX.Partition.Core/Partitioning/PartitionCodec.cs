@@ -31,7 +31,7 @@ public static class PartitionCodec
         // GPT vence quando existe: há discos com MBR "híbrido" ou sem a protetora.
         if (TryReadGpt(dev, 1, out var gpt, out var primaryOk) && primaryOk)
         {
-            if (!protective && hasMbrSig) gpt!.Warnings.Add("GPT encontrada, mas o MBR não tem a entrada protetora (0xEE).");
+            if (!protective && hasMbrSig) gpt!.Warnings.Add(L.T("GPT encontrada, mas o MBR não tem a entrada protetora (0xEE)."));
             CheckBackup(dev, gpt!);
             return gpt!;
         }
@@ -43,10 +43,10 @@ public static class PartitionCodec
             if (TryReadGpt(dev, sectors - 1, out var backup, out var ok2) && ok2)
             {
                 backup!.GptPrimaryDamaged = true;
-                backup.Warnings.Add("Cabeçalho GPT primário danificado — usando a cópia de segurança do fim do disco.");
+                backup.Warnings.Add(L.T("Cabeçalho GPT primário danificado — usando a cópia de segurança do fim do disco."));
                 return backup;
             }
-            if (gpt != null) { gpt.Warnings.Add("Tabela GPT com CRC inválido."); return gpt; }
+            if (gpt != null) { gpt.Warnings.Add(L.T("Tabela GPT com CRC inválido.")); return gpt; }
         }
         if (!hasMbrSig) return t;
 
@@ -64,7 +64,7 @@ public static class PartitionCodec
             t.Entries.Add(e);
         }
         if (ext != null) ReadLogicals(dev, t, ext);
-        if (Overlaps(t)) t.Warnings.Add("Há partições sobrepostas na tabela MBR.");
+        if (Overlaps(t)) t.Warnings.Add(L.T("Há partições sobrepostas na tabela MBR."));
         return t;
     }
 
@@ -89,7 +89,7 @@ public static class PartitionCodec
         while (seen.Add(next) && seen.Count < 256 && next < t.DiskSectors)
         {
             dev.Read(next * ss, sec);
-            if (sec[510] != 0x55 || sec[511] != 0xAA) { t.Warnings.Add($"EBR inválido no setor {next}."); break; }
+            if (sec[510] != 0x55 || sec[511] != 0xAA) { t.Warnings.Add(L.T($"EBR inválido no setor {next}.")); break; }
             var logical = ParseMbrEntry(sec, 446, next);
             if (logical != null)
             {
@@ -135,7 +135,7 @@ public static class PartitionCodec
             FirstUsableLba = (long)U64(h, 40), LastUsableLba = (long)U64(h, 48),
             DiskGuid = new Guid(h.AsSpan(56, 16)), GptEntryCount = (int)count,
         };
-        if (!arrOk) t.Warnings.Add("CRC da lista de partições GPT não confere.");
+        if (!arrOk) t.Warnings.Add(L.T("CRC da lista de partições GPT não confere."));
         for (int i = 0; i < count; i++)
         {
             var e = arr.AsSpan((int)(i * esize), (int)esize);
@@ -151,7 +151,7 @@ public static class PartitionCodec
         }
         if (t.LastUsableLba >= sectors || t.FirstUsableLba < 2)
         {
-            t.Warnings.Add("Limites do GPT não batem com o tamanho do disco (disco clonado de outro tamanho?).");
+            t.Warnings.Add(L.T("Limites do GPT não batem com o tamanho do disco (disco clonado de outro tamanho?)."));
             t.LastUsableLba = Math.Min(t.LastUsableLba, sectors - 34);
         }
         valid = headerOk && arrOk;
@@ -164,7 +164,7 @@ public static class PartitionCodec
         if (!TryReadGpt(dev, last, out _, out var ok) || !ok)
         {
             t.GptBackupDamaged = true;
-            t.Warnings.Add("A cópia de segurança do GPT (fim do disco) está ausente ou danificada.");
+            t.Warnings.Add(L.T("A cópia de segurança do GPT (fim do disco) está ausente ou danificada."));
         }
     }
 
@@ -187,17 +187,17 @@ public static class PartitionCodec
         for (int i = 0; i < o.Count; i++)
         {
             var e = o[i];
-            if (e.SectorCount <= 0) err.Add($"Partição {e.Slot}: tamanho zero.");
-            if (e.StartLba < lo || e.EndLba > hi) err.Add($"Partição {e.Slot}: fora da área utilizável ({lo}–{hi}).");
-            if (i > 0 && e.StartLba <= o[i - 1].EndLba) err.Add($"Duas partições se sobrepõem (setores {o[i - 1].StartLba:N0}–{o[i - 1].EndLba:N0} e {e.StartLba:N0}–{e.EndLba:N0}). Desmarque uma delas.");
-            if (t.Style == TableStyle.Mbr && (e.EndLba > uint.MaxValue)) err.Add($"Partição {e.Slot}: além de 2 TiB, impossível em MBR.");
+            if (e.SectorCount <= 0) err.Add(L.T($"Partição {e.Slot}: tamanho zero."));
+            if (e.StartLba < lo || e.EndLba > hi) err.Add(L.T($"Partição {e.Slot}: fora da área utilizável ({lo}–{hi})."));
+            if (i > 0 && e.StartLba <= o[i - 1].EndLba) err.Add(L.T($"Duas partições se sobrepõem (setores {o[i - 1].StartLba:N0}–{o[i - 1].EndLba:N0} e {e.StartLba:N0}–{e.EndLba:N0}). Desmarque uma delas."));
+            if (t.Style == TableStyle.Mbr && (e.EndLba > uint.MaxValue)) err.Add(L.T($"Partição {e.Slot}: além de 2 TiB, impossível em MBR."));
         }
         if (t.Style == TableStyle.Mbr)
         {
             int primaries = o.Count(e => !e.IsLogical) + (o.Any(e => e.IsLogical) ? 1 : 0);
-            if (primaries > 4) err.Add("MBR comporta no máximo 4 partições primárias (ou 3 + estendida).");
+            if (primaries > 4) err.Add(L.T("MBR comporta no máximo 4 partições primárias (ou 3 + estendida)."));
         }
-        if (t.Style == TableStyle.Gpt && o.Count > t.GptEntryCount) err.Add("Partições demais para a tabela GPT.");
+        if (t.Style == TableStyle.Gpt && o.Count > t.GptEntryCount) err.Add(L.T("Partições demais para a tabela GPT."));
         return err;
     }
 
@@ -214,7 +214,7 @@ public static class PartitionCodec
         {
             TableStyle.Gpt => BuildGpt(t),
             TableStyle.Mbr => BuildMbr(t),
-            _ => throw new InvalidOperationException("estilo de tabela indefinido"),
+            _ => throw new InvalidOperationException(L.T("estilo de tabela indefinido")),
         };
     }
 
@@ -339,7 +339,7 @@ public static class PartitionCodec
         int FreeSlot()
         {
             for (int k = 0; k < 4; k++) if (!taken[k]) { taken[k] = true; return k; }
-            throw new InvalidOperationException("MBR comporta só 4 entradas primárias (contando a estendida).");
+            throw new InvalidOperationException(L.T("MBR comporta só 4 entradas primárias (contando a estendida)."));
         }
         foreach (var e in prim.Where(e => !slotOf.ContainsKey(e))) slotOf[e] = FreeSlot();
         foreach (var e in prim) { PutMbrEntry(mbr, 446 + slotOf[e] * 16, e.MbrType, e.StartLba, e.SectorCount, e.Active); e.Slot = slotOf[e] + 1; }
@@ -352,7 +352,7 @@ public static class PartitionCodec
             {
                 long ebr = l.EbrLba > prevEnd && l.EbrLba < l.StartLba ? l.EbrLba
                          : Math.Max(prevEnd + 1, l.StartLba - t.AlignSectors);
-                if (ebr >= l.StartLba) throw new InvalidOperationException($"Sem espaço para o EBR antes da partição lógica em {l.StartLba}.");
+                if (ebr >= l.StartLba) throw new InvalidOperationException(L.T($"Sem espaço para o EBR antes da partição lógica em {l.StartLba}."));
                 l.EbrLba = ebr;
                 prevEnd = l.EndLba;
             }

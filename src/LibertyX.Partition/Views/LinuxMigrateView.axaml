@@ -1,4 +1,5 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LinuxMigrateView" x:DataType="vm:LinuxMigrateViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LinuxMigrateView" x:DataType="vm:LinuxMigrateViewModel">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Margin="0,4,0,18">
       <TextBlock Classes="h1" Text="{Binding Title}" />
@@ -6,18 +7,18 @@
     </StackPanel>
     <Grid ColumnDefinitions="*,24,1.15*">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="10"><TextBlock Classes="section" Text="DISCO NOVO (SERÁ APAGADO)" /><ContentControl Content="{Binding Target}" /></StackPanel>
+        <StackPanel Spacing="10"><TextBlock Classes="section" Text="{l:T 'DISCO NOVO (SERÁ APAGADO)'}" /><ContentControl Content="{Binding Target}" /></StackPanel>
       </ScrollViewer>
       <Border Grid.Column="2" Classes="glass" Padding="20,16" VerticalAlignment="Top">
         <StackPanel Spacing="12">
-          <TextBlock Classes="section" Text="O QUE VAI PARA O DISCO NOVO" />
+          <TextBlock Classes="section" Text="{l:T 'O QUE VAI PARA O DISCO NOVO'}" />
           <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
           <ItemsControl ItemsSource="{Binding Pieces}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:MigratePieceRow">
                 <Border Classes="inset" Padding="12,9" Margin="0,0,0,8">
                   <Grid ColumnDefinitions="Auto,*,Auto">
-                    <CheckBox IsChecked="{Binding Include}" IsEnabled="{Binding Optional}" VerticalAlignment="Center" Margin="0,0,6,0" ToolTip.Tip="Partições do sistema vão sempre; as de dados podem ficar no disco antigo." />
+                    <CheckBox IsChecked="{Binding Include}" IsEnabled="{Binding Optional}" VerticalAlignment="Center" Margin="0,0,6,0" ToolTip.Tip="{l:T 'Partições do sistema vão sempre; as de dados podem ficar no disco antigo.'}" />
                     <StackPanel Grid.Column="1">
                       <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                       <TextBlock Text="{Binding Detail}" Classes="faint" TextWrapping="Wrap" />
@@ -35,7 +36,7 @@
             <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" />
           </Border>
           <Button Classes="primary" Command="{Binding RunCommand}" IsEnabled="{Binding CanRun}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="16,12">
-            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcPlay}" /><TextBlock Text="Começar" /></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcPlay}" /><TextBlock Text="{l:T 'Começar'}" /></StackPanel>
           </Button>
         </StackPanel>
       </Border>

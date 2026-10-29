@@ -22,11 +22,11 @@ public sealed partial class BitLockerRow(WinCommands.BitLockerInfo i, BitLockerV
     public bool CanLock => Unlocked && Encrypted;
     public string StatusText => I.Status switch
     {
-        "FullyEncrypted" => "Criptografado", "FullyDecrypted" => "Sem BitLocker", "EncryptionInProgress" => $"Criptografando… {I.Percent}%",
-        "DecryptionInProgress" => $"Descriptografando… {100 - I.Percent}%", "EncryptionPaused" => "Criptografia pausada", _ => I.Status,
+        "FullyEncrypted" => L.T("Criptografado"), "FullyDecrypted" => L.T("Sem BitLocker"), "EncryptionInProgress" => L.T($"Criptografando… {I.Percent}%"),
+        "DecryptionInProgress" => L.T($"Descriptografando… {100 - I.Percent}%"), "EncryptionPaused" => L.T("Criptografia pausada"), _ => I.Status,
     };
-    public string LockText => Locked ? "Bloqueado" : "Desbloqueado";
-    public string Detail => Encrypted ? $"{I.Method} · protetores: {(I.Protectors.Length > 0 ? I.Protectors : "nenhum")} · proteção {(I.Protection == "On" ? "ativa" : "suspensa")}" : "Volume sem criptografia.";
+    public string LockText => Locked ? L.T("Bloqueado") : L.T("Desbloqueado");
+    public string Detail => Encrypted ? L.T($"{I.Method} · protetores: {(I.Protectors.Length > 0 ? I.Protectors : "nenhum")} · proteção {(I.Protection == "On" ? "ativa" : "suspensa")}") : L.T("Volume sem criptografia.");
     public double Percent => I.Percent / 100.0;
     public IAsyncRelayCommand Unlock => new AsyncRelayCommand(() => owner.Unlock(this));
     public IAsyncRelayCommand LockCmd => new AsyncRelayCommand(() => owner.Lock(this));
@@ -49,26 +49,26 @@ public sealed partial class BitLockerViewModel : PageViewModel
     private async Task Load()
     {
         Volumes.Clear();
-        if (!OperatingSystem.IsWindows()) { Message = "O BitLocker só é gerenciado no Windows."; return; }
+        if (!OperatingSystem.IsWindows()) { Message = L.T("O BitLocker só é gerenciado no Windows."); return; }
         Busy = true;
         var list = await WinCommands.BitLockerStatus();
         Busy = false;
         foreach (var v in list) Volumes.Add(new BitLockerRow(v, this));
-        Message = list.Count == 0 ? "Não foi possível consultar o BitLocker (no Windows Home, só a “Criptografia do dispositivo” existe)." : "";
+        Message = list.Count == 0 ? L.T("Não foi possível consultar o BitLocker (no Windows Home, só a “Criptografia do dispositivo” existe).") : "";
     }
 
     public async Task Unlock(BitLockerRow r)
     {
-        var f = new FormDialogViewModel { Title = $"Desbloquear {r.Mount}", IconKey = "Unlock", ConfirmText = "Desbloquear" };
-        var mode = f.Add(new ChoiceField { Label = "Com" });
-        mode.Options.Add("Senha"); mode.Options.Add("Chave de recuperação (48 dígitos)");
-        var pw = f.Add(new TextField { Label = "Senha", Password = true });
-        var key = f.Add(new TextField { Label = "Chave de recuperação", Watermark = "000000-000000-000000-000000-000000-000000-000000-000000", IsVisible = false });
+        var f = new FormDialogViewModel { Title = L.T($"Desbloquear {r.Mount}"), IconKey = "Unlock", ConfirmText = L.T("Desbloquear") };
+        var mode = f.Add(new ChoiceField { Label = L.T("Com") });
+        mode.Options.Add(L.T("Senha")); mode.Options.Add(L.T("Chave de recuperação (48 dígitos)"));
+        var pw = f.Add(new TextField { Label = L.T("Senha"), Password = true });
+        var key = f.Add(new TextField { Label = L.T("Chave de recuperação"), Watermark = "000000-000000-000000-000000-000000-000000-000000-000000", IsVisible = false });
         mode.Changed += i => { pw.IsVisible = i == 0; key.IsVisible = i == 1; };
-        f.Note("Desbloqueado, o volume pode ser lido normalmente — inclusive pela Recuperação de dados, que passa a enxergar o conteúdo decifrado.", "gold");
+        f.Note(L.T("Desbloqueado, o volume pode ser lido normalmente — inclusive pela Recuperação de dados, que passa a enxergar o conteúdo decifrado."), "gold");
         if (!await Main.ShowDialog(f)) return;
         var res = mode.SelectedIndex == 0 ? await WinCommands.BitLockerUnlockPassword(r.Mount, pw.Value) : await WinCommands.BitLockerUnlockRecovery(r.Mount, key.Value.Trim());
-        Main.ShowToast(res.Ok ? $"{r.Mount} desbloqueado." : "Não desbloqueou: " + res.Message);
+        Main.ShowToast(res.Ok ? L.T($"{r.Mount} desbloqueado.") : L.T("Não desbloqueou: ") + res.Message);
         await Load();
         if (res.Ok) await Main.Refresh();
     }
@@ -76,43 +76,43 @@ public sealed partial class BitLockerViewModel : PageViewModel
     public async Task Lock(BitLockerRow r)
     {
         var res = await WinCommands.BitLockerLock(r.Mount);
-        Main.ShowToast(res.Ok ? $"{r.Mount} bloqueado." : res.Message);
+        Main.ShowToast(res.Ok ? L.T($"{r.Mount} bloqueado.") : res.Message);
         await Load();
     }
 
     public async Task Disable(BitLockerRow r)
     {
-        if (!await Main.Confirm("Desativar BitLocker", $"{r.Mount} será descriptografado em segundo plano (pode levar horas; o computador pode ser usado normalmente).", "Desativar")) return;
+        if (!await Main.Confirm(L.T("Desativar BitLocker"), L.T($"{r.Mount} será descriptografado em segundo plano (pode levar horas; o computador pode ser usado normalmente)."), L.T("Desativar"))) return;
         var res = await WinCommands.BitLockerDisable(r.Mount);
-        Main.ShowToast(res.Ok ? "Descriptografia iniciada." : res.Message);
+        Main.ShowToast(res.Ok ? L.T("Descriptografia iniciada.") : res.Message);
         await Load();
     }
 
     public async Task Enable(BitLockerRow r)
     {
-        var f = new FormDialogViewModel { Title = $"Ativar BitLocker em {r.Mount}", IconKey = "Lock", ConfirmText = "Ativar" };
-        var pw = f.Add(new TextField { Label = "Senha (mínimo 8 caracteres)", Password = true });
-        var pw2 = f.Add(new TextField { Label = "Repita a senha", Password = true });
-        f.Note("Uma chave de recuperação também é criada. Guarde-a (botão “Chave de recuperação”) — sem ela e sem a senha, os dados ficam inacessíveis para sempre.", "warn");
-        f.Validate = () => pw.Value.Length < 8 ? "A senha precisa de 8 caracteres ou mais." : pw.Value != pw2.Value ? "As senhas não conferem." : null;
+        var f = new FormDialogViewModel { Title = L.T($"Ativar BitLocker em {r.Mount}"), IconKey = "Lock", ConfirmText = L.T("Ativar") };
+        var pw = f.Add(new TextField { Label = L.T("Senha (mínimo 8 caracteres)"), Password = true });
+        var pw2 = f.Add(new TextField { Label = L.T("Repita a senha"), Password = true });
+        f.Note(L.T("Uma chave de recuperação também é criada. Guarde-a (botão “Chave de recuperação”) — sem ela e sem a senha, os dados ficam inacessíveis para sempre."), "warn");
+        f.Validate = () => pw.Value.Length < 8 ? L.T("A senha precisa de 8 caracteres ou mais.") : pw.Value != pw2.Value ? L.T("As senhas não conferem.") : null;
         if (!await Main.ShowDialog(f)) return;
         var res = await WinCommands.BitLockerEnablePassword(r.Mount, pw.Value);
-        Main.ShowToast(res.Ok ? "Criptografia iniciada." : res.Message);
+        Main.ShowToast(res.Ok ? L.T("Criptografia iniciada.") : res.Message);
         await Load();
     }
 
     public async Task ShowKeys(BitLockerRow r)
     {
         var res = await WinCommands.BitLockerRecoveryKeys(r.Mount);
-        var f = new FormDialogViewModel { Title = $"Chaves de recuperação de {r.Mount}", IconKey = "Key", ConfirmText = "Fechar" };
+        var f = new FormDialogViewModel { Title = L.T($"Chaves de recuperação de {r.Mount}"), IconKey = "Key", ConfirmText = L.T("Fechar") };
         var lines = res.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (lines.Length == 0) f.Note(res.Ok ? "Nenhuma chave de recuperação cadastrada neste volume." : res.Message, "warn");
+        if (lines.Length == 0) f.Note(res.Ok ? L.T("Nenhuma chave de recuperação cadastrada neste volume.") : res.Message, "warn");
         foreach (var l in lines)
         {
             var parts = l.Split(' ', 2);
             f.Add(new InfoField { Label = parts[0], Text = parts.Length > 1 ? parts[1] : "" });
         }
-        f.Note("Guarde a chave fora deste computador (papel, outro dispositivo). Selecione o texto para copiar.", "gold");
+        f.Note(L.T("Guarde a chave fora deste computador (papel, outro dispositivo). Selecione o texto para copiar."), "gold");
         await Main.ShowDialog(f);
     }
 }
@@ -132,7 +132,7 @@ public sealed partial class BenchRow : ObservableObject
 
 public sealed partial class BenchmarkViewModel : PageViewModel
 {
-    public override string Title => "Benchmark de disco";
+    public override string Title => L.T("Benchmark de disco");
     public override string IconKey => "Benchmark";
     public ObservableCollection<string> Drives { get; } = [];
     [ObservableProperty] private int _driveIndex;
@@ -151,11 +151,11 @@ public sealed partial class BenchmarkViewModel : PageViewModel
     private List<DiskInfo> _disks = [];
     private CancellationTokenSource? _cts;
     public List<string> Sizes { get; } = ["256 MB", "1 GB", "4 GB"];
-    public List<string> Durations { get; } = ["3 s por teste", "5 s por teste", "10 s por teste"];
+    public List<string> Durations { get; } = [L.T("3 s por teste"), L.T("5 s por teste"), L.T("10 s por teste")];
 
     public BenchmarkViewModel()
     {
-        foreach (var l in new[] { "Sequencial 1 MiB · fila 8", "Sequencial 1 MiB · fila 1", "Aleatório 4 KiB · fila 32", "Aleatório 4 KiB · fila 1" })
+        foreach (var l in new[] { L.T("Sequencial 1 MiB · fila 8"), L.T("Sequencial 1 MiB · fila 1"), L.T("Aleatório 4 KiB · fila 32"), L.T("Aleatório 4 KiB · fila 1") })
             Rows.Add(new BenchRow { Label = l });
     }
 
@@ -177,8 +177,8 @@ public sealed partial class BenchmarkViewModel : PageViewModel
         _drives = list;
         Drives.Clear();
         foreach (var d in list)
-            Drives.Add(OperatingSystem.IsWindows() ? $"{d.Root.TrimEnd('\\')} {d.Label} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? " · removível" : "")}"
-                                                   : $"{d.Root}{(d.Label.Length > 0 ? $" ({d.Label})" : "")} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? " · removível" : "")}");
+            Drives.Add(OperatingSystem.IsWindows() ? L.T($"{d.Root.TrimEnd('\\')} {d.Label} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? L.T(" · removível") : "")}")
+                                                   : L.T($"{d.Root}{(d.Label.Length > 0 ? $" ({d.Label})" : "")} · {Fmt.Size(d.Free)} livres{(d.Type == DriveType.Removable ? L.T(" · removível") : "")}"));
         DriveIndex = Drives.Count > 0 ? 0 : -1;
     }
 
@@ -194,7 +194,7 @@ public sealed partial class BenchmarkViewModel : PageViewModel
         if (DriveIndex < 0 || DriveIndex >= _drives.Count) return;
         var drive = _drives[DriveIndex];
         long size = SizeIndex switch { 0 => 256L << 20, 2 => 4L << 30, _ => 1L << 30 };
-        if (drive.Free < size + (256L << 20)) { await Main.Alert("Pouco espaço", $"O teste precisa de {Fmt.Size(size)} livres em {drive.Root}."); return; }
+        if (drive.Free < size + (256L << 20)) { await Main.Alert(L.T("Pouco espaço"), L.T($"O teste precisa de {Fmt.Size(size)} livres em {drive.Root}.")); return; }
         var dur = TimeSpan.FromSeconds(DurationIndex switch { 0 => 3, 2 => 10, _ => 5 });
         foreach (var r in Rows) { r.Read = r.Write = "—"; r.ReadBar = r.WriteBar = 0; r.ReadDetail = r.WriteDetail = ""; }
         _cts = new CancellationTokenSource();
@@ -222,9 +222,9 @@ public sealed partial class BenchmarkViewModel : PageViewModel
         // não passam mais pela linha da tela — que travava e ainda inflava a latência medida
         var token = _cts.Token;
         bool write = IncludeWrite;
-        try { await Task.Run(() => DiskBenchmark.RunAsync(drive.Root, size, dur, write, prog, token)); Phase = DiskBenchmark.NoDirect ? "Concluído — este sistema de arquivos não aceita leitura direta: a leitura passou pelo cache" : "Concluído"; }
-        catch (OperationCanceledException) { Phase = "Cancelado"; }
-        catch (Exception ex) { Phase = "Erro: " + ex.Message; }
+        try { await Task.Run(() => DiskBenchmark.RunAsync(drive.Root, size, dur, write, prog, token)); Phase = DiskBenchmark.NoDirect ? L.T("Concluído — este sistema de arquivos não aceita leitura direta: a leitura passou pelo cache") : L.T("Concluído"); }
+        catch (OperationCanceledException) { Phase = L.T("Cancelado"); }
+        catch (Exception ex) { Phase = L.T("Erro: ") + ex.Message; }
         finally { Running = false; Fraction = 1; }
     }
 
@@ -236,7 +236,7 @@ public sealed partial class BenchmarkViewModel : PageViewModel
         if (_disks.Count == 0) return;
         var d = _disks[DiskIndex];
         Running = true;
-        CurveText = "Lendo 100 pontos ao longo do disco…";
+        CurveText = L.T("Lendo 100 pontos ao longo do disco…");
         _cts = new CancellationTokenSource();
         try
         {
@@ -248,10 +248,10 @@ public sealed partial class BenchmarkViewModel : PageViewModel
             Curve = pts.Select(p => p.mbps).ToList();
             CurveVersion++;
             var v = Curve.Where(x => x > 0).ToList();
-            CurveText = v.Count == 0 ? "Sem leituras." : $"Início {v.First():0} MB/s · fim {v.Last():0} MB/s · mínima {v.Min():0} MB/s · acesso médio {pts.Average(p => p.accessMs):0.0} ms" +
-                (pts.Any(p => p.mbps == 0) ? " · ATENÇÃO: trechos ilegíveis" : "");
+            CurveText = v.Count == 0 ? L.T("Sem leituras.") : L.T($"Início {v.First():0} MB/s · fim {v.Last():0} MB/s · mínima {v.Min():0} MB/s · acesso médio {pts.Average(p => p.accessMs):0.0} ms") +
+                (pts.Any(p => p.mbps == 0) ? L.T(" · ATENÇÃO: trechos ilegíveis") : "");
         }
-        catch (Exception ex) { CurveText = "Erro: " + ex.Message; }
+        catch (Exception ex) { CurveText = L.T("Erro: ") + ex.Message; }
         finally { Running = false; }
     }
 }
@@ -260,7 +260,7 @@ public sealed partial class BenchmarkViewModel : PageViewModel
 
 public sealed partial class SpaceViewModel : PageViewModel
 {
-    public override string Title => "Analisador de espaço";
+    public override string Title => L.T("Analisador de espaço");
     public override string IconKey => "Space";
     [ObservableProperty] private string _path = "";
     [ObservableProperty] private bool _busy;
@@ -290,27 +290,27 @@ public sealed partial class SpaceViewModel : PageViewModel
     [RelayCommand] private void UseRoot(string r) => Path = r;
 
     [RelayCommand]
-    private async Task Browse() { var f = await MainViewModel.PickFolder("Pasta para analisar"); if (f != null) Path = f; }
+    private async Task Browse() { var f = await MainViewModel.PickFolder(L.T("Pasta para analisar")); if (f != null) Path = f; }
 
     [RelayCommand]
     private async Task Analyze()
     {
-        if (!Directory.Exists(Path)) { Main.ShowToast("Pasta não encontrada."); return; }
+        if (!Directory.Exists(Path)) { Main.ShowToast(L.T("Pasta não encontrada.")); return; }
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
         Busy = true;
-        var prog = new Progress<SpaceProgress>(p => Status = $"{p.Files:N0} arquivos · {Fmt.Size(p.Bytes)} · {p.Current}");
+        var prog = new Progress<SpaceProgress>(p => Status = L.T($"{p.Files:N0} arquivos · {Fmt.Size(p.Bytes)} · {p.Current}"));
         try
         {
             var path = Path;
             _root = await Task.Run(() => SpaceAnalyzer.Analyze(path, prog, _cts.Token));
-            Status = $"{_root.Files:N0} arquivos · {Fmt.Size(_root.Size)}";
+            Status = L.T($"{_root.Files:N0} arquivos · {Fmt.Size(_root.Size)}");
             Open(_root);
             Largest.Clear();
             foreach (var f in SpaceAnalyzer.AllFiles(_root).OrderByDescending(f => f.Size).Take(12)) Largest.Add(new(Fmt.Size(f.Size), f.FullPath));
             ByType.Clear();
             foreach (var g in SpaceAnalyzer.AllFiles(_root).GroupBy(f => FileTypes.CategoryName(FileTypes.Categorize(f.Extension))).Select(g => (g.Key, sum: g.Sum(x => x.Size), n: g.Count())).OrderByDescending(g => g.sum))
-                ByType.Add(new(g.Key, $"{Fmt.Size(g.sum)} · {g.n:N0} arquivos"));
+                ByType.Add(new(g.Key, L.T($"{Fmt.Size(g.sum)} · {g.n:N0} arquivos")));
         }
         catch (OperationCanceledException) { Status = "Cancelado."; }
         finally { Busy = false; }
@@ -339,9 +339,9 @@ public sealed partial class SpaceViewModel : PageViewModel
     {
         var s = Selected;
         if (s == null || !(OperatingSystem.IsWindows() || OperatingSystem.IsLinux())) return;
-        if (!await Main.Confirm("Mandar para a Lixeira", $"{s.FullPath}\n{Fmt.Size(s.Size)}", "Mover para a Lixeira", true)) return;
-        if (WinShell.Recycle([s.FullPath])) { SpaceAnalyzer.Remove(s); Selected = null; Open(Current!); Main.ShowToast("Movido para a Lixeira."); }
-        else Main.ShowToast("Não foi possível mover (arquivo em uso?).");
+        if (!await Main.Confirm(L.T("Mandar para a Lixeira"), $"{s.FullPath}\n{Fmt.Size(s.Size)}", L.T("Mover para a Lixeira"), true)) return;
+        if (WinShell.Recycle([s.FullPath])) { SpaceAnalyzer.Remove(s); Selected = null; Open(Current!); Main.ShowToast(L.T("Movido para a Lixeira.")); }
+        else Main.ShowToast(L.T("Não foi possível mover (arquivo em uso?)."));
     }
 }
 
@@ -360,19 +360,19 @@ public sealed class DupGroupRow
 {
     public required DupGroup G { get; init; }
     public List<DupFileRow> Files { get; } = [];
-    public string Header => $"{G.Files.Count} cópias de {System.IO.Path.GetFileName(G.Files[0].Path)} · {Fmt.Size(G.Size)} cada";
-    public string Waste => $"desperdício {Fmt.Size(G.Wasted)}";
+    public string Header => L.T($"{G.Files.Count} cópias de {System.IO.Path.GetFileName(G.Files[0].Path)} · {Fmt.Size(G.Size)} cada");
+    public string Waste => L.T($"desperdício {Fmt.Size(G.Wasted)}");
 }
 
 public sealed partial class DuplicatesViewModel : PageViewModel
 {
-    public override string Title => "Limpador de duplicados";
+    public override string Title => L.T("Limpador de duplicados");
     public override string IconKey => "Duplicates";
     public ObservableCollection<string> Folders { get; } = [];
     public ObservableCollection<DupGroupRow> Groups { get; } = [];
-    public List<string> MinSizes { get; } = ["Qualquer tamanho", "Acima de 100 KB", "Acima de 1 MB", "Acima de 10 MB", "Acima de 100 MB"];
-    public List<string> Kinds { get; } = ["Todos os tipos", "Imagens", "Vídeos", "Áudio", "Documentos", "Compactados"];
-    public List<string> Rules { get; } = ["Manter o mais antigo", "Manter o mais novo", "Manter o de caminho mais curto"];
+    public List<string> MinSizes { get; } = [L.T("Qualquer tamanho"), L.T("Acima de 100 KB"), L.T("Acima de 1 MB"), L.T("Acima de 10 MB"), L.T("Acima de 100 MB")];
+    public List<string> Kinds { get; } = [L.T("Todos os tipos"), L.T("Imagens"), L.T("Vídeos"), L.T("Áudio"), L.T("Documentos"), L.T("Compactados")];
+    public List<string> Rules { get; } = [L.T("Manter o mais antigo"), L.T("Manter o mais novo"), L.T("Manter o de caminho mais curto")];
     [ObservableProperty] private int _minIndex = 2;
     [ObservableProperty] private int _kindIndex;
     [ObservableProperty] private int _ruleIndex;
@@ -382,19 +382,19 @@ public sealed partial class DuplicatesViewModel : PageViewModel
     [ObservableProperty] private bool _hasSelection;
     private CancellationTokenSource? _cts;
 
-    [RelayCommand] private async Task AddFolder() { var f = await MainViewModel.PickFolder("Pasta para procurar"); if (f != null && !Folders.Contains(f)) Folders.Add(f); }
+    [RelayCommand] private async Task AddFolder() { var f = await MainViewModel.PickFolder(L.T("Pasta para procurar")); if (f != null && !Folders.Contains(f)) Folders.Add(f); }
     [RelayCommand] private void RemoveFolder(string f) => Folders.Remove(f);
 
     [RelayCommand]
     private async Task Find()
     {
-        if (Folders.Count == 0) { Main.ShowToast("Adicione ao menos uma pasta."); return; }
+        if (Folders.Count == 0) { Main.ShowToast(L.T("Adicione ao menos uma pasta.")); return; }
         long min = MinIndex switch { 0 => 1, 1 => 100 << 10, 2 => 1 << 20, 3 => 10 << 20, _ => 100 << 20 };
         FileCategory? cat = KindIndex switch { 1 => FileCategory.Image, 2 => FileCategory.Video, 3 => FileCategory.Audio, 4 => FileCategory.Document, 5 => FileCategory.Archive, _ => null };
         Func<string, bool>? filter = cat == null ? null : p => FileTypes.Categorize(System.IO.Path.GetExtension(p).TrimStart('.')) == cat;
         _cts = new CancellationTokenSource();
         Busy = true; Groups.Clear();
-        var prog = new Progress<DupProgress>(p => Status = p.Total > 0 ? $"{p.Phase}: {p.Done:N0}/{p.Total:N0} · {p.Groups:N0} grupos · {Fmt.Size(p.WastedBytes)} repetidos" : $"{p.Phase}: {p.Done:N0}");
+        var prog = new Progress<DupProgress>(p => Status = p.Total > 0 ? L.T($"{p.Phase}: {p.Done:N0}/{p.Total:N0} · {p.Groups:N0} grupos · {Fmt.Size(p.WastedBytes)} repetidos") : $"{p.Phase}: {p.Done:N0}");
         try
         {
             var folders = Folders.ToList();
@@ -405,7 +405,7 @@ public sealed partial class DuplicatesViewModel : PageViewModel
                 foreach (var f in g.Files) row.Files.Add(new DupFileRow(f, this));
                 Groups.Add(row);
             }
-            Status = res.Count == 0 ? "Nenhum duplicado encontrado." : $"{res.Count:N0} grupos · {Fmt.Size(res.Sum(g => g.Wasted))} ocupados por cópias";
+            Status = res.Count == 0 ? L.T("Nenhum duplicado encontrado.") : L.T($"{res.Count:N0} grupos · {Fmt.Size(res.Sum(g => g.Wasted))} ocupados por cópias");
             ApplyRule();
         }
         catch (OperationCanceledException) { Status = "Cancelado."; }
@@ -432,7 +432,7 @@ public sealed partial class DuplicatesViewModel : PageViewModel
     {
         var sel = Groups.SelectMany(g => g.Files).Where(f => f.IsChecked).ToList();
         HasSelection = sel.Count > 0;
-        Selection = sel.Count == 0 ? "Nada marcado" : $"{sel.Count:N0} arquivos marcados · libera {Fmt.Size(sel.Sum(f => f.F.Size))}";
+        Selection = sel.Count == 0 ? L.T("Nada marcado") : L.T($"{sel.Count:N0} arquivos marcados · libera {Fmt.Size(sel.Sum(f => f.F.Size))}");
     }
 
     [RelayCommand]
@@ -442,12 +442,12 @@ public sealed partial class DuplicatesViewModel : PageViewModel
         if (sel.Count == 0) return;
         if (Groups.Any(g => g.Files.All(f => f.IsChecked)))
         {
-            await Main.Alert("Grupo inteiro marcado", "Em algum grupo TODAS as cópias estão marcadas — assim não sobraria nenhuma. Desmarque ao menos uma por grupo.", "danger");
+            await Main.Alert(L.T("Grupo inteiro marcado"), L.T("Em algum grupo TODAS as cópias estão marcadas — assim não sobraria nenhuma. Desmarque ao menos uma por grupo."), "danger");
             return;
         }
-        if (!await Main.Confirm("Mover duplicados para a Lixeira", $"{sel.Count:N0} arquivos ({Fmt.Size(sel.Sum(f => f.F.Size))}) vão para a Lixeira — dá para restaurar de lá.", "Mover para a Lixeira")) return;
+        if (!await Main.Confirm(L.T("Mover duplicados para a Lixeira"), L.T($"{sel.Count:N0} arquivos ({Fmt.Size(sel.Sum(f => f.F.Size))}) vão para a Lixeira — dá para restaurar de lá."), L.T("Mover para a Lixeira"))) return;
         bool ok = WinShell.Recycle(sel.Select(s => s.F.Path));
-        Main.ShowToast(ok ? "Duplicados movidos para a Lixeira." : "Alguns arquivos não puderam ser movidos.");
+        Main.ShowToast(ok ? L.T("Duplicados movidos para a Lixeira.") : L.T("Alguns arquivos não puderam ser movidos."));
         foreach (var g in Groups.ToList())
         {
             g.Files.RemoveAll(f => f.IsChecked && !File.Exists(f.Path));
@@ -461,13 +461,13 @@ public sealed partial class DuplicatesViewModel : PageViewModel
 
 public sealed partial class BootMediaViewModel : PageViewModel
 {
-    public override string Title => "Pendrive de boot e imagens";
+    public override string Title => L.T("Pendrive de boot e imagens");
     public override string IconKey => "Boot";
     public PickerViewModel Target { get; }
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ImageName))] private string _imagePath = "";
     public string ImageName => System.IO.Path.GetFileName(ImagePath);
-    [ObservableProperty] private string _imageInfo = "Arraste um arquivo para cá ou clique em Escolher. ISO, IMG, RAW, BIN, DD, WIC — também compactados em ZIP, GZ, XZ, BZ2 ou ZST.";
+    [ObservableProperty] private string _imageInfo = L.T("Arraste um arquivo para cá ou clique em Escolher. ISO, IMG, RAW, BIN, DD, WIC — também compactados em ZIP, GZ, XZ, BZ2 ou ZST.");
     [ObservableProperty] private string _sha = "";
     [ObservableProperty] private bool _hashing;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Effective), nameof(IsWindows), nameof(IsFiles), nameof(IsRaw), nameof(ModeNote))] private int _mode;
@@ -482,8 +482,8 @@ public sealed partial class BootMediaViewModel : PageViewModel
     [ObservableProperty] private bool _showAllDisks;
     private ImageSource? _src;
 
-    public List<string> Modes { get; } = ["Automático (pelo conteúdo da imagem)", "Instalação do Windows", "Copiar os arquivos da ISO (FAT32)", "Gravação direta (como o balenaEtcher)"];
-    public List<string> Schemes { get; } = ["MBR — inicia em BIOS e UEFI", "GPT — só UEFI (PCs atuais)"];
+    public List<string> Modes { get; } = [L.T("Automático (pelo conteúdo da imagem)"), L.T("Instalação do Windows"), L.T("Copiar os arquivos da ISO (FAT32)"), L.T("Gravação direta (como o balenaEtcher)")];
+    public List<string> Schemes { get; } = [L.T("MBR — inicia em BIOS e UEFI"), L.T("GPT — só UEFI (PCs atuais)")];
 
     /// <summary>O modo que vai valer: o escolhido, ou o que a imagem pede no automático.</summary>
     public int Effective => Mode != 0 ? Mode : _src?.Kind switch
@@ -497,10 +497,10 @@ public sealed partial class BootMediaViewModel : PageViewModel
     public bool IsRaw => Effective == 3;
     public string ModeNote => Effective switch
     {
-        1 => OperatingSystem.IsLinux() ? "Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo wimlib. As opções abaixo valem para o Windows 11."
-                                       : "Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo DISM. As opções abaixo valem para o Windows 11.",
-        2 => "Tabela e FAT32 novos e os arquivos da ISO copiados — para ISOs de ferramentas UEFI que não são híbridas.",
-        _ => "Setor a setor, como o balenaEtcher e o modo DD do Rufus: ISOs de Linux e imagens de disco (Raspberry Pi, Home Assistant…). Imagens compactadas são descompactadas durante a gravação.",
+        1 => OperatingSystem.IsLinux() ? L.T("Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo wimlib. As opções abaixo valem para o Windows 11.")
+                                       : L.T("Como o Rufus: tabela e FAT32 novos, arquivos da ISO copiados, install.wim acima de 4 GB dividido pelo DISM. As opções abaixo valem para o Windows 11."),
+        2 => L.T("Tabela e FAT32 novos e os arquivos da ISO copiados — para ISOs de ferramentas UEFI que não são híbridas."),
+        _ => L.T("Setor a setor, como o balenaEtcher e o modo DD do Rufus: ISOs de Linux e imagens de disco (Raspberry Pi, Home Assistant…). Imagens compactadas são descompactadas durante a gravação."),
     };
     public bool CanWrite => _src != null && Target.Selected != null;
 
@@ -509,8 +509,8 @@ public sealed partial class BootMediaViewModel : PageViewModel
         Target = new PickerViewModel
         {
             ShowPartitions = false,
-            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.IsVirtual ? "Volume lógico: escolha um disco físico." : d.IsImage ? "Escolha um pendrive, cartão ou disco." :
-                !ShowAllDisks && !d.Removable && d.Bus is not ("USB" or "SD" or "MMC") ? "Disco interno — marque “Mostrar todos os discos” se for mesmo este." : null,
+            DiskFilter = d => d.IsSystem ? Ui.SystemDiskInUse : d.IsVirtual ? L.T("Volume lógico: escolha um disco físico.") : d.IsImage ? L.T("Escolha um pendrive, cartão ou disco.") :
+                !ShowAllDisks && !d.Removable && d.Bus is not ("USB" or "SD" or "MMC") ? L.T("Disco interno — marque “Mostrar todos os discos” se for mesmo este.") : null,
         };
         Target.Changed += _ => OnPropertyChanged(nameof(CanWrite));
     }
@@ -521,7 +521,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
     [RelayCommand]
     private async Task PickImage()
     {
-        var f = await MainViewModel.PickFile("Imagem para gravar", ("Imagens e ISOs", ["*.iso", "*.img", "*.raw", "*.bin", "*.dd", "*.wic", "*.zip", "*.gz", "*.xz", "*.bz2", "*.zst"]));
+        var f = await MainViewModel.PickFile(L.T("Imagem para gravar"), (L.T("Imagens e ISOs"), ["*.iso", "*.img", "*.raw", "*.bin", "*.dd", "*.wic", "*.zip", "*.gz", "*.xz", "*.bz2", "*.zst"]));
         if (f != null) await SetImage(f);
     }
 
@@ -530,7 +530,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
     {
         Sha = "";
         ImagePath = path;
-        ImageInfo = "Lendo a imagem…";
+        ImageInfo = L.T("Lendo a imagem…");
         try
         {
             _src = await Task.Run(() => ImageSource.Inspect(path));
@@ -540,7 +540,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
         catch (Exception ex)
         {
             _src = null;
-            ImageInfo = "Não consegui ler esta imagem: " + ex.Message;
+            ImageInfo = L.T("Não consegui ler esta imagem: ") + ex.Message;
         }
         OnPropertyChanged(nameof(Effective)); OnPropertyChanged(nameof(IsWindows)); OnPropertyChanged(nameof(IsFiles));
         OnPropertyChanged(nameof(IsRaw)); OnPropertyChanged(nameof(ModeNote)); OnPropertyChanged(nameof(CanWrite));
@@ -552,7 +552,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
     {
         if (ImagePath.Length == 0 || Hashing) return;
         Hashing = true;
-        Sha = "Calculando…";
+        Sha = L.T("Calculando…");
         try
         {
             string path = ImagePath;
@@ -563,7 +563,7 @@ public sealed partial class BootMediaViewModel : PageViewModel
             });
             Sha = h;
         }
-        catch (Exception ex) { Sha = "Erro: " + ex.Message; }
+        catch (Exception ex) { Sha = L.T("Erro: ") + ex.Message; }
         finally { Hashing = false; }
     }
 
@@ -572,24 +572,24 @@ public sealed partial class BootMediaViewModel : PageViewModel
     {
         var d = Target.Selected?.Disk; var src = _src;
         if (d == null || src == null) return;
-        if (!await Main.RequirePremium("Pendrive de boot e imagens", "Gravar ISOs e imagens de disco em pendrive ou cartão é do Premium.")) return;
+        if (!await Main.RequirePremium(L.T("Pendrive de boot e imagens"), L.T("Gravar ISOs e imagens de disco em pendrive ou cartão é do Premium."))) return;
         int mode = Effective;
-        if (mode is 1 or 2 && !OperatingSystem.IsWindows() && !OperatingSystem.IsLinux()) { await Main.Alert("Indisponível aqui", "Copiar os arquivos da ISO exige montar a ISO pelo sistema."); return; }
-        if (mode is 1 or 2 && src.Compression != null) { await Main.Alert("ISO compactada", "Para copiar os arquivos, descompacte a ISO antes — ou use a gravação direta."); return; }
-        if (IsWindows && WindowsSetupOptions.ValidateUser(UserName) is { } ue) { await Main.Alert("Nome da conta", ue); return; }
-        if (src.Length is { } need && need > d.Size) { await Main.Alert("Não cabe", $"A imagem tem {Fmt.Size(need)} e {d.Title} tem {Fmt.Size(d.Size)}."); return; }
+        if (mode is 1 or 2 && !OperatingSystem.IsWindows() && !OperatingSystem.IsLinux()) { await Main.Alert(L.T("Indisponível aqui"), L.T("Copiar os arquivos da ISO exige montar a ISO pelo sistema.")); return; }
+        if (mode is 1 or 2 && src.Compression != null) { await Main.Alert(L.T("ISO compactada"), L.T("Para copiar os arquivos, descompacte a ISO antes — ou use a gravação direta.")); return; }
+        if (IsWindows && WindowsSetupOptions.ValidateUser(UserName) is { } ue) { await Main.Alert(L.T("Nome da conta"), ue); return; }
+        if (src.Length is { } need && need > d.Size) { await Main.Alert(L.T("Não cabe"), L.T($"A imagem tem {Fmt.Size(need)} e {d.Title} tem {Fmt.Size(d.Size)}.")); return; }
         if (!d.Removable && d.Bus is not ("USB" or "SD" or "MMC") &&
-            !await Main.Confirm("Disco interno", $"{d.Title} ({d.Model}, {Fmt.Size(d.Size)}) não é pendrive nem cartão. Tudo nele será apagado.", "É este mesmo", danger: true)) return;
+            !await Main.Confirm(L.T("Disco interno"), L.T($"{d.Title} ({d.Model}, {Fmt.Size(d.Size)}) não é pendrive nem cartão. Tudo nele será apagado."), L.T("É este mesmo"), danger: true)) return;
         string iso = src.Path, label = Label;
         bool gpt = Scheme == 1, verify = Verify;
         var opts = IsWindows ? new WindowsSetupOptions(BypassRequirements, LocalAccount, string.IsNullOrWhiteSpace(UserName) ? null : UserName.Trim(), SkipPrivacy, NoAutoEncryption) : null;
         string how = mode switch
         {
-            1 => $"instalação do Windows, {(gpt ? "GPT" : "MBR")}" + (opts is { Any: true } ? $" ({opts.Summary})" : ""),
-            2 => $"arquivos da ISO em FAT32, {(gpt ? "GPT" : "MBR")}",
-            _ => "gravação direta" + (verify ? " com verificação" : ""),
+            1 => L.T($"instalação do Windows, {(gpt ? "GPT" : "MBR")}") + (opts is { Any: true } ? $" ({opts.Summary})" : ""),
+            2 => L.T($"arquivos da ISO em FAT32, {(gpt ? "GPT" : "MBR")}"),
+            _ => L.T("gravação direta") + (verify ? L.T(" com verificação") : ""),
         };
-        Main.Queue("Gravar imagem", $"{Path.GetFileName(iso)} → {d.Title} ({d.Model}, {Fmt.Size(d.Size)}): {how} — apaga tudo que está nele", "Boot", s =>
+        Main.Queue(L.T("Gravar imagem"), L.T($"{Path.GetFileName(iso)} → {d.Title} ({d.Model}, {Fmt.Size(d.Size)}): {how} — apaga tudo que está nele"), "Boot", s =>
         {
             var dq = MainViewModel.Fresh(d);
             return mode == 3 ? Task.Run(() => BootMedia.WriteImage(ImageSource.Inspect(iso), dq, verify, s))

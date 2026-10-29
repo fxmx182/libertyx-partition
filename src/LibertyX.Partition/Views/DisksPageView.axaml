@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:LibertyX.Partition.ViewModels"
              xmlns:c="using:LibertyX.Partition.Controls"
@@ -18,15 +19,15 @@
     <DockPanel Container.Name="discos" Container.Sizing="Width">
       <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,18">
         <StackPanel>
-          <TextBlock Classes="h1" Text="Discos e partições" />
+          <TextBlock Classes="h1" Text="{l:T 'Discos e partições'}" />
           <TextBlock Classes="muted" Text="{Binding Summary}" Margin="0,2,0,0" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenImageCommand}" ToolTip.Tip="Abrir imagem de disco">
-            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcDisc}" Classes="small" /><TextBlock Classes="btnlabel" Text="Abrir imagem de disco" /></StackPanel>
+          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).OpenImageCommand}" ToolTip.Tip="{l:T 'Abrir imagem de disco'}">
+            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcDisc}" Classes="small" /><TextBlock Classes="btnlabel" Text="{l:T 'Abrir imagem de disco'}" /></StackPanel>
           </Button>
-          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RefreshCommand}" ToolTip.Tip="Atualizar">
-            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Classes="btnlabel" Text="Atualizar" /></StackPanel>
+          <Button Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).RefreshCommand}" ToolTip.Tip="{l:T 'Atualizar'}">
+            <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Classes="btnlabel" Text="{l:T 'Atualizar'}" /></StackPanel>
           </Button>
         </StackPanel>
       </Grid>
@@ -54,12 +55,12 @@
                       </StackPanel>
                       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <Border Classes="chip orange" IsVisible="{Binding HasPending}"><TextBlock Text="{Binding PendingText}" /></Border>
-                        <Border Classes="chip gold" IsVisible="{Binding IsSystem}"><TextBlock Text="Windows" /></Border>
-                        <Border Classes="chip" IsVisible="{Binding IsImage}"><TextBlock Text="Imagem · leitura" /></Border>
+                        <Border Classes="chip gold" IsVisible="{Binding IsSystem}"><TextBlock Text="{l:T 'Windows'}" /></Border>
+                        <Border Classes="chip" IsVisible="{Binding IsImage}"><TextBlock Text="{l:T 'Imagem · leitura'}" /></Border>
                         <Border Classes="chip" IsVisible="{Binding HasTemp}"><TextBlock Text="{Binding TempText}" /></Border>
-                        <Border Classes="chip green" IsVisible="{Binding HealthGood}"><TextBlock Text="Saudável" /></Border>
-                        <Border Classes="chip orange" IsVisible="{Binding HealthCaution}"><TextBlock Text="Atenção" /></Border>
-                        <Border Classes="chip red" IsVisible="{Binding HealthBad}"><TextBlock Text="Crítico" /></Border>
+                        <Border Classes="chip green" IsVisible="{Binding HealthGood}"><TextBlock Text="{l:T 'Saudável'}" /></Border>
+                        <Border Classes="chip orange" IsVisible="{Binding HealthCaution}"><TextBlock Text="{l:T 'Atenção'}" /></Border>
+                        <Border Classes="chip red" IsVisible="{Binding HealthBad}"><TextBlock Text="{l:T 'Crítico'}" /></Border>
                       </StackPanel>
                     </Grid>
                   </Button>
@@ -72,13 +73,13 @@
 
                   <StackPanel Spacing="2">
                     <Grid Classes="tbl rowwide" ColumnDefinitions="2.1*,0.95*,0.95*,0.95*,0.9*,2.2*,1.4*" Margin="12,0,12,4">
-                      <TextBlock Classes="section" Text="PARTIÇÃO" />
-                      <TextBlock Grid.Column="1" Classes="section" Text="TAMANHO" HorizontalAlignment="Right" />
-                      <TextBlock Grid.Column="2" Classes="section" Text="USADO" HorizontalAlignment="Right" />
-                      <TextBlock Grid.Column="3" Classes="section" Text="LIVRE" HorizontalAlignment="Right" />
-                      <TextBlock Grid.Column="4" Classes="section" Text="FS" Margin="18,0,0,0" />
-                      <TextBlock Grid.Column="5" Classes="section" Text="TIPO" />
-                      <TextBlock Grid.Column="6" Classes="section" Text="STATUS" />
+                      <TextBlock Classes="section" Text="{l:T 'PARTIÇÃO'}" />
+                      <TextBlock Grid.Column="1" Classes="section" Text="{l:T 'TAMANHO'}" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="2" Classes="section" Text="{l:T 'USADO'}" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="3" Classes="section" Text="{l:T 'LIVRE'}" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="4" Classes="section" Text="{l:T 'FS'}" Margin="18,0,0,0" />
+                      <TextBlock Grid.Column="5" Classes="section" Text="{l:T 'TIPO'}" />
+                      <TextBlock Grid.Column="6" Classes="section" Text="{l:T 'STATUS'}" />
                     </Grid>
                     <ItemsControl ItemsSource="{Binding Partitions}">
                       <ItemsControl.ItemTemplate>
@@ -92,7 +93,7 @@
                                 <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" Margin="8,0,0,0" />
                               </Grid>
                               <TextBlock Margin="14,0,0,0" FontSize="12" Foreground="{StaticResource Apagado}" TextTrimming="CharacterEllipsis">
-                                <Run Text="{Binding FsText}" FontWeight="SemiBold" Foreground="{StaticResource Texto}" /><Run Text=" · " /><Run Text="{Binding UsedText}" /><Run Text=" usado · " /><Run Text="{Binding TypeText}" />
+                                <Run Text="{Binding FsText}" FontWeight="SemiBold" Foreground="{StaticResource Texto}" /><Run Text=" · " /><Run Text="{Binding UsedText}" /><Run Text="{l:T ' usado · '}" /><Run Text="{Binding TypeText}" />
                               </TextBlock>
                             </StackPanel>
                             <Grid Classes="tbl rowwide" ColumnDefinitions="2.1*,0.95*,0.95*,0.95*,0.9*,2.2*,1.4*">

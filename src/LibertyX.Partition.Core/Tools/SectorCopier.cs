@@ -96,16 +96,16 @@ public static class SectorCopier
                     double inst = (done - lastBytes) / (now - lastTick).TotalSeconds;
                     speed = speed == 0 ? inst : speed * 0.7 + inst * 0.3;
                     lastBytes = done; lastTick = now;
-                    progress?.Report(new(opt.ProgressBase + done, opt.ProgressTotal ?? total, speed, res.BadSectors.Count, p, "Copiando"));
+                    progress?.Report(new(opt.ProgressBase + done, opt.ProgressTotal ?? total, speed, res.BadSectors.Count, p, L.T("Copiando")));
                 }
             }
         }
-        progress?.Report(new(opt.ProgressBase + done, opt.ProgressTotal ?? total, speed, res.BadSectors.Count, src.Length, "Gravando cache"));
+        progress?.Report(new(opt.ProgressBase + done, opt.ProgressTotal ?? total, speed, res.BadSectors.Count, src.Length, L.T("Gravando cache")));
         dst.Flush();
         res.BytesCopied = done;
         res.Elapsed = sw.Elapsed;
         if (sha != null) res.Sha256 = Convert.ToHexString(sha.GetHashAndReset());
-        progress?.Report(new(opt.ProgressBase + done, opt.ProgressTotal ?? total, speed, res.BadSectors.Count, src.Length, "Concluído"));
+        progress?.Report(new(opt.ProgressBase + done, opt.ProgressTotal ?? total, speed, res.BadSectors.Count, src.Length, L.T("Concluído")));
         return res;
     }
 
@@ -126,7 +126,7 @@ public static class SectorCopier
                 b.Read(offsetB + p, y.AsSpan(0, n));
                 if (!x.AsSpan(0, n).SequenceEqual(y.AsSpan(0, n))) mismatches++;
                 done += n;
-                if (done % (64 << 20) == 0) progress?.Report(new(done, total, done / Math.Max(0.001, sw.Elapsed.TotalSeconds), mismatches, p, "Verificando"));
+                if (done % (64 << 20) == 0) progress?.Report(new(done, total, done / Math.Max(0.001, sw.Elapsed.TotalSeconds), mismatches, p, L.T("Verificando")));
             }
         return mismatches;
     }

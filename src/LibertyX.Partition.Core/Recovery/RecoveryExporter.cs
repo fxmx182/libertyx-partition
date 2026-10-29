@@ -21,7 +21,7 @@ public static class RecoveryExporter
         Directory.CreateDirectory(destination);
         var rep = new ExportReport();
         long totalBytes = files.Sum(f => f.Size), done = 0;
-        var log = new StringBuilder("Status;Arquivo;Tamanho;Origem;Observação\r\n");
+        var log = new StringBuilder(L.T("Status;Arquivo;Tamanho;Origem;Observação\r\n"));
         var buf = new byte[1 << 20];
         int i = 0;
         foreach (var f in files)
@@ -66,7 +66,7 @@ public static class RecoveryExporter
                 rep.Bytes += f.Size;
                 if (bad > 0) rep.WithBadSectors++;
                 log.Append(bad > 0 ? "PARCIAL" : "OK").Append(';').Append(rel).Append(';').Append(f.Size).Append(';')
-                   .Append(f.Origin).Append(';').Append(bad > 0 ? $"{bad} setores ilegíveis preenchidos com zeros" : f.Note ?? "").Append("\r\n");
+                   .Append(f.Origin).Append(';').Append(bad > 0 ? L.T($"{bad} setores ilegíveis preenchidos com zeros") : f.Note ?? "").Append("\r\n");
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)

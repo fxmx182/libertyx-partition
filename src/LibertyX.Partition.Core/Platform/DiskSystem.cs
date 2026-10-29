@@ -21,7 +21,7 @@ public static class DiskSystem
         int n = 100;
         foreach (var path in AttachedImages.ToList())
         {
-            var d = new DiskInfo { Number = n++, IsImage = true, ImagePath = path, DevicePath = path, Model = Path.GetFileName(path), Bus = "Imagem", ReadOnly = true };
+            var d = new DiskInfo { Number = n++, IsImage = true, ImagePath = path, DevicePath = path, Model = Path.GetFileName(path), Bus = L.T("Imagem"), ReadOnly = true };
             try
             {
                 using var dev = new ImageFileDevice(path);

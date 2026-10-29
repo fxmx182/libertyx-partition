@@ -107,7 +107,7 @@ public sealed class NtfsVolume
             if (boot == null && dev.SectorSize != 512) boot = ParseBoot(dev.ReadBytes(dev.Length - 512, 512));
             v.UsedBackupBoot = boot != null;
         }
-        if (boot == null) { error = "Setor de boot NTFS não encontrado (nem a cópia de reserva)."; return null; }
+        if (boot == null) { error = L.T("Setor de boot NTFS não encontrado (nem a cópia de reserva)."); return null; }
         v.BytesPerSector = boot.BytesPerSector;
         v.ClusterSize = boot.ClusterSize;
         v.RecordSize = boot.RecordSize;
@@ -129,7 +129,7 @@ public sealed class NtfsVolume
                 break;
             }
         }
-        if (v.MftRuns.Count == 0) { error = "O registro do $MFT e sua cópia estão ilegíveis."; return null; }
+        if (v.MftRuns.Count == 0) { error = L.T("O registro do $MFT e sua cópia estão ilegíveis."); return null; }
         return v;
     }
 

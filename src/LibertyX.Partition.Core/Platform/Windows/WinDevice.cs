@@ -28,8 +28,8 @@ public sealed unsafe class WinDevice : IBlockDevice
         {
             int err = Marshal.GetLastWin32Error();
             throw new IOException(err == Native.ERROR_ACCESS_DENIED
-                ? $"Acesso negado a {path}. O LibertyX Partition precisa rodar como administrador."
-                : $"Não foi possível abrir {path} (erro {err}).");
+                ? L.T($"Acesso negado a {path}. O LibertyX Partition precisa rodar como administrador.")
+                : L.T($"Não foi possível abrir {path} (erro {err})."));
         }
         if (isVolume) Native.IoctlNoData(_h, Native.FSCTL_ALLOW_EXTENDED_DASD_IO);
         long len = length ?? 0;
@@ -48,7 +48,7 @@ public sealed unsafe class WinDevice : IBlockDevice
     {
         if (offset >= Length) return 0;
         int want = (int)Math.Min(buffer.Length, Length - offset);
-        if (offset % SectorSize != 0 || want % SectorSize != 0) throw new ArgumentException("leitura desalinhada");
+        if (offset % SectorSize != 0 || want % SectorSize != 0) throw new ArgumentException(L.T("leitura desalinhada"));
         int done = 0;
         lock (_lock)
         {
@@ -60,7 +60,7 @@ public sealed unsafe class WinDevice : IBlockDevice
                 if (!Native.ReadFile(_h, _bounce, n, out int got, &ov))
                 {
                     int err = Marshal.GetLastWin32Error();
-                    throw new MediaReadException(pos, n, err, $"Erro de leitura em {pos / SectorSize:N0} (código {err}).");
+                    throw new MediaReadException(pos, n, err, L.T($"Erro de leitura em {pos / SectorSize:N0} (código {err})."));
                 }
                 if (got <= 0) break;
                 new Span<byte>(_bounce, got).CopyTo(buffer[done..]);
@@ -73,8 +73,8 @@ public sealed unsafe class WinDevice : IBlockDevice
 
     public void Write(long offset, ReadOnlySpan<byte> buffer)
     {
-        if (!CanWrite) throw new IOException("dispositivo aberto só para leitura");
-        if (offset % SectorSize != 0 || buffer.Length % SectorSize != 0) throw new ArgumentException("escrita desalinhada");
+        if (!CanWrite) throw new IOException(L.T("dispositivo aberto só para leitura"));
+        if (offset % SectorSize != 0 || buffer.Length % SectorSize != 0) throw new ArgumentException(L.T("escrita desalinhada"));
         int done = 0;
         lock (_lock)
         {
@@ -88,8 +88,8 @@ public sealed unsafe class WinDevice : IBlockDevice
                 {
                     int err = Marshal.GetLastWin32Error();
                     throw new IOException(err == Native.ERROR_ACCESS_DENIED
-                        ? $"O Windows bloqueou a escrita no setor {pos / SectorSize:N0}: há um volume montado ali."
-                        : $"Erro de escrita no setor {pos / SectorSize:N0} (código {err}).");
+                        ? L.T($"O Windows bloqueou a escrita no setor {pos / SectorSize:N0}: há um volume montado ali.")
+                        : L.T($"Erro de escrita no setor {pos / SectorSize:N0} (código {err})."));
                 }
                 done += n;
             }

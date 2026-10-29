@@ -86,10 +86,10 @@ public static class Carver
 
     public static readonly (string ext, string desc)[] SupportedTypes =
     [
-        ("jpg", "Foto JPEG"), ("png", "Imagem PNG"), ("gif", "GIF"), ("bmp", "Bitmap"), ("tif", "TIFF / RAW de câmera (CR2, NEF, ARW, DNG)"),
-        ("heic", "Foto HEIC do iPhone"), ("mp4", "Vídeo MP4 / MOV / 3GP"), ("avi", "Vídeo AVI"), ("mkv", "Vídeo MKV / WebM"), ("wmv", "Vídeo WMV / ASF"),
-        ("mp3", "Áudio MP3"), ("wav", "Áudio WAV"), ("ogg", "Áudio OGG / Opus"), ("pdf", "PDF"), ("docx", "Office (docx, xlsx, pptx), ODF, EPUB, ZIP"),
-        ("doc", "Office antigo (doc, xls, ppt, msg)"), ("rar", "RAR"), ("7z", "7-Zip"), ("sqlite", "SQLite (WhatsApp, navegadores)"), ("exe", "Programas (exe, dll)"),
+        ("jpg", L.T("Foto JPEG")), ("png", L.T("Imagem PNG")), ("gif", "GIF"), ("bmp", "Bitmap"), ("tif", L.T("TIFF / RAW de câmera (CR2, NEF, ARW, DNG)")),
+        ("heic", L.T("Foto HEIC do iPhone")), ("mp4", L.T("Vídeo MP4 / MOV / 3GP")), ("avi", L.T("Vídeo AVI")), ("mkv", L.T("Vídeo MKV / WebM")), ("wmv", L.T("Vídeo WMV / ASF")),
+        ("mp3", L.T("Áudio MP3")), ("wav", L.T("Áudio WAV")), ("ogg", L.T("Áudio OGG / Opus")), ("pdf", "PDF"), ("docx", L.T("Office (docx, xlsx, pptx), ODF, EPUB, ZIP")),
+        ("doc", L.T("Office antigo (doc, xls, ppt, msg)")), ("rar", "RAR"), ("7z", "7-Zip"), ("sqlite", L.T("SQLite (WhatsApp, navegadores)")), ("exe", L.T("Programas (exe, dll)")),
     ];
 
     /// <summary>Grupo do filtro de tipos a que cada extensão produzida pertence.</summary>
@@ -157,7 +157,7 @@ public static class Carver
                 case (byte)'M' when Bin.Match(h, 0, "MM\0*"u8):
                     { var (sz, ext) = Tiff(r, s, h[0] == 'I', h, max); return Hit(ext, sz, "TIFF"); }
                 case (byte)'M' when h[1] == 'Z':
-                    { var (sz, ext) = Pe(r, s, max); return Hit(ext, sz, "Executável"); }
+                    { var (sz, ext) = Pe(r, s, max); return Hit(ext, sz, L.T("Executável")); }
                 case (byte)'O' when Bin.Match(h, 0, "OggS"u8) && h[4] == 0 && (h[5] & 2) != 0:
                     { var (sz, ext) = Ogg(r, s, max); return Hit(ext, sz, "Ogg"); }
                 case 0x30 when Bin.Match(h, 0, AsfHeader):
@@ -165,9 +165,9 @@ public static class Carver
             }
             // MPEG-TS das filmadoras (AVCHD): pacotes de 188 bytes (ou 192 com carimbo de tempo) começando em 0x47
             if (h.Length >= 512 && h[4] == 0x47 && h[196] == 0x47 && h[388] == 0x47)
-                return Hit("mts", TransportStream(r, s, 192, 4, max), "Vídeo de câmera");
+                return Hit("mts", TransportStream(r, s, 192, 4, max), L.T("Vídeo de câmera"));
             if (h.Length >= 512 && h[0] == 0x47 && h[188] == 0x47 && h[376] == 0x47)
-                return Hit("ts", TransportStream(r, s, 188, 0, max), "Vídeo de câmera");
+                return Hit("ts", TransportStream(r, s, 188, 0, max), L.T("Vídeo de câmera"));
             if (Bin.Match(h, 0, "8BPS"u8) && Bin.U16BE(h, 4) is 1 or 2)
                 { var (sz, ext) = Psd(r, s, h, max); return Hit(ext, sz, "Photoshop"); }
             if (Bin.Match(h, 4, "ftyp"u8))
@@ -697,7 +697,7 @@ public static class Carver
         long total = ranges.Sum(x => x.length), done = 0;
         const int block = 4 << 20;
         var buf = new byte[block];
-        var root = into.GetOrAddFolder(into.Root, "Encontrados por assinatura", "varredura profunda: sem nome nem pasta originais");
+        var root = into.GetOrAddFolder(into.Root, L.T("Encontrados por assinatura"), L.T("varredura profunda: sem nome nem pasta originais"));
         var counters = new Dictionary<string, int>();
         var orphans = new List<(NtfsRecord rec, long abs)>();
         long found = 0, lastReport = 0;
@@ -715,7 +715,7 @@ public static class Carver
                 catch (MediaReadException)
                 {
                     // bloco com setor ruim: pula um setor por vez em vez de perder o bloco inteiro
-                    into.Log.Add($"Setor ilegível perto de {pos / ss:N0}.");
+                    into.Log.Add(L.T($"Setor ilegível perto de {pos / ss:N0}."));
                     pos += ss; done += ss; continue;
                 }
                 if (got <= 0) break;
@@ -746,7 +746,7 @@ public static class Carver
                     {
                         Id = into.NewId(), Name = $"{hit.Ext.ToUpperInvariant()}_{k:D6}.{hit.Ext}", Origin = ItemOrigin.Carved,
                         Size = hit.Size, Data = new ExtentSource(dev, [new Extent(abs, hit.Size)], hit.Size),
-                        Condition = Condition.Unknown, DeviceOffset = abs, Note = $"setor {abs / ss:N0}",
+                        Condition = Condition.Unknown, DeviceOffset = abs, Note = L.T($"setor {abs / ss:N0}"),
                     });
                     found++;
                     // pula o arquivo inteiro: evita escavar miniaturas de dentro dele de novo
@@ -759,11 +759,11 @@ public static class Carver
                 if (done - lastReport > (32 << 20) || pos >= end)
                 {
                     lastReport = done;
-                    progress?.Report(new("Varredura profunda (por assinatura)", total == 0 ? 1 : (double)done / total, found, pos, dev.Length));
+                    progress?.Report(new(L.T("Varredura profunda (por assinatura)"), total == 0 ? 1 : (double)done / total, found, pos, dev.Length));
                 }
             }
         }
-        into.Log.Add($"Varredura profunda: {found:N0} arquivos reconhecidos pelo conteúdo.");
+        into.Log.Add(L.T($"Varredura profunda: {found:N0} arquivos reconhecidos pelo conteúdo."));
         if (orphans.Count > 0) BuildOrphanTree(dev, orphans, into, ntfsClusterSize ?? 4096);
     }
 
@@ -858,7 +858,7 @@ public static class Carver
         var byIndex = orphans.Where(o => o.rec.Index != uint.MaxValue && o.rec.Index >= 16)
             .GroupBy(o => o.rec.Index).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.rec.Seq).First());
         var unnumbered = orphans.Where(o => o.rec.Index == uint.MaxValue).ToList();
-        var top = into.GetOrAddFolder(into.Root, "MFT antigo (antes da formatação)", $"registros soltos reorganizados · cluster antigo de {cs / 1024.0:0.#} KB");
+        var top = into.GetOrAddFolder(into.Root, L.T("MFT antigo (antes da formatação)"), L.T($"registros soltos reorganizados · cluster antigo de {cs / 1024.0:0.#} KB"));
         var items = new Dictionary<long, RecoveredItem>();
         foreach (var (idx, (rec, abs)) in byIndex)
         {
@@ -886,7 +886,7 @@ public static class Carver
             RecoveredItem parent = top;
             if (fn.ParentIndex == 5) parent = top;
             else if (items.TryGetValue(fn.ParentIndex, out var p) && p.IsDirectory) { parent = p; linked++; }
-            else parent = into.GetOrAddFolder(top, "$Pasta perdida", "a pasta-mãe deste registro não foi encontrada");
+            else parent = into.GetOrAddFolder(top, L.T("$Pasta perdida"), L.T("a pasta-mãe deste registro não foi encontrada"));
             parent.Children ??= [];
             parent.Children.Add(item);
             item.Parent = parent;
@@ -900,7 +900,7 @@ public static class Carver
             d.Parent?.Children?.Remove(d);
             into.Items.Remove(d);
         }
-        into.Log.Add($"MFT antigo: {items.Count(i => !i.Value.IsDirectory):N0} arquivos com nome original, {items.Count(i => i.Value.IsDirectory)} pastas reconstruídas, cluster antigo {cs} bytes.");
+        into.Log.Add(L.T($"MFT antigo: {items.Count(i => !i.Value.IsDirectory):N0} arquivos com nome original, {items.Count(i => i.Value.IsDirectory)} pastas reconstruídas, cluster antigo {cs} bytes."));
         _ = unnumbered;
     }
 }

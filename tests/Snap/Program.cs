@@ -11,6 +11,7 @@ string outDir = args[0];
 var sep = Array.IndexOf(args, "--");
 var images = args[1..sep];
 var scenes = args[(sep + 1)..];
+LibertyX.Partition.Core.L.Init(null, Environment.GetEnvironmentVariable("LX_SNAP_LANG"));
 if (Environment.GetEnvironmentVariable("LX_SNAP_REAL") != "1") Environment.SetEnvironmentVariable("LIBERTYX_ONLY_IMAGES", "1");
 Directory.CreateDirectory(outDir);
 

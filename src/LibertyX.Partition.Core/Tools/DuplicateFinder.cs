@@ -45,7 +45,7 @@ public static class DuplicateFinder
                 if (len < minSize || (filter != null && !filter(fi.FullName)) || !seen.Add(fi.FullName)) continue;
                 if (!bySize.TryGetValue(len, out var l)) bySize[len] = l = [];
                 l.Add(new DupFile { Path = fi.FullName, Size = len, Modified = fi.LastWriteTime, Created = fi.CreationTime });
-                if (++listed % 2000 == 0) progress?.Report(new("Listando arquivos", listed, 0, 0, 0));
+                if (++listed % 2000 == 0) progress?.Report(new(L.T("Listando arquivos"), listed, 0, 0, 0));
             }
         }
 
@@ -69,7 +69,7 @@ public static class DuplicateFinder
                 }
             }
             done += group.Count;
-            progress?.Report(new("Comparando conteúdo", done, totalCand, result.Count, wasted));
+            progress?.Report(new(L.T("Comparando conteúdo"), done, totalCand, result.Count, wasted));
         }
         return result.OrderByDescending(g => g.Wasted).ToList();
     }

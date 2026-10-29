@@ -119,7 +119,7 @@ public static class Fat32Formatter
     public static void Format(IBlockDevice vol, string label, int clusterBytes, long hiddenSectors, IProgress<double>? progress = null)
     {
         int bps = vol.SectorSize;
-        if (bps is not (512 or 4096)) throw new InvalidOperationException("Tamanho de setor não suportado para FAT32.");
+        if (bps is not (512 or 4096)) throw new InvalidOperationException(L.T("Tamanho de setor não suportado para FAT32."));
         long total = vol.Length / bps;
         if (clusterBytes <= 0) clusterBytes = Math.Max(bps, AutoCluster(vol.Length));
         int spc = Math.Max(1, clusterBytes / bps);
@@ -131,8 +131,8 @@ public static class Fat32Formatter
         long dataStart = reserved + numFats * fatSz;
         if (dataStart % align != 0) { reserved += align - dataStart % align; dataStart = reserved + numFats * fatSz; }
         long clusters = (total - dataStart) / spc;
-        if (clusters < 65525) throw new InvalidOperationException("Volume pequeno demais para FAT32 com esse cluster — use FAT16 ou exFAT.");
-        if (clusters > 0x0FFFFFF5) throw new InvalidOperationException("Volume grande demais para FAT32 com esse cluster — aumente o cluster.");
+        if (clusters < 65525) throw new InvalidOperationException(L.T("Volume pequeno demais para FAT32 com esse cluster — use FAT16 ou exFAT."));
+        if (clusters > 0x0FFFFFF5) throw new InvalidOperationException(L.T("Volume grande demais para FAT32 com esse cluster — aumente o cluster."));
         uint serial = (uint)Random.Shared.NextInt64(1, uint.MaxValue);
 
         var boot = new byte[bps];

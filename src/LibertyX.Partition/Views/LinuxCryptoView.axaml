@@ -1,12 +1,13 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LinuxCryptoView" x:DataType="vm:LinuxCryptoViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" x:Class="LibertyX.Partition.Views.LinuxCryptoView" x:DataType="vm:LinuxCryptoViewModel">
   <DockPanel>
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,18">
       <StackPanel>
-        <TextBlock Classes="h1" Text="Criptografia" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Volumes LUKS do Linux e BitLocker do Windows: desbloquear, montar, recuperar arquivos de dentro, senhas e cópia do cabeçalho." />
+        <TextBlock Classes="h1" Text="{l:T 'Criptografia'}" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="{l:T 'Volumes LUKS do Linux e BitLocker do Windows: desbloquear, montar, recuperar arquivos de dentro, senhas e cópia do cabeçalho.'}" />
       </StackPanel>
       <Button Grid.Column="1" Command="{Binding RefreshCommand}" VerticalAlignment="Center">
-        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Text="Atualizar" /></StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Data="{StaticResource IcRefresh}" Classes="small" /><TextBlock Text="{l:T 'Atualizar'}" /></StackPanel>
       </Button>
     </Grid>
     <Border DockPanel.Dock="Top" Classes="notice warn" Margin="0,0,0,14" IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -34,15 +35,15 @@
                 </Grid>
                 <TextBlock Text="{Binding Detail}" Classes="faint" TextWrapping="Wrap" />
                 <WrapPanel>
-                  <Button Content="Desbloquear" Command="{Binding UnlockCmd}" IsVisible="{Binding Closed}" Classes="primary" Margin="0,0,8,8" />
-                  <Button Content="Abrir pasta" Command="{Binding BrowseCmd}" IsVisible="{Binding Mounted}" Classes="primary" Margin="0,0,8,8" />
-                  <Button Content="Montar" Command="{Binding MountCmd}" IsVisible="{Binding OpenNotMounted}" Classes="primary" Margin="0,0,8,8" />
-                  <Button Content="Recuperar arquivos" Command="{Binding RecoverCmd}" IsVisible="{Binding Open}" Margin="0,0,8,8" />
-                  <Button Content="Trancar" Command="{Binding CloseCmd}" IsVisible="{Binding Open}" Margin="0,0,8,8" />
-                  <Button Content="Senhas" Command="{Binding KeysCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
-                  <Button Content="Salvar cabeçalho" Command="{Binding BackupCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
-                  <Button Content="Restaurar cabeçalho" Command="{Binding RestoreCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
-                  <Button Content="Detalhes" Command="{Binding InfoCmd}" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Desbloquear'}" Command="{Binding UnlockCmd}" IsVisible="{Binding Closed}" Classes="primary" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Abrir pasta'}" Command="{Binding BrowseCmd}" IsVisible="{Binding Mounted}" Classes="primary" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Montar'}" Command="{Binding MountCmd}" IsVisible="{Binding OpenNotMounted}" Classes="primary" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Recuperar arquivos'}" Command="{Binding RecoverCmd}" IsVisible="{Binding Open}" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Trancar'}" Command="{Binding CloseCmd}" IsVisible="{Binding Open}" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Senhas'}" Command="{Binding KeysCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Salvar cabeçalho'}" Command="{Binding BackupCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Restaurar cabeçalho'}" Command="{Binding RestoreCmd}" IsVisible="{Binding IsLuks}" Margin="0,0,8,8" />
+                  <Button Content="{l:T 'Detalhes'}" Command="{Binding InfoCmd}" Margin="0,0,8,8" />
                 </WrapPanel>
               </StackPanel>
             </Border>

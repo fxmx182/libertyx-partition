@@ -16,46 +16,46 @@ public static class LinuxTools
 
     public static readonly List<Tool> Catalog =
     [
-        new("mkfs.ext4", "Formatar ext2/ext3/ext4", "Ext2/3/4", P("e2fsprogs")),
-        new("e2fsck", "Verificar e reparar ext", "Ext2/3/4", P("e2fsprogs")),
-        new("resize2fs", "Redimensionar ext", "Ext2/3/4", P("e2fsprogs")),
-        new("tune2fs", "Rótulo, UUID e opções de ext", "Ext2/3/4", P("e2fsprogs")),
-        new("mkfs.xfs", "Formatar XFS", "XFS", P("xfsprogs")),
-        new("xfs_repair", "Reparar XFS", "XFS", P("xfsprogs")),
-        new("xfs_growfs", "Aumentar XFS", "XFS", P("xfsprogs")),
-        new("xfs_admin", "Rótulo e UUID de XFS", "XFS", P("xfsprogs")),
-        new("mkfs.btrfs", "Formatar Btrfs", "Btrfs", P("btrfs-progs")),
-        new("btrfs", "Verificar, redimensionar e rotular Btrfs", "Btrfs", P("btrfs-progs")),
-        new("btrfstune", "UUID de Btrfs", "Btrfs", P("btrfs-progs")),
-        new("mkfs.fat", "Formatar FAT16/FAT32", "FAT", P("dosfstools")),
-        new("fsck.fat", "Verificar FAT", "FAT", P("dosfstools")),
-        new("fatlabel", "Rótulo de FAT", "FAT", P("dosfstools")),
-        new("fatresize", "Redimensionar FAT", "FAT", P("fatresize")),
-        new("mkfs.exfat", "Formatar exFAT", "exFAT", P("exfatprogs")),
-        new("fsck.exfat", "Verificar exFAT", "exFAT", P("exfatprogs")),
-        new("tune.exfat", "Rótulo de exFAT", "exFAT", P("exfatprogs")),
-        new("mkntfs", "Formatar NTFS", "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
-        new("ntfsresize", "Redimensionar NTFS", "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
-        new("ntfsfix", "Corrigir NTFS (marca para o chkdsk do Windows)", "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
-        new("ntfslabel", "Rótulo de NTFS", "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
-        new("mkfs.f2fs", "Formatar F2FS (cartões e pendrives)", "F2FS", P("f2fs-tools")),
-        new("fsck.f2fs", "Verificar F2FS", "F2FS", P("f2fs-tools")),
-        new("mkswap", "Criar área de troca (swap)", "Básico", P("util-linux")),
-        new("fstrim", "TRIM do espaço livre em SSD (Otimizar)", "Básico", P("util-linux")),
-        new("e4defrag", "Desfragmentar ext4 em HD (Otimizar)", "Ext2/3/4", P("e2fsprogs")),
-        new("xfs_fsr", "Desfragmentar XFS em HD (Otimizar)", "XFS", P("xfsprogs")),
-        new("wipefs", "Apagar assinaturas de sistemas de arquivos", "Básico", P("util-linux")),
-        new("mount", "Montar e desmontar", "Básico", P("util-linux", debian: "mount")),
-        new("udevadm", "Esperar o sistema criar /dev depois de mudanças", "Básico", P("systemd", alpine: "eudev")),
-        new("cryptsetup", "LUKS e BitLocker (abrir, fechar, criar, chaves)", "Criptografia", P("cryptsetup")),
-        new("lvm", "Volumes lógicos LVM", "LVM e RAID", P("lvm2")),
-        new("mdadm", "RAID por software", "LVM e RAID", P("mdadm")),
-        new("smartctl", "S.M.A.R.T. de adaptadores USB difíceis", "Saúde", P("smartmontools")),
-        new("nvme", "Apagamento seguro de SSD NVMe", "Saúde", P("nvme-cli")),
-        new("hdparm", "Apagamento seguro de SSD SATA", "Saúde", P("hdparm")),
-        new("rsync", "Copiar arquivos (unir, cluster, migrar)", "Arquivos", P("rsync")),
-        new("wimlib-imagex", "Dividir install.wim (pendrive do Windows)", "Pendrive de boot", P("wimtools", fedora: "wimlib-utils", arch: "wimlib", suse: "wimlib")),
-        new("grub-install", "Reinstalar o GRUB (migrar sistema, reparar boot)", "Boot", P("grub2-common", debian: "grub2-common", fedora: "grub2-tools", arch: "grub", suse: "grub2")),
+        new("mkfs.ext4", L.T("Formatar ext2/ext3/ext4"), "Ext2/3/4", P("e2fsprogs")),
+        new("e2fsck", L.T("Verificar e reparar ext"), "Ext2/3/4", P("e2fsprogs")),
+        new("resize2fs", L.T("Redimensionar ext"), "Ext2/3/4", P("e2fsprogs")),
+        new("tune2fs", L.T("Rótulo, UUID e opções de ext"), "Ext2/3/4", P("e2fsprogs")),
+        new("mkfs.xfs", L.T("Formatar XFS"), "XFS", P("xfsprogs")),
+        new("xfs_repair", L.T("Reparar XFS"), "XFS", P("xfsprogs")),
+        new("xfs_growfs", L.T("Aumentar XFS"), "XFS", P("xfsprogs")),
+        new("xfs_admin", L.T("Rótulo e UUID de XFS"), "XFS", P("xfsprogs")),
+        new("mkfs.btrfs", L.T("Formatar Btrfs"), L.T("Btrfs"), P("btrfs-progs")),
+        new("btrfs", L.T("Verificar, redimensionar e rotular Btrfs"), L.T("Btrfs"), P("btrfs-progs")),
+        new("btrfstune", L.T("UUID de Btrfs"), L.T("Btrfs"), P("btrfs-progs")),
+        new("mkfs.fat", L.T("Formatar FAT16/FAT32"), "FAT", P("dosfstools")),
+        new("fsck.fat", L.T("Verificar FAT"), "FAT", P("dosfstools")),
+        new("fatlabel", L.T("Rótulo de FAT"), "FAT", P("dosfstools")),
+        new("fatresize", L.T("Redimensionar FAT"), "FAT", P("fatresize")),
+        new("mkfs.exfat", L.T("Formatar exFAT"), "exFAT", P("exfatprogs")),
+        new("fsck.exfat", L.T("Verificar exFAT"), "exFAT", P("exfatprogs")),
+        new("tune.exfat", L.T("Rótulo de exFAT"), "exFAT", P("exfatprogs")),
+        new("mkntfs", L.T("Formatar NTFS"), "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
+        new("ntfsresize", L.T("Redimensionar NTFS"), "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
+        new("ntfsfix", L.T("Corrigir NTFS (marca para o chkdsk do Windows)"), "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
+        new("ntfslabel", L.T("Rótulo de NTFS"), "NTFS", P("ntfs-3g", fedora: "ntfsprogs", suse: "ntfsprogs", alpine: "ntfs-3g-progs")),
+        new("mkfs.f2fs", L.T("Formatar F2FS (cartões e pendrives)"), "F2FS", P("f2fs-tools")),
+        new("fsck.f2fs", L.T("Verificar F2FS"), "F2FS", P("f2fs-tools")),
+        new("mkswap", L.T("Criar área de troca (swap)"), L.T("Básico"), P("util-linux")),
+        new("fstrim", L.T("TRIM do espaço livre em SSD (Otimizar)"), L.T("Básico"), P("util-linux")),
+        new("e4defrag", L.T("Desfragmentar ext4 em HD (Otimizar)"), "Ext2/3/4", P("e2fsprogs")),
+        new("xfs_fsr", L.T("Desfragmentar XFS em HD (Otimizar)"), "XFS", P("xfsprogs")),
+        new("wipefs", L.T("Apagar assinaturas de sistemas de arquivos"), L.T("Básico"), P("util-linux")),
+        new("mount", L.T("Montar e desmontar"), L.T("Básico"), P("util-linux", debian: "mount")),
+        new("udevadm", L.T("Esperar o sistema criar /dev depois de mudanças"), L.T("Básico"), P("systemd", alpine: "eudev")),
+        new("cryptsetup", L.T("LUKS e BitLocker (abrir, fechar, criar, chaves)"), L.T("Criptografia"), P("cryptsetup")),
+        new("lvm", L.T("Volumes lógicos LVM"), L.T("LVM e RAID"), P("lvm2")),
+        new("mdadm", L.T("RAID por software"), L.T("LVM e RAID"), P("mdadm")),
+        new("smartctl", L.T("S.M.A.R.T. de adaptadores USB difíceis"), L.T("Saúde"), P("smartmontools")),
+        new("nvme", L.T("Apagamento seguro de SSD NVMe"), L.T("Saúde"), P("nvme-cli")),
+        new("hdparm", L.T("Apagamento seguro de SSD SATA"), L.T("Saúde"), P("hdparm")),
+        new("rsync", L.T("Copiar arquivos (unir, cluster, migrar)"), L.T("Arquivos"), P("rsync")),
+        new("wimlib-imagex", L.T("Dividir install.wim (pendrive do Windows)"), L.T("Pendrive de boot"), P("wimtools", fedora: "wimlib-utils", arch: "wimlib", suse: "wimlib")),
+        new("grub-install", L.T("Reinstalar o GRUB (migrar sistema, reparar boot)"), "Boot", P("grub2-common", debian: "grub2-common", fedora: "grub2-tools", arch: "grub", suse: "grub2")),
     ];
 
     private static readonly string[] ExtraDirs = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
@@ -111,7 +111,7 @@ public static class LinuxTools
             : like.Contains("suse") ? "suse"
             : like.Contains("alpine") ? "alpine"
             : like.Contains("void") ? "void" : "debian";
-        return new Distro(id, kv.GetValueOrDefault("PRETTY_NAME", "Linux"), fam);
+        return new Distro(id, kv.GetValueOrDefault("PRETTY_NAME", L.T("Linux")), fam);
     }
 
     public static string PackageOf(string exe)
@@ -142,7 +142,7 @@ public static class LinuxTools
     {
         var pk = exes.Select(PackageOf).Distinct().ToList();
         var c = InstallCommand(pk);
-        return c is { } x ? $"sudo {x.exe} {string.Join(' ', x.args)}" : "instale: " + string.Join(", ", pk);
+        return c is { } x ? $"sudo {x.exe} {string.Join(' ', x.args)}" : L.T("instale: ") + string.Join(", ", pk);
     }
 
     /// <summary>Falta alguma? Devolve a mensagem pronta para a tela (ou nulo se está tudo lá).</summary>
@@ -150,14 +150,14 @@ public static class LinuxTools
     {
         var miss = exes.Where(e => !Has(e)).ToList();
         if (miss.Count == 0) return null;
-        return $"Falta {string.Join(", ", miss)} no sistema. Instale em Utilidades → Ferramentas do sistema, ou: {InstallHint(miss)}";
+        return L.T($"Falta {string.Join(", ", miss)} no sistema. Instale em Utilidades → Ferramentas do sistema, ou: {InstallHint(miss)}");
     }
 
     public static async Task<CommandResult> Install(IEnumerable<string> exes, CancellationToken ct, Action<string>? onLine)
     {
         var pk = exes.Select(PackageOf).Distinct().ToList();
         var c = InstallCommand(pk);
-        if (c == null) return new CommandResult(1, "", "Não reconheci o gerenciador de pacotes desta distribuição. Instale: " + string.Join(", ", pk));
+        if (c == null) return new CommandResult(1, "", L.T("Não reconheci o gerenciador de pacotes desta distribuição. Instale: ") + string.Join(", ", pk));
         if (Current.Family == "debian") await Proc.Run("apt-get", ["update", "-q"], ct, onLine, env: new Dictionary<string, string> { ["DEBIAN_FRONTEND"] = "noninteractive" });
         var r = await Proc.Run(c.Value.exe, c.Value.args, ct, onLine, env: new Dictionary<string, string> { ["DEBIAN_FRONTEND"] = "noninteractive" });
         Forget();

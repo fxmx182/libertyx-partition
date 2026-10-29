@@ -28,10 +28,10 @@ public static class DiskOperations
     private static void RequireModifiable(DiskInfo d)
     {
         if (d.IsSystem) throw new InvalidOperationException(OperatingSystem.IsWindows()
-            ? "Este é o disco do Windows em uso. Para alterá-lo, use a mídia inicializável."
-            : "Este é o disco do sistema em uso (onde está o /). Para alterá-lo inteiro, inicie por um pendrive Linux.");
-        if (d.ReadOnly) throw new InvalidOperationException("Disco aberto só para leitura.");
-        if (d.IsVirtual) throw new InvalidOperationException($"Volume {d.VirtualKind}: altere a partição física onde ele está.");
+            ? L.T("Este é o disco do Windows em uso. Para alterá-lo, use a mídia inicializável.")
+            : L.T("Este é o disco do sistema em uso (onde está o /). Para alterá-lo inteiro, inicie por um pendrive Linux."));
+        if (d.ReadOnly) throw new InvalidOperationException(L.T("Disco aberto só para leitura."));
+        if (d.IsVirtual) throw new InvalidOperationException(L.T($"Volume {d.VirtualKind}: altere a partição física onde ele está."));
     }
 
     /// <summary>
@@ -41,8 +41,8 @@ public static class DiskOperations
     private static void RequirePartition(PartitionInfo p)
     {
         if (OperatingSystem.IsWindows() || p.Disk.IsImage) { RequireModifiable(p.Disk); return; }
-        if (p.Disk.ReadOnly) throw new InvalidOperationException("Disco só para leitura (mídia protegida contra gravação).");
-        if (p.IsSystemCritical) throw new InvalidOperationException($"{p.KernelName ?? p.DisplayName} está em uso pelo sistema. Para alterá-la, inicie por um pendrive Linux.");
+        if (p.Disk.ReadOnly) throw new InvalidOperationException(L.T("Disco só para leitura (mídia protegida contra gravação)."));
+        if (p.IsSystemCritical) throw new InvalidOperationException(L.T($"{p.KernelName ?? p.DisplayName} está em uso pelo sistema. Para alterá-la, inicie por um pendrive Linux."));
     }
 
     /// <summary>Linux: partições cuja entrada na tabela muda (são as únicas que precisam ser desmontadas).</summary>
@@ -54,7 +54,7 @@ public static class DiskOperations
 
     private static IProgress<CopyProgress> CopyReporter(OpSink sink, string label) => new Progress<CopyProgress>(p =>
         sink.Progress(p.Total == 0 ? 0 : (double)p.Done / p.Total, label,
-            $"{Size(p.Done)} de {Size(p.Total)} · {Size((long)p.BytesPerSecond)}/s{(p.BadSectors > 0 ? $" · {p.BadSectors} setores ilegíveis" : "")}"));
+            $"{Size(p.Done)} de {Size(p.Total)} · {Size((long)p.BytesPerSecond)}/s{(p.BadSectors > 0 ? L.T($" · {p.BadSectors} setores ilegíveis") : "")}"));
 
     // ───────────── tabela ─────────────
 
@@ -64,7 +64,7 @@ public static class DiskOperations
         if (!allowSystem)
         {
             if (OperatingSystem.IsWindows() || d.IsImage) RequireModifiable(d);
-            else if (!d.PartitionsEditable) throw new InvalidOperationException(d.IsVirtual ? $"Volume {d.VirtualKind}: não tem tabela de partições." : "Disco só para leitura.");
+            else if (!d.PartitionsEditable) throw new InvalidOperationException(d.IsVirtual ? L.T($"Volume {d.VirtualKind}: não tem tabela de partições.") : L.T("Disco só para leitura."));
         }
         var errs = PartitionCodec.Validate(table);
         if (errs.Count > 0) throw new InvalidOperationException(string.Join("\n", errs));
@@ -72,18 +72,18 @@ public static class DiskOperations
         var footprint = PartitionCodec.FootprintForBackup(dev, d.Table);
         foreach (var (lba, _) in PartitionCodec.Build(table.Clone())) footprint.Add((lba, 1));
         string bak = TableBackup.Save(dev, footprint, $"{d.Model}-{d.Serial}", reason);
-        sink.Log($"Backup dos setores da tabela salvo em {bak}");
+        sink.Log(L.T($"Backup dos setores da tabela salvo em {bak}"));
         var affected = Affected(d, table);
         if (growInPlace != null && affected != null)
         {
             var e = table.Entries.FirstOrDefault(x => x.StartLba == growInPlace.Entry?.StartLba);
-            if (e == null || e.SectorCount < growInPlace.Entry!.SectorCount) throw new InvalidOperationException("Crescer no lugar só vale para aumentar a partição mantendo o início.");
+            if (e == null || e.SectorCount < growInPlace.Entry!.SectorCount) throw new InvalidOperationException(L.T("Crescer no lugar só vale para aumentar a partição mantendo o início."));
             affected.RemoveAll(x => x.Offset == growInPlace.Offset);
         }
         using (DiskSystem.Native.LockVolumes(d, affected))
         {
             PartitionCodec.Write(dev, table);
-            sink.Log("Tabela de partições gravada.");
+            sink.Log(L.T("Tabela de partições gravada."));
             DiskSystem.Native.Rescan(d);
         }
         DiskSystem.Native.Rescan(d);
@@ -95,8 +95,8 @@ public static class DiskOperations
         var t = d.Table.Clone();
         if (t.Style == TableStyle.None) t.Style = TableStyle.Gpt;
         t.Entries.Clear();
-        WriteTable(d, t, "Excluir todas as partições", sink);
-        sink.Log("Todas as partições foram removidas da tabela. Os dados continuam no disco até serem sobrescritos — a Recuperação de partição consegue trazê-las de volta.");
+        WriteTable(d, t, L.T("Excluir todas as partições"), sink);
+        sink.Log(L.T("Todas as partições foram removidas da tabela. Os dados continuam no disco até serem sobrescritos — a Recuperação de partição consegue trazê-las de volta."));
     }
 
     public static void DeletePartitionRaw(PartitionInfo p, OpSink sink)
@@ -104,7 +104,7 @@ public static class DiskOperations
         RequirePartition(p);
         var t = p.Disk.Table.Clone();
         t.Entries.RemoveAll(e => e.StartLba == p.Entry!.StartLba);
-        WriteTable(p.Disk, t, "Excluir partição", sink);
+        WriteTable(p.Disk, t, L.T("Excluir partição"), sink);
     }
 
     /// <summary>Diz se dá para converter sem perder nada e por quê.</summary>
@@ -113,15 +113,15 @@ public static class DiskOperations
         var notes = new List<string>();
         bool ok = true;
         var parts = d.Partitions.Where(p => p.Entry != null).ToList();
-        if (d.Table.Style == target) { notes.Add("O disco já está nesse estilo."); return (false, notes); }
+        if (d.Table.Style == target) { notes.Add(L.T("O disco já está nesse estilo.")); return (false, notes); }
         if (target == TableStyle.Mbr)
         {
-            if (d.Size > 2L * 1024 * 1024 * 1024 * 1024 && d.SectorSize == 512) notes.Add("Disco acima de 2 TiB: em MBR, o espaço além de 2 TiB fica inutilizável.");
+            if (d.Size > 2L * 1024 * 1024 * 1024 * 1024 && d.SectorSize == 512) notes.Add(L.T("Disco acima de 2 TiB: em MBR, o espaço além de 2 TiB fica inutilizável."));
             var kept = parts.Where(p => !p.IsMsr).ToList();
-            if (parts.Any(p => p.IsMsr)) notes.Add("A partição reservada da Microsoft (MSR) será descartada — ela não existe em MBR e não guarda dados.");
-            if (kept.Count > 4) { ok = false; notes.Add($"São {kept.Count} partições; MBR comporta 4 primárias."); }
-            if (kept.Any(p => p.Entry!.EndLba > uint.MaxValue)) { ok = false; notes.Add("Há partição além do limite de 2 TiB do MBR."); }
-            if (d.IsSystem) { ok = false; notes.Add("O Windows em uso inicia por UEFI/GPT; convertê-lo para MBR o deixaria sem inicializar."); }
+            if (parts.Any(p => p.IsMsr)) notes.Add(L.T("A partição reservada da Microsoft (MSR) será descartada — ela não existe em MBR e não guarda dados."));
+            if (kept.Count > 4) { ok = false; notes.Add(L.T($"São {kept.Count} partições; MBR comporta 4 primárias.")); }
+            if (kept.Any(p => p.Entry!.EndLba > uint.MaxValue)) { ok = false; notes.Add(L.T("Há partição além do limite de 2 TiB do MBR.")); }
+            if (d.IsSystem) { ok = false; notes.Add(L.T("O Windows em uso inicia por UEFI/GPT; convertê-lo para MBR o deixaria sem inicializar.")); }
         }
         else
         {
@@ -129,12 +129,12 @@ public static class DiskOperations
             long first = PartitionCodec.GptFirstUsable(probe), last = PartitionCodec.GptLastUsable(probe);
             var lo = parts.FirstOrDefault(p => p.Entry!.StartLba < first);
             var hi = parts.FirstOrDefault(p => p.Entry!.EndLba > last);
-            if (lo != null) { ok = false; notes.Add($"A partição {lo.DisplayName} começa no setor {lo.Entry!.StartLba}; o GPT precisa dos primeiros {first} setores. Mova-a 1 MB para a direita antes."); }
-            if (hi != null) { ok = false; notes.Add($"A partição {hi.DisplayName} vai até o fim do disco; o GPT precisa de {d.Size / d.SectorSize - last - 1} setores no fim. Reduza-a 1 MB antes."); }
-            if (d.IsSystem) { ok = false; notes.Add("Para o disco do Windows, use o conversor oficial MBR2GPT (o assistente oferece) e mude o firmware para UEFI."); }
-            if (parts.Any(p => p.Entry!.IsLogical)) notes.Add("As partições lógicas viram partições GPT normais.");
+            if (lo != null) { ok = false; notes.Add(L.T($"A partição {lo.DisplayName} começa no setor {lo.Entry!.StartLba}; o GPT precisa dos primeiros {first} setores. Mova-a 1 MB para a direita antes.")); }
+            if (hi != null) { ok = false; notes.Add(L.T($"A partição {hi.DisplayName} vai até o fim do disco; o GPT precisa de {d.Size / d.SectorSize - last - 1} setores no fim. Reduza-a 1 MB antes.")); }
+            if (d.IsSystem) { ok = false; notes.Add(L.T("Para o disco do Windows, use o conversor oficial MBR2GPT (o assistente oferece) e mude o firmware para UEFI.")); }
+            if (parts.Any(p => p.Entry!.IsLogical)) notes.Add(L.T("As partições lógicas viram partições GPT normais."));
         }
-        if (ok) notes.Add("Conversão sem perda de dados: só a tabela é reescrita; o conteúdo das partições não é tocado.");
+        if (ok) notes.Add(L.T("Conversão sem perda de dados: só a tabela é reescrita; o conteúdo das partições não é tocado."));
         return (ok, notes);
     }
 
@@ -158,8 +158,8 @@ public static class DiskOperations
                 t.Entries.Add(new PartitionEntry { StartLba = e.StartLba, SectorCount = e.SectorCount, TypeGuid = g, Attributes = a, Name = p.Label ?? "", UniqueGuid = Guid.NewGuid() });
             }
         }
-        WriteTable(d, t, $"Converter para {target}", sink);
-        sink.Log($"Disco convertido para {(target == TableStyle.Gpt ? "GPT" : "MBR")}.");
+        WriteTable(d, t, L.T($"Converter para {target}"), sink);
+        sink.Log(L.T($"Disco convertido para {(target == TableStyle.Gpt ? "GPT" : "MBR")}."));
     }
 
     // ───────────── mover / alinhar ─────────────
@@ -167,7 +167,7 @@ public static class DiskOperations
     public static void MovePartition(PartitionInfo p, long newStartLba, OpSink sink)
     {
         RequirePartition(p);
-        if (p.Entry == null) throw new InvalidOperationException("Escolha uma partição.");
+        if (p.Entry == null) throw new InvalidOperationException(L.T("Escolha uma partição."));
         var d = p.Disk;
         var e = p.Entry;
         if (newStartLba == e.StartLba) return;
@@ -176,28 +176,28 @@ public static class DiskOperations
         long oldStart = me.StartLba;
         me.StartLba = newStartLba;
         if (t.Entries.Any(o => o != me && o.StartLba <= me.EndLba && me.StartLba <= o.EndLba))
-            throw new InvalidOperationException("A nova posição invade outra partição.");
+            throw new InvalidOperationException(L.T("A nova posição invade outra partição."));
         long lo = t.Style == TableStyle.Gpt ? PartitionCodec.GptFirstUsable(t) : 1;
         long hi = t.Style == TableStyle.Gpt ? PartitionCodec.GptLastUsable(t) : t.DiskSectors - 1;
-        if (me.StartLba < lo || me.EndLba > hi) throw new InvalidOperationException("A nova posição sai da área utilizável do disco.");
+        if (me.StartLba < lo || me.EndLba > hi) throw new InvalidOperationException(L.T("A nova posição sai da área utilizável do disco."));
         if (me.IsLogical && me.EbrLba >= newStartLba) me.EbrLba = 0;
 
         using var dev = DiskSystem.OpenDisk(d, true);
         int ss = dev.SectorSize;
-        string bak = TableBackup.Save(dev, PartitionCodec.FootprintForBackup(dev, d.Table), $"{d.Model}-{d.Serial}", "Mover partição");
-        sink.Log($"Backup da tabela: {bak}");
-        sink.Log("ATENÇÃO: não desligue o computador até o fim — a partição está sendo deslocada no lugar.");
+        string bak = TableBackup.Save(dev, PartitionCodec.FootprintForBackup(dev, d.Table), $"{d.Model}-{d.Serial}", L.T("Mover partição"));
+        sink.Log(L.T($"Backup da tabela: {bak}"));
+        sink.Log(L.T("ATENÇÃO: não desligue o computador até o fim — a partição está sendo deslocada no lugar."));
         using (DiskSystem.Native.LockVolumes(d, [p]))
         {
             var src = new SubDevice(dev, oldStart * ss, e.SectorCount * ss);
             SectorCopier.Copy(src, dev, new CopyOptions { TargetOffset = newStartLba * ss, Backwards = newStartLba > oldStart },
-                CopyReporter(sink, "Deslocando dados"), sink.Token, sink.PauseGate);
+                CopyReporter(sink, L.T("Deslocando dados")), sink.Token, sink.PauseGate);
             BootSector.SetHiddenSectors(new SubDevice(dev, newStartLba * ss, e.SectorCount * ss), p.FileSystem, newStartLba);
             PartitionCodec.Write(dev, t);
             DiskSystem.Native.Rescan(d);
         }
         DiskSystem.Native.Rescan(d);
-        sink.Log($"Partição movida do setor {oldStart:N0} para {newStartLba:N0}.");
+        sink.Log(L.T($"Partição movida do setor {oldStart:N0} para {newStartLba:N0}."));
     }
 
     public static bool IsAligned(PartitionInfo p) => p.Entry == null || (p.Offset % (1024 * 1024)) == 0;
@@ -226,7 +226,7 @@ public static class DiskOperations
         using var dev = DiskSystem.OpenDisk(p.Disk, true);
         using (DiskSystem.Native.LockVolumes(p.Disk, [p]))
             BootSector.WriteSerial(new SubDevice(dev, p.Offset, p.Length), p.FileSystem, serial);
-        sink.Log($"Número de série alterado para {BootSector.FormatSerial(serial, p.FileSystem)}.");
+        sink.Log(L.T($"Número de série alterado para {BootSector.FormatSerial(serial, p.FileSystem)}."));
     }
 
     public static void ChangeTypeRaw(PartitionInfo p, Guid? gpt, byte? mbr, OpSink sink)
@@ -235,7 +235,7 @@ public static class DiskOperations
         var e = t.Entries.First(x => x.StartLba == p.Entry!.StartLba);
         if (gpt != null) e.TypeGuid = gpt.Value;
         if (mbr != null) e.MbrType = mbr.Value;
-        WriteTable(p.Disk, t, "Alterar ID de tipo", sink, allowSystem: !p.IsSystemCritical);
+        WriteTable(p.Disk, t, L.T("Alterar ID de tipo"), sink, allowSystem: !p.IsSystemCritical);
     }
 
     // ───────────── limpeza ─────────────
@@ -243,40 +243,40 @@ public static class DiskOperations
     /// <summary>Apaga um LUKS achado pelo detector: cabeçalhos e chaves, sem tocar no que é de hoje.</summary>
     public static void EraseLuks(DiskInfo d, LuksFinding f, OpSink sink)
     {
-        if (d.ReadOnly) throw new InvalidOperationException("Imagem só para leitura.");
+        if (d.ReadOnly) throw new InvalidOperationException(L.T("Imagem só para leitura."));
         using var dev = DiskSystem.OpenDisk(d, true);
         var layout = LuksFinder.Layout(d, dev.Length);
         var touched = d.Partitions.Where(p => !p.IsUnallocated && f.Regions().Any(r => r.off < p.Offset + p.Length && r.off + r.len > p.Offset)).ToList();
         if (touched.FirstOrDefault(p => p.IsSystemCritical) is { } crit && crit.Offset == f.Start)
-            throw new InvalidOperationException($"{crit.DisplayName} está em uso pelo sistema.");
-        sink.Progress(-1, "Apagando o LUKS", f.Where);
+            throw new InvalidOperationException(L.T($"{crit.DisplayName} está em uso pelo sistema."));
+        sink.Progress(-1, L.T("Apagando o LUKS"), f.Where);
         LuksEraseResult res;
         using (DiskSystem.Native.LockVolumes(d, touched.Where(p => !p.IsSystemCritical)))
         {
             res = LuksFinder.Erase(dev, layout, f, a => LuksFinder.UsedRanges(dev.Slice(a.Offset, a.Length)), sink.Log, sink.Token);
         }
         DiskSystem.Native.Rescan(d);
-        sink.Log($"Zerados {Size(res.Written)} (cabeçalhos e áreas das chaves).");
-        foreach (var s in res.Skipped) sink.Log("Não tocado: " + s);
-        if (res.After == null) sink.Log("Conferido: não sobrou cabeçalho nem material de chave nesse lugar.");
+        sink.Log(L.T($"Zerados {Size(res.Written)} (cabeçalhos e áreas das chaves)."));
+        foreach (var s in res.Skipped) sink.Log(L.T("Não tocado: ") + s);
+        if (res.After == null) sink.Log(L.T("Conferido: não sobrou cabeçalho nem material de chave nesse lugar."));
         else if (res.After.State == LuksState.Openable || res.After.IntactSlots > 0)
-            throw new InvalidOperationException($"Ainda sobrou LUKS ({res.After.Explain()}). O que restou está em área usada pelo sistema de arquivos atual: para sumir com tudo, use Limpar disco nessa partição.");
-        else sink.Log("Conferido: " + res.After.Explain());
+            throw new InvalidOperationException(L.T($"Ainda sobrou LUKS ({res.After.Explain()}). O que restou está em área usada pelo sistema de arquivos atual: para sumir com tudo, use Limpar disco nessa partição."));
+        else sink.Log(L.T("Conferido: ") + res.After.Explain());
     }
 
     public static void Wipe(DiskInfo d, PartitionInfo? p, WipeMethod method, OpSink sink)
     {
         if (p == null) RequireModifiable(d); else RequirePartition(p);
-        if (p is { IsSystemCritical: true }) throw new InvalidOperationException("Partição do sistema em uso.");
+        if (p is { IsSystemCritical: true }) throw new InvalidOperationException(L.T("Partição do sistema em uso."));
         if (method is WipeMethod.Discard or WipeMethod.Sanitize)
         {
-            if (!OperatingSystem.IsLinux() || d.IsImage) throw new InvalidOperationException("Disponível no Linux, em discos físicos.");
+            if (!OperatingSystem.IsLinux() || d.IsImage) throw new InvalidOperationException(L.T("Disponível no Linux, em discos físicos."));
             using (DiskSystem.Native.LockVolumes(d, p == null ? null : [p]))
             {
                 if (method == WipeMethod.Discard) Platform.Linux.LinuxErase.Discard(d, p, sink);
                 else
                 {
-                    if (p != null) throw new InvalidOperationException("O apagamento do fabricante é sempre do disco inteiro.");
+                    if (p != null) throw new InvalidOperationException(L.T("O apagamento do fabricante é sempre do disco inteiro."));
                     Platform.Linux.LinuxErase.Sanitize(d, sink).GetAwaiter().GetResult();
                 }
             }
@@ -288,11 +288,11 @@ public static class DiskOperations
         using (DiskSystem.Native.LockVolumes(d, p == null ? null : [p]))
         {
             Wiper.Wipe(dev, start, len, method, new Progress<WipeProgress>(w =>
-                sink.Progress((w.Pass - 1 + (double)w.Done / w.Total) / w.Passes, $"Passada {w.Pass} de {w.Passes}", $"{Size(w.Done)} de {Size(w.Total)} · {Size((long)w.BytesPerSecond)}/s")), sink.Token);
+                sink.Progress((w.Pass - 1 + (double)w.Done / w.Total) / w.Passes, L.T($"Passada {w.Pass} de {w.Passes}"), $"{Size(w.Done)} de {Size(w.Total)} · {Size((long)w.BytesPerSecond)}/s")), sink.Token);
             DiskSystem.Native.Rescan(d);
         }
         DiskSystem.Native.Rescan(d);
-        sink.Log(p == null ? "Disco limpo. Ele aparece agora como não inicializado." : "Partição limpa (o conteúdo foi sobrescrito; a partição continua na tabela).");
+        sink.Log(p == null ? L.T("Disco limpo. Ele aparece agora como não inicializado.") : L.T("Partição limpa (o conteúdo foi sobrescrito; a partição continua na tabela)."));
     }
 
     // ───────────── origem com VSS ─────────────
@@ -306,11 +306,11 @@ public static class DiskOperations
     {
         if (useVss && OperatingSystem.IsWindows() && !p.Disk.IsImage && p.Letter != null && p.FileSystem == FsKind.Ntfs && !p.BitLocker)
         {
-            sink.Log($"Criando instantâneo VSS de {p.Letter}…");
+            sink.Log(L.T($"Criando instantâneo VSS de {p.Letter}…"));
             var shadow = await WinCommands.CreateShadow(p.Letter + "\\", sink.Token);
             if (shadow is { } s)
             {
-                sink.Log("Instantâneo pronto: a cópia sai consistente mesmo com o Windows em uso.");
+                sink.Log(L.T("Instantâneo pronto: a cópia sai consistente mesmo com o Windows em uso."));
                 // o tamanho vem da partição: nem todo Windows responde IOCTL_DISK_GET_LENGTH_INFO no instantâneo
                 var dev = new WinDevice(s.device, false, p.Disk.SectorSize, p.Length, isVolume: true);
                 return (dev, async () => { dev.Dispose(); await WinCommands.DeleteShadow(s.id); });
@@ -348,10 +348,10 @@ public static class DiskOperations
     public static async Task CopyPartition(PartitionInfo src, DiskInfo target, long targetStartLba, bool usedOnly, bool useVss, OpSink sink)
     {
         if (OperatingSystem.IsWindows() || target.IsImage) RequireModifiable(target);
-        else if (!target.PartitionsEditable) throw new InvalidOperationException("O disco de destino não aceita partições novas.");
-        if (target.SectorSize != src.Disk.SectorSize) throw new InvalidOperationException("Os discos têm tamanhos de setor diferentes (512 × 4096).");
+        else if (!target.PartitionsEditable) throw new InvalidOperationException(L.T("O disco de destino não aceita partições novas."));
+        if (target.SectorSize != src.Disk.SectorSize) throw new InvalidOperationException(L.T("Os discos têm tamanhos de setor diferentes (512 × 4096)."));
         var t = target.Table.Clone();
-        if (t.Style == TableStyle.None) throw new InvalidOperationException("Inicialize o disco de destino (GPT ou MBR) antes.");
+        if (t.Style == TableStyle.None) throw new InvalidOperationException(L.T("Inicialize o disco de destino (GPT ou MBR) antes."));
         long count = src.Length / target.SectorSize;
         var e = new PartitionEntry { StartLba = targetStartLba, SectorCount = count };
         if (t.Style == TableStyle.Gpt)
@@ -369,21 +369,21 @@ public static class DiskOperations
         try
         {
             var ranges = usedOnly ? UsedRangesOf(sdev, src.FileSystem) : null;
-            if (ranges != null) sink.Log($"Copiando só o espaço em uso: {Size(ranges.Sum(r => r.Item2))} de {Size(src.Length)}.");
+            if (ranges != null) sink.Log(L.T($"Copiando só o espaço em uso: {Size(ranges.Sum(r => r.Item2))} de {Size(src.Length)}."));
             using var tdev = DiskSystem.OpenDisk(target, true);
             // Linux: o espaço livre não pertence a nenhuma partição montada — nada a desmontar
             using (DiskSystem.Native.LockVolumes(target, OperatingSystem.IsWindows() ? null : []))
             {
                 var r = SectorCopier.Copy(sdev, tdev, new CopyOptions { TargetOffset = targetStartLba * target.SectorSize, Ranges = ranges },
-                    CopyReporter(sink, "Copiando partição"), sink.Token, sink.PauseGate);
-                if (r.BadSectors.Count > 0) sink.Log($"{r.BadSectors.Count} setores ilegíveis na origem foram gravados como zeros.");
+                    CopyReporter(sink, L.T("Copiando partição")), sink.Token, sink.PauseGate);
+                if (r.BadSectors.Count > 0) sink.Log(L.T($"{r.BadSectors.Count} setores ilegíveis na origem foram gravados como zeros."));
                 BootSector.SetHiddenSectors(new SubDevice(tdev, targetStartLba * target.SectorSize, src.Length), src.FileSystem, targetStartLba);
             }
         }
         finally { await release(); }
-        WriteTable(target, t, "Copiar partição", sink);
-        sink.Log(OperatingSystem.IsWindows() ? "Partição copiada. O Windows deve montá-la com uma letra nova em alguns segundos."
-            : "Partição copiada. Atenção: a cópia tem o mesmo UUID da original — se as duas ficarem no mesmo computador, troque o UUID de uma (Alterar UUID) para o sistema não confundir.");
+        WriteTable(target, t, L.T("Copiar partição"), sink);
+        sink.Log(OperatingSystem.IsWindows() ? L.T("Partição copiada. O Windows deve montá-la com uma letra nova em alguns segundos.")
+            : L.T("Partição copiada. Atenção: a cópia tem o mesmo UUID da original — se as duas ficarem no mesmo computador, troque o UUID de uma (Alterar UUID) para o sistema não confundir."));
     }
 
     // ───────────── imagem de disco ─────────────
@@ -397,7 +397,7 @@ public static class DiskOperations
         if (dir != null)
         {
             var di = new DriveInfo(dir);
-            if (di.IsReady && di.AvailableFreeSpace < total) throw new InvalidOperationException($"Espaço insuficiente no destino: precisa de {Size(total)}, há {Size(di.AvailableFreeSpace)}.");
+            if (di.IsReady && di.AvailableFreeSpace < total) throw new InvalidOperationException(L.T($"Espaço insuficiente no destino: precisa de {Size(total)}, há {Size(di.AvailableFreeSpace)}."));
         }
         using var sha = hash ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
         long bad = 0;
@@ -429,9 +429,9 @@ public static class DiskOperations
                     {
                         TargetOffset = onlyPartition != null ? 0 : offset, Retries = retries, HashSink = sha,
                         ProgressBase = baseDone, ProgressTotal = total, Ranges = [(0, Math.Min(length, src.Length))],
-                    }, CopyReporter(sink, "Gravando imagem"), sink.Token, sink.PauseGate);
+                    }, CopyReporter(sink, L.T("Gravando imagem")), sink.Token, sink.PauseGate);
                     bad += r.BadSectors.Count;
-                    if (r.BadSectors.Count > 0) sink.Log($"{r.BadSectors.Count} setores ilegíveis em {part?.DisplayName ?? "área livre"} (primeiro: {r.BadSectors[0]:N0}).");
+                    if (r.BadSectors.Count > 0) sink.Log(L.T($"{r.BadSectors.Count} setores ilegíveis em {part?.DisplayName ?? L.T("área livre")} (primeiro: {r.BadSectors[0]:N0})."));
                 }
                 finally { await release(); }
                 baseDone += length;
@@ -441,9 +441,9 @@ public static class DiskOperations
         var meta = new ImageMeta(onlyPartition != null ? $"{d.Title} · {onlyPartition.DisplayName}" : d.Title, d.Model, d.Serial, total, d.SectorSize, DateTime.Now, digest, bad,
             d.StyleText, d.Partitions.Where(p => !p.IsUnallocated).Select(p => $"{p.DisplayName} {FsDetect.Name(p.FileSystem)} {Size(p.Length)} @ {p.Offset}").ToList());
         await File.WriteAllTextAsync(path + ".json", JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true }));
-        sink.Log($"Imagem concluída: {path}");
+        sink.Log(L.T($"Imagem concluída: {path}"));
         if (digest != null) sink.Log($"SHA-256: {digest}");
-        sink.Log(bad == 0 ? "Nenhum setor ilegível." : $"{bad} setores ilegíveis foram preenchidos com zeros (lista no log).");
+        sink.Log(bad == 0 ? L.T("Nenhum setor ilegível.") : L.T($"{bad} setores ilegíveis foram preenchidos com zeros (lista no log)."));
     }
 
     public static void RestoreImage(string imagePath, DiskInfo target, PartitionInfo? targetPartition, OpSink sink)
@@ -451,15 +451,15 @@ public static class DiskOperations
         if (targetPartition == null) RequireModifiable(target); else RequirePartition(targetPartition);
         using var img = new ImageFileDevice(imagePath, false, target.SectorSize);
         long capacity = targetPartition?.Length ?? target.Size;
-        if (img.Length > capacity) throw new InvalidOperationException($"A imagem ({Size(img.Length)}) é maior que o destino ({Size(capacity)}).");
+        if (img.Length > capacity) throw new InvalidOperationException(L.T($"A imagem ({Size(img.Length)}) é maior que o destino ({Size(capacity)})."));
         using var dev = DiskSystem.OpenDisk(target, true);
         using (DiskSystem.Native.LockVolumes(target, targetPartition == null ? null : [targetPartition]))
         {
-            SectorCopier.Copy(img, dev, new CopyOptions { TargetOffset = targetPartition?.Offset ?? 0 }, CopyReporter(sink, "Restaurando imagem"), sink.Token, sink.PauseGate);
+            SectorCopier.Copy(img, dev, new CopyOptions { TargetOffset = targetPartition?.Offset ?? 0 }, CopyReporter(sink, L.T("Restaurando imagem")), sink.Token, sink.PauseGate);
             DiskSystem.Native.Rescan(target);
         }
         DiskSystem.Native.Rescan(target);
-        sink.Log("Imagem restaurada.");
+        sink.Log(L.T("Imagem restaurada."));
     }
 
     // ───────────── clonar disco / migrar sistema ─────────────
@@ -520,8 +520,8 @@ public static class DiskOperations
     public static async Task Clone(ClonePlan plan, bool usedOnly, bool useVss, bool makeBootable, OpSink sink)
     {
         RequireModifiable(plan.Target);
-        if (plan.Deficit > 0) throw new InvalidOperationException($"Não cabe: faltam {Size(plan.Deficit)} no disco de destino.");
-        if (plan.Target.SectorSize != plan.Source.SectorSize) throw new InvalidOperationException("Os discos têm tamanhos de setor diferentes (512 × 4096): a cópia setor a setor não funcionaria.");
+        if (plan.Deficit > 0) throw new InvalidOperationException(L.T($"Não cabe: faltam {Size(plan.Deficit)} no disco de destino."));
+        if (plan.Target.SectorSize != plan.Source.SectorSize) throw new InvalidOperationException(L.T("Os discos têm tamanhos de setor diferentes (512 × 4096): a cópia setor a setor não funcionaria."));
         int ss = plan.Source.SectorSize;
         var style = plan.Source.Table.Style == TableStyle.None ? TableStyle.Gpt : plan.Source.Table.Style;
         // Linux copiado no Linux: mantém os identificadores da tabela. root=PARTUUID=, fstab com
@@ -542,7 +542,7 @@ public static class DiskOperations
         {
             foreach (var (src, start, sectors) in plan.Items)
             {
-                sink.Log($"Copiando {src.DisplayName} ({FsDetect.Name(src.FileSystem)}, {Size(src.Length)}) para o setor {start:N0}…");
+                sink.Log(L.T($"Copiando {src.DisplayName} ({FsDetect.Name(src.FileSystem)}, {Size(src.Length)}) para o setor {start:N0}…"));
                 var (sdev, release) = await OpenSource(src, useVss, sink);
                 try
                 {
@@ -551,8 +551,8 @@ public static class DiskOperations
                     {
                         TargetOffset = start * ss, Ranges = ranges ?? [(0, Math.Min(src.Length, sdev.Length))],
                         ProgressBase = baseDone, ProgressTotal = total,
-                    }, CopyReporter(sink, "Clonando"), sink.Token, sink.PauseGate);
-                    if (r.BadSectors.Count > 0) sink.Log($"  {r.BadSectors.Count} setores ilegíveis gravados como zeros.");
+                    }, CopyReporter(sink, L.T("Clonando")), sink.Token, sink.PauseGate);
+                    if (r.BadSectors.Count > 0) sink.Log(L.T($"  {r.BadSectors.Count} setores ilegíveis gravados como zeros."));
                     BootSector.SetHiddenSectors(new SubDevice(tdev, start * ss, sectors * ss), src.FileSystem, start);
                 }
                 finally { await release(); }
@@ -566,34 +566,34 @@ public static class DiskOperations
             }
             tdev.Flush();
         }
-        WriteTable(plan.Target, t, plan.SystemOnly ? "Migrar sistema" : "Copiar disco", sink);
+        WriteTable(plan.Target, t, plan.SystemOnly ? L.T("Migrar sistema") : L.T("Copiar disco"), sink);
         if (keepIds)
-            sink.Log("O disco novo é uma cópia idêntica do Linux (mesmos UUIDs e PARTUUIDs): para ligar por ele, desconecte o antigo. " +
-                     "Para manter os dois ligados juntos, use Migrar sistema, que dá identificadores novos e ajusta o fstab e o boot.");
+            sink.Log(L.T("O disco novo é uma cópia idêntica do Linux (mesmos UUIDs e PARTUUIDs): para ligar por ele, desconecte o antigo. ") +
+                     L.T("Para manter os dois ligados juntos, use Migrar sistema, que dá identificadores novos e ajusta o fstab e o boot."));
 
         if (!OperatingSystem.IsWindows() || plan.Target.IsImage) return;
         await Task.Delay(2500, sink.Token);
         if (plan.Grow != null)
         {
             long newOfs = plan.Items.First(i => i.src == plan.Grow).start * ss;
-            sink.Log($"Expandindo {plan.Grow.DisplayName} para ocupar o espaço extra ({Size(plan.GrowBy)})…");
+            sink.Log(L.T($"Expandindo {plan.Grow.DisplayName} para ocupar o espaço extra ({Size(plan.GrowBy)})…"));
             var r = await WinCommands.PowerShell($"$p=Get-Partition -DiskNumber {plan.Target.Number} | Where-Object {{ $_.Offset -eq {newOfs} }}; $m=($p | Get-PartitionSupportedSize).SizeMax; $p | Resize-Partition -Size $m", sink.Token);
-            sink.Log(r.Ok ? "Partição expandida." : "Não foi possível expandir agora (faça depois em Mover/Redimensionar): " + r.Message);
+            sink.Log(r.Ok ? L.T("Partição expandida.") : L.T("Não foi possível expandir agora (faça depois em Mover/Redimensionar): ") + r.Message);
         }
         if (makeBootable)
         {
             var win = plan.Items.FirstOrDefault(i => i.src.IsSystemVolume);
             var sys = plan.Items.FirstOrDefault(i => i.src.IsEsp || (style == TableStyle.Mbr && i.src.Entry!.Active));
-            if (win.src == null || sys.src == null) { sink.Log("Sem partição do Windows/sistema no plano: o disco novo não foi preparado para iniciar."); return; }
-            sink.Log("Preparando o disco novo para iniciar (bcdboot)…");
+            if (win.src == null || sys.src == null) { sink.Log(L.T("Sem partição do Windows/sistema no plano: o disco novo não foi preparado para iniciar.")); return; }
+            sink.Log(L.T("Preparando o disco novo para iniciar (bcdboot)…"));
             var wl = await WinCommands.AssignTemporaryLetter(plan.Target.Number, win.start * ss);
             var sl = await WinCommands.AssignTemporaryLetter(plan.Target.Number, sys.start * ss);
             string w = wl.Output.Trim(), s = sl.Output.Trim();
-            if (!wl.Ok || !sl.Ok || w.Length != 1 || s.Length != 1) { sink.Log("Não foi possível dar letras temporárias às partições novas: " + wl.Message + " " + sl.Message); return; }
+            if (!wl.Ok || !sl.Ok || w.Length != 1 || s.Length != 1) { sink.Log(L.T("Não foi possível dar letras temporárias às partições novas: ") + wl.Message + " " + sl.Message); return; }
             var b = await WinCommands.BcdBoot($"{w}:\\Windows", $"{s}:", style == TableStyle.Gpt, sink.Token);
-            sink.Log(b.Ok ? "Inicialização configurada no disco novo." : "bcdboot falhou: " + b.Message);
+            sink.Log(b.Ok ? L.T("Inicialização configurada no disco novo.") : L.T("bcdboot falhou: ") + b.Message);
             await WinCommands.PowerShell($"Get-Partition -DiskNumber {plan.Target.Number} | Where-Object {{ $_.Offset -eq {sys.start * ss} }} | Remove-PartitionAccessPath -AccessPath '{s}:\\'");
-            sink.Log("Pronto. Para iniciar pelo disco novo, escolha-o na BIOS/UEFI (ou troque os discos de lugar).");
+            sink.Log(L.T("Pronto. Para iniciar pelo disco novo, escolha-o na BIOS/UEFI (ou troque os discos de lugar)."));
         }
     }
 
@@ -602,8 +602,8 @@ public static class DiskOperations
     public static void RestoreFound(DiskInfo d, IEnumerable<FoundPartition> chosen, TableStyle style, OpSink sink)
     {
         var t = PartitionFinder.BuildRestoredTable(d.Table, chosen, style, d.Size / d.SectorSize, d.SectorSize);
-        WriteTable(d, t, "Recuperar partições", sink);
-        sink.Log($"{chosen.Count()} partição(ões) restaurada(s) na tabela {(style == TableStyle.Gpt ? "GPT" : "MBR")}.");
+        WriteTable(d, t, L.T("Recuperar partições"), sink);
+        sink.Log(L.T($"{chosen.Count()} partição(ões) restaurada(s) na tabela {(style == TableStyle.Gpt ? "GPT" : "MBR")}."));
     }
 
     public static void RestoreTableBackup(DiskInfo d, string backupFile, OpSink sink)
@@ -616,6 +616,6 @@ public static class DiskOperations
             DiskSystem.Native.Rescan(d);
         }
         DiskSystem.Native.Rescan(d);
-        sink.Log("Backup de tabela restaurado.");
+        sink.Log(L.T("Backup de tabela restaurado."));
     }
 }

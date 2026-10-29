@@ -27,7 +27,7 @@ public sealed partial class MainViewModel
     /// <summary>A fila de alterações — o mesmo modelo do MiniTool: escolhe, revisa, confirma.</summary>
     public ObservableCollection<PendingOp> Pending { get; } = [];
     public bool HasPending => Pending.Count > 0;
-    public string PendingTitle => Pending.Count == 0 ? "ALTERAÇÕES PENDENTES" : $"{Pending.Count} PENDENTE{(Pending.Count == 1 ? "" : "S")}";
+    public string PendingTitle => Pending.Count == 0 ? L.T("ALTERAÇÕES PENDENTES") : (Pending.Count == 1 ? L.T("1 PENDENTE") : L.T($"{Pending.Count} PENDENTES"));
 
     private void HookPending()
     {
@@ -43,7 +43,7 @@ public sealed partial class MainViewModel
     public void Queue(string title, string detail, string icon, Func<OpSink, Task> work, DiskInfo? disk = null, bool dangerous = false, bool canPause = false)
     {
         Pending.Add(new PendingOp { Title = title, Detail = detail, IconKey = icon, Work = work, DiskNumber = disk?.Number, Dangerous = dangerous, CanPause = canPause });
-        ShowToast("Adicionado às alterações pendentes — confira e clique em Confirmar, na barra à esquerda.");
+        ShowToast(L.T("Adicionado às alterações pendentes — confira e clique em Confirmar, na barra à esquerda."));
     }
 
     public void Queue(string title, string detail, string icon, Action<OpSink> work, DiskInfo? disk = null, bool dangerous = false, bool canPause = false)
@@ -53,9 +53,9 @@ public sealed partial class MainViewModel
     private async Task DiscardPending()
     {
         if (Pending.Count == 0) return;
-        if (!await Confirm("Cancelar alterações", $"As {Pending.Count} alterações pendentes serão descartadas. Nada foi gravado no disco.", "Descartar", false, null, "Close")) return;
+        if (!await Confirm(L.T("Cancelar alterações"), L.T($"As {Pending.Count} alterações pendentes serão descartadas. Nada foi gravado no disco."), L.T("Descartar"), false, null, "Close")) return;
         Pending.Clear();
-        ShowToast("Alterações descartadas. Nenhum disco foi tocado.");
+        ShowToast(L.T("Alterações descartadas. Nenhum disco foi tocado."));
     }
 
     [RelayCommand]
@@ -65,15 +65,15 @@ public sealed partial class MainViewModel
         var ops = Pending.ToList();
         var f = new FormDialogViewModel
         {
-            Title = "Confirmar alterações", IconKey = "Check", Subtitle = $"{ops.Count} operação(ões), executadas nesta ordem",
-            ConfirmText = "Aplicar agora", Danger = ops.Any(o => o.Dangerous),
+            Title = L.T("Confirmar alterações"), IconKey = "Check", Subtitle = L.T($"{ops.Count} operação(ões), executadas nesta ordem"),
+            ConfirmText = L.T("Aplicar agora"), Danger = ops.Any(o => o.Dangerous),
         };
         int i = 1;
         foreach (var o in ops) f.Add(new InfoField { Label = $"{i++}. {o.Title}", Text = o.Detail });
-        f.Note("Feche os programas que usam esses discos. Não desligue o computador durante a execução. A tabela de cada disco é salva antes em Documentos\\LibertyX Partition.", ops.Any(o => o.Dangerous) ? "danger" : "gold");
+        f.Note(L.T("Feche os programas que usam esses discos. Não desligue o computador durante a execução. A tabela de cada disco é salva antes em Documentos\\LibertyX Partition."), ops.Any(o => o.Dangerous) ? "danger" : "gold");
         if (!await ShowDialog(f)) return;
 
-        await Run(ops.Count == 1 ? ops[0].Title : $"Aplicando {ops.Count} alterações", async s =>
+        await Run(ops.Count == 1 ? ops[0].Title : L.T($"Aplicando {ops.Count} alterações"), async s =>
         {
             for (int k = 0; k < ops.Count; k++)
             {
@@ -84,9 +84,9 @@ public sealed partial class MainViewModel
                 Ui.Post(() => Pending.Remove(o));
                 s.Log("   feito.");
             }
-        }, refresh: true, canPause: ops.Any(o => o.CanPause), success: ops.Count == 1 ? null : $"As {ops.Count} alterações foram aplicadas.");
+        }, refresh: true, canPause: ops.Any(o => o.CanPause), success: ops.Count == 1 ? null : L.T($"As {ops.Count} alterações foram aplicadas."));
         if (Pending.Count > 0)
-            ShowToast($"{Pending.Count} alteração(ões) não chegaram a rodar e continuam pendentes.");
+            ShowToast(L.T($"{Pending.Count} alteração(ões) não chegaram a rodar e continuam pendentes."));
     }
 
     // ───────── estado atualizado na hora de executar ─────────
@@ -95,7 +95,7 @@ public sealed partial class MainViewModel
     public static DiskInfo Fresh(DiskInfo d)
     {
         var nd = DiskSystem.Enumerate().FirstOrDefault(x => x.Number == d.Number && x.IsImage == d.IsImage && (!d.IsImage || x.ImagePath == d.ImagePath));
-        if (nd == null) throw new InvalidOperationException($"{d.Title} ({d.Model}) não está mais conectado.");
+        if (nd == null) throw new InvalidOperationException(L.T($"{d.Title} ({d.Model}) não está mais conectado."));
         if (d.IsImage) nd.ReadOnly = d.ReadOnly;
         return nd;
     }
@@ -112,7 +112,7 @@ public sealed partial class MainViewModel
         else
             np = nd.Partitions.FirstOrDefault(x => x.Offset == p.Offset && !x.IsUnallocated);
         if (np == null)
-            throw new InvalidOperationException($"A partição {p.Letter ?? p.Label ?? DiskOperations.Size(p.Offset)} não existe mais onde estava — uma alteração anterior da fila a removeu ou mudou. Confirme essa primeiro e escolha esta de novo.");
+            throw new InvalidOperationException(L.T($"A partição {p.Letter ?? p.Label ?? DiskOperations.Size(p.Offset)} não existe mais onde estava — uma alteração anterior da fila a removeu ou mudou. Confirme essa primeiro e escolha esta de novo."));
         return np;
     }
 }

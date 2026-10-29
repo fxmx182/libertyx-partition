@@ -133,8 +133,8 @@ public sealed class LinuxDiskSystem : IDiskSystem
     private static string DmLabel(string dm)
     {
         string name = Sys($"/sys/class/block/{dm}/dm/name"), uuid = Sys($"/sys/class/block/{dm}/dm/uuid");
-        if (uuid.StartsWith("CRYPT-BITLK")) return $"BitLocker aberto ({name})";
-        if (uuid.StartsWith("CRYPT-")) return $"LUKS aberto ({name})";
+        if (uuid.StartsWith("CRYPT-BITLK")) return L.T($"BitLocker aberto ({name})");
+        if (uuid.StartsWith("CRYPT-")) return L.T($"LUKS aberto ({name})");
         if (uuid.StartsWith("LVM-")) return $"LVM ({name})";
         return dm.StartsWith("md") ? $"RAID {dm}" : name.Length > 0 ? name : dm;
     }
@@ -143,7 +143,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
     {
         if (dm.StartsWith("md")) return "RAID";
         string uuid = Sys($"/sys/class/block/{dm}/dm/uuid");
-        return uuid.StartsWith("CRYPT-BITLK") ? "BitLocker" : uuid.StartsWith("CRYPT-") ? "LUKS" : uuid.StartsWith("LVM-") ? "LVM" : "Mapeado";
+        return uuid.StartsWith("CRYPT-BITLK") ? "BitLocker" : uuid.StartsWith("CRYPT-") ? "LUKS" : uuid.StartsWith("LVM-") ? "LVM" : L.T("Mapeado");
     }
 
     /// <summary>Número estável por nome do kernel: o mesmo pendrive não troca de número quando outro entra.</summary>
@@ -173,10 +173,10 @@ public sealed class LinuxDiskSystem : IDiskSystem
         if (name.StartsWith("mmcblk")) return Sys($"/sys/block/{name}/device/type") == "MMC" ? "MMC" : "SD";
         if (name.StartsWith("vd") || real.Contains("/virtio")) return "Virtio";
         if (name.StartsWith("loop")) return "Loop";
-        if (name.StartsWith("nbd")) return "Rede (NBD)";
+        if (name.StartsWith("nbd")) return L.T("Rede (NBD)");
         if (real.Contains("/ata")) return "SATA";
         if (u.GetValueOrDefault("ID_BUS") is "scsi" || real.Contains("/host")) return real.Contains("sas") ? "SAS" : "SCSI";
-        return u.GetValueOrDefault("ID_BUS", "Desconhecido").ToUpperInvariant();
+        return u.GetValueOrDefault("ID_BUS", L.T("Desconhecido")).ToUpperInvariant();
     }
 
     public List<DiskInfo> Enumerate()
@@ -222,7 +222,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
             if (model.Length == 0) model = Sys(Path.Combine(dir, "device/model"));
             string vendor = Sys(Path.Combine(dir, "device/vendor"));
             if (vendor.Length > 0 && vendor is not ("ATA" or "NVMe") && !model.StartsWith(vendor, StringComparison.OrdinalIgnoreCase)) model = vendor + " " + model;
-            if (name.StartsWith("mmcblk")) model = Sys(Path.Combine(dir, "device/name")) is { Length: > 0 } nm ? $"Cartão {nm}" : "Cartão SD";
+            if (name.StartsWith("mmcblk")) model = Sys(Path.Combine(dir, "device/name")) is { Length: > 0 } nm ? L.T($"Cartão {nm}") : L.T("Cartão SD");
             if (name.StartsWith("loop")) model = "Loop · " + Path.GetFileName(Sys(Path.Combine(dir, "loop/backing_file")));
             if (virt) model = name.StartsWith("md") ? $"RAID {Sys(Path.Combine(dir, "md/level"))} ({name})" : Sys(Path.Combine(dir, "dm/name"));
             var d = new DiskInfo
@@ -260,7 +260,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
                 if (d.Size > 0)
                 {
                     using var dev = Bounded.Run(() => (IBlockDevice?)OpenDisk(d, false), TimeSpan.FromSeconds(15), null, out bool slow);
-                    if (slow || dev == null) d.Error = "O disco não respondeu em 15 segundos — mídia com defeito ou leitor travado. Tire e ponha de novo e clique em Atualizar.";
+                    if (slow || dev == null) d.Error = L.T("O disco não respondeu em 15 segundos — mídia com defeito ou leitor travado. Tire e ponha de novo e clique em Atualizar.");
                     else LayoutBuilder.Build(d, dev);
                 }
             }
@@ -272,9 +272,9 @@ public sealed class LinuxDiskSystem : IDiskSystem
                 if (!p.IsWholeDisk)
                 {
                     var k = kparts.FirstOrDefault(x => x.start == p.Offset);
-                    if (k.name == null) { p.HeldBy = "o kernel ainda não vê esta partição"; continue; }
+                    if (k.name == null) { p.HeldBy = L.T("o kernel ainda não vê esta partição"); continue; }
                     pname = k.name; pmm = k.majMin;
-                    if (k.size != p.Length) p.HeldBy = $"o kernel vê {Operations.DiskOperations.Size(k.size)} — releia a tabela";
+                    if (k.size != p.Length) p.HeldBy = L.T($"o kernel vê {Operations.DiskOperations.Size(k.size)} — releia a tabela");
                 }
                 p.DeviceNode = DevNodes.Node(pname);
                 p.VolumePath = p.DeviceNode;
@@ -309,7 +309,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
             // partições que o kernel tem e a tabela não (tabela apagada com o volume ainda montado)
             var orphan = kparts.Where(k => !d.Partitions.Any(p => p.Offset == k.start && !p.IsUnallocated)).Select(k => k.name).ToList();
             if (orphan.Count > 0 && d.Error == null)
-                d.Error = $"O kernel ainda usa {string.Join(", ", orphan)}, que não está mais na tabela. Desmonte e clique em Atualizar (ou reinicie).";
+                d.Error = L.T($"O kernel ainda usa {string.Join(", ", orphan)}, que não está mais na tabela. Desmonte e clique em Atualizar (ou reinicie).");
             res.Add(d);
         }
         return res;
@@ -388,10 +388,10 @@ public sealed class LinuxDiskSystem : IDiskSystem
         var now = fresh == null ? targets : targets.Select(t => fresh.Partitions.FirstOrDefault(f => f.Offset == t.Offset && !f.IsUnallocated) ?? t).ToList();
         var critical = now.Where(p => p.IsSystemCritical).ToList();
         if (critical.Count > 0)
-            throw new IOException($"{string.Join(", ", critical.Select(p => p.KernelName ?? p.DisplayName))} está em uso pelo sistema ({string.Join(", ", critical.SelectMany(p => p.MountPoints).DefaultIfEmpty("swap"))}). Para alterá-la, inicie por um pendrive Linux.");
+            throw new IOException(L.T($"{string.Join(", ", critical.Select(p => p.KernelName ?? p.DisplayName))} está em uso pelo sistema ({string.Join(", ", critical.SelectMany(p => p.MountPoints).DefaultIfEmpty("swap"))}). Para alterá-la, inicie por um pendrive Linux."));
         var held = now.Where(p => p.HeldBy != null && p.KernelName != null && HoldersOf(p.KernelName).Count > 0).ToList();
         if (held.Count > 0)
-            throw new IOException($"{string.Join(", ", held.Select(p => $"{p.KernelName} ({p.HeldBy})"))}: feche antes o que está aberto em cima (Criptografia → Fechar, ou desative o grupo LVM).");
+            throw new IOException(L.T($"{string.Join(", ", held.Select(p => $"{p.KernelName} ({p.HeldBy})"))}: feche antes o que está aberto em cima (Criptografia → Fechar, ou desative o grupo LVM)."));
         var inhibit = AutomountInhibitor.Start();
         var undone = new List<(string dev, string mp, string fs)>();
         try
@@ -400,7 +400,7 @@ public sealed class LinuxDiskSystem : IDiskSystem
             foreach (var p in now)
             {
                 if (p.HasPageFile && p.DeviceNode != null && SwapOff(p.DeviceNode) != 0)
-                    throw new IOException($"Não foi possível desligar a swap em {p.DeviceNode}: {ErrText(Errno)}.");
+                    throw new IOException(L.T($"Não foi possível desligar a swap em {p.DeviceNode}: {ErrText(Errno)}."));
                 // mais fundo primeiro: /mnt/a/b antes de /mnt/a
                 foreach (var mp in p.MountPoints.OrderByDescending(m => m.Length))
                 {
@@ -411,9 +411,9 @@ public sealed class LinuxDiskSystem : IDiskSystem
                         if (e == EBUSY)
                         {
                             var who = WhoUses(mp);
-                            throw new IOException($"{mp} está em uso{(who.Count > 0 ? " por: " + string.Join(", ", who.Take(6)) : "")}. Feche esses programas (ou janelas abertas nessa pasta) e tente de novo.");
+                            throw new IOException(L.T($"{mp} está em uso{(who.Count > 0 ? L.T(" por: ") + string.Join(", ", who.Take(6)) : "")}. Feche esses programas (ou janelas abertas nessa pasta) e tente de novo."));
                         }
-                        if (e != EINVAL) throw new IOException($"Não foi possível desmontar {mp}: {ErrText(e)}.");
+                        if (e != EINVAL) throw new IOException(L.T($"Não foi possível desmontar {mp}: {ErrText(e)}."));
                     }
                     undone.Add((p.DeviceNode!, mp, fs));
                 }
@@ -481,8 +481,8 @@ public sealed class LinuxDiskSystem : IDiskSystem
 
     public SmartReport ReadSmart(DiskInfo d)
     {
-        if (d.IsImage) return new SmartReport { Summary = "Imagem de disco: sem S.M.A.R.T." };
-        if (d.IsVirtual) return new SmartReport { Summary = $"Volume {d.VirtualKind}: a saúde é a dos discos físicos que o compõem." };
+        if (d.IsImage) return new SmartReport { Summary = L.T("Imagem de disco: sem S.M.A.R.T.") };
+        if (d.IsVirtual) return new SmartReport { Summary = L.T($"Volume {d.VirtualKind}: a saúde é a dos discos físicos que o compõem.") };
         return LinuxSmart.Read(d);
     }
 }

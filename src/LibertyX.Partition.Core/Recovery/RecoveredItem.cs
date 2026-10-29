@@ -144,9 +144,9 @@ public static class FileTypes
 
     public static string CategoryName(FileCategory c) => c switch
     {
-        FileCategory.Folder => "Pastas", FileCategory.Image => "Imagens", FileCategory.Video => "Vídeos",
-        FileCategory.Audio => "Áudio", FileCategory.Document => "Documentos", FileCategory.Archive => "Compactados",
-        FileCategory.Code => "Código", FileCategory.Executable => "Programas", FileCategory.Database => "Bancos de dados",
-        _ => "Outros",
+        FileCategory.Folder => L.T("Pastas"), FileCategory.Image => L.T("Imagens"), FileCategory.Video => L.T("Vídeos"),
+        FileCategory.Audio => L.T("Áudio"), FileCategory.Document => L.T("Documentos"), FileCategory.Archive => L.T("Compactados"),
+        FileCategory.Code => L.T("Código"), FileCategory.Executable => L.T("Programas"), FileCategory.Database => L.T("Bancos de dados"),
+        _ => L.T("Outros"),
     };
 }

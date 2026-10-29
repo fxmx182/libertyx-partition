@@ -11,7 +11,7 @@ public sealed partial class OperationViewModel : ViewModelBase
 {
     public OpSink Sink { get; } = new();
     [ObservableProperty] private string _title = "";
-    [ObservableProperty] private string _status = "Preparando…";
+    [ObservableProperty] private string _status = L.T("Preparando…");
     [ObservableProperty] private string? _detail;
     [ObservableProperty] private double _fraction;
     [ObservableProperty] private bool _indeterminate = true;
@@ -51,7 +51,7 @@ public sealed partial class OperationViewModel : ViewModelBase
                 if (f > 0.01 && f < 1)
                 {
                     var eta = TimeSpan.FromSeconds(_sw.Elapsed.TotalSeconds * (1 - f) / f);
-                    Elapsed += $" · faltam ~{Fmt.Duration(eta)}";
+                    Elapsed += L.T($" · faltam ~{Fmt.Duration(eta)}");
                 }
             });
         };
@@ -65,7 +65,7 @@ public sealed partial class OperationViewModel : ViewModelBase
             Failed = !ok;
             Indeterminate = false;
             if (ok) Fraction = 1;
-            Status = ok ? "Concluído" : "Não foi possível concluir";
+            Status = ok ? L.T("Concluído") : L.T("Não foi possível concluir");
             ResultText = message;
             Elapsed = Fmt.Duration(_sw.Elapsed);
             if (message != null) Log.Add(message);
@@ -77,7 +77,7 @@ public sealed partial class OperationViewModel : ViewModelBase
     {
         Sink.Resume();
         Sink.Cancel();
-        Status = "Cancelando…";
+        Status = L.T("Cancelando…");
     }
 
     [RelayCommand]

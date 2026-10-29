@@ -10,19 +10,19 @@ public sealed record WindowsSetupOptions(bool BypassRequirements, bool LocalAcco
 
     public string Summary => string.Join("; ", new[]
     {
-        BypassRequirements ? "sem exigência de TPM 2.0, Secure Boot e 4 GB de RAM" : null,
-        LocalAccount ? "sem exigência de conta Microsoft/internet" : null,
-        string.IsNullOrWhiteSpace(UserName) ? null : $"conta local “{UserName}”",
-        SkipPrivacy ? "sem as perguntas de privacidade" : null,
-        NoAutoEncryption ? "sem criptografia automática do disco" : null,
+        BypassRequirements ? L.T("sem exigência de TPM 2.0, Secure Boot e 4 GB de RAM") : null,
+        LocalAccount ? L.T("sem exigência de conta Microsoft/internet") : null,
+        string.IsNullOrWhiteSpace(UserName) ? null : L.T($"conta local “{UserName}”"),
+        SkipPrivacy ? L.T("sem as perguntas de privacidade") : null,
+        NoAutoEncryption ? L.T("sem criptografia automática do disco") : null,
     }.Where(x => x != null));
 
     /// <summary>Nome válido para conta local do Windows (nulo = ok).</summary>
     public static string? ValidateUser(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return null;
-        if (name.Length > 20) return "O nome da conta tem no máximo 20 caracteres.";
-        if (name.IndexOfAny("/\\[]:;|=,+*?<>\"@".ToCharArray()) >= 0 || name.Trim('.', ' ').Length == 0) return "O nome da conta não pode ter / \\ [ ] : ; | = , + * ? < > \" @.";
+        if (name.Length > 20) return L.T("O nome da conta tem no máximo 20 caracteres.");
+        if (name.IndexOfAny("/\\[]:;|=,+*?<>\"@".ToCharArray()) >= 0 || name.Trim('.', ' ').Length == 0) return L.T("O nome da conta não pode ter / \\ [ ] : ; | = , + * ? < > \" @.");
         return null;
     }
 }

@@ -1,14 +1,15 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:core="using:LibertyX.Partition.Core.Platform" xmlns:p="using:LibertyX.Partition.Core.Platform" x:Class="LibertyX.Partition.Views.HealthView" x:DataType="vm:HealthViewModel">
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:l="using:LibertyX.Partition" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:LibertyX.Partition.ViewModels" xmlns:c="using:LibertyX.Partition.Controls" xmlns:core="using:LibertyX.Partition.Core.Platform" xmlns:p="using:LibertyX.Partition.Core.Platform" x:Class="LibertyX.Partition.Views.HealthView" x:DataType="vm:HealthViewModel">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Margin="0,4,0,18">
-      <TextBlock Classes="h1" Text="Saúde e propriedades" />
-      <TextBlock Classes="muted" Text="O que o próprio disco relata sobre si: S.M.A.R.T. (SATA) ou o log de saúde (NVMe)." />
+      <TextBlock Classes="h1" Text="{l:T 'Saúde e propriedades'}" />
+      <TextBlock Classes="muted" Text="{l:T 'O que o próprio disco relata sobre si: S.M.A.R.T. (SATA) ou o log de saúde (NVMe).'}" />
     </StackPanel>
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="0.8*" MinWidth="250" MaxWidth="330" /><ColumnDefinition Width="20" /><ColumnDefinition Width="*" MinWidth="320" /></Grid.ColumnDefinitions>
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="10">
-          <TextBlock Classes="section" Text="DISCO" />
+          <TextBlock Classes="section" Text="{l:T 'DISCO'}" />
           <ContentControl Content="{Binding Picker}" />
         </StackPanel>
       </ScrollViewer>
@@ -27,20 +28,20 @@
             </Grid>
           </Border>
           <UniformGrid Columns="3">
-            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="TEMPERATURA" /><TextBlock Text="{Binding Temp}" Classes="h2" /></StackPanel></Border>
-            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="LIGADO" /><TextBlock Text="{Binding Hours}" Classes="h2" /></StackPanel></Border>
-            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="CICLOS" /><TextBlock Text="{Binding Cycles}" Classes="h2" /></StackPanel></Border>
-            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="VIDA ÚTIL" /><TextBlock Text="{Binding Life}" Classes="h2" Foreground="{StaticResource Ouro}" /></StackPanel></Border>
-            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="ESCRITO" /><TextBlock Text="{Binding Written}" Classes="h2" /></StackPanel></Border>
-            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="LIDO" /><TextBlock Text="{Binding Read}" Classes="h2" /></StackPanel></Border>
+            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="{l:T 'TEMPERATURA'}" /><TextBlock Text="{Binding Temp}" Classes="h2" /></StackPanel></Border>
+            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="{l:T 'LIGADO'}" /><TextBlock Text="{Binding Hours}" Classes="h2" /></StackPanel></Border>
+            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="{l:T 'CICLOS'}" /><TextBlock Text="{Binding Cycles}" Classes="h2" /></StackPanel></Border>
+            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="{l:T 'VIDA ÚTIL'}" /><TextBlock Text="{Binding Life}" Classes="h2" Foreground="{StaticResource Ouro}" /></StackPanel></Border>
+            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="{l:T 'ESCRITO'}" /><TextBlock Text="{Binding Written}" Classes="h2" /></StackPanel></Border>
+            <Border Classes="card" Margin="0,0,10,10" Padding="14"><StackPanel><TextBlock Classes="section" Text="{l:T 'LIDO'}" /><TextBlock Text="{Binding Read}" Classes="h2" /></StackPanel></Border>
           </UniformGrid>
           <Border Classes="card">
             <StackPanel Spacing="6">
-              <TextBlock Classes="section" Text="ATRIBUTOS" />
+              <TextBlock Classes="section" Text="{l:T 'ATRIBUTOS'}" />
               <Grid ColumnDefinitions="50,*,80,80,80,140,90" Margin="0,4,0,4">
-                <TextBlock Classes="faint" Text="ID" /><TextBlock Grid.Column="1" Classes="faint" Text="Atributo" />
-                <TextBlock Grid.Column="2" Classes="faint" Text="Atual" HorizontalAlignment="Right" /><TextBlock Grid.Column="3" Classes="faint" Text="Pior" HorizontalAlignment="Right" />
-                <TextBlock Grid.Column="4" Classes="faint" Text="Limite" HorizontalAlignment="Right" /><TextBlock Grid.Column="5" Classes="faint" Text="Valor bruto" HorizontalAlignment="Right" />
+                <TextBlock Classes="faint" Text="{l:T 'ID'}" /><TextBlock Grid.Column="1" Classes="faint" Text="{l:T 'Atributo'}" />
+                <TextBlock Grid.Column="2" Classes="faint" Text="{l:T 'Atual'}" HorizontalAlignment="Right" /><TextBlock Grid.Column="3" Classes="faint" Text="{l:T 'Pior'}" HorizontalAlignment="Right" />
+                <TextBlock Grid.Column="4" Classes="faint" Text="{l:T 'Limite'}" HorizontalAlignment="Right" /><TextBlock Grid.Column="5" Classes="faint" Text="{l:T 'Valor bruto'}" HorizontalAlignment="Right" />
               </Grid>
               <ItemsControl ItemsSource="{Binding Attributes}">
                 <ItemsControl.ItemTemplate>
@@ -53,9 +54,9 @@
                       <TextBlock Grid.Column="4" Text="{Binding Threshold}" HorizontalAlignment="Right" Foreground="{StaticResource Apagado}" />
                       <TextBlock Grid.Column="5" Text="{Binding Raw, StringFormat='{}{0:N0}'}" HorizontalAlignment="Right" />
                       <Panel Grid.Column="6" HorizontalAlignment="Right">
-                        <Border Classes="chip green" IsVisible="{Binding Level, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static p:HealthLevel.Good}}"><TextBlock Text="OK" /></Border>
-                        <Border Classes="chip orange" IsVisible="{Binding Level, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static p:HealthLevel.Caution}}"><TextBlock Text="Atenção" /></Border>
-                        <Border Classes="chip red" IsVisible="{Binding Level, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static p:HealthLevel.Bad}}"><TextBlock Text="Falha" /></Border>
+                        <Border Classes="chip green" IsVisible="{Binding Level, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static p:HealthLevel.Good}}"><TextBlock Text="{l:T 'OK'}" /></Border>
+                        <Border Classes="chip orange" IsVisible="{Binding Level, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static p:HealthLevel.Caution}}"><TextBlock Text="{l:T 'Atenção'}" /></Border>
+                        <Border Classes="chip red" IsVisible="{Binding Level, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static p:HealthLevel.Bad}}"><TextBlock Text="{l:T 'Falha'}" /></Border>
                       </Panel>
                     </Grid>
                   </DataTemplate>
@@ -65,7 +66,7 @@
           </Border>
           <Border Classes="card">
             <StackPanel Spacing="4">
-              <TextBlock Classes="section" Text="PROPRIEDADES DO DISCO" Margin="0,0,0,6" />
+              <TextBlock Classes="section" Text="{l:T 'PROPRIEDADES DO DISCO'}" Margin="0,0,0,6" />
               <ItemsControl ItemsSource="{Binding Properties}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:InfoRow">

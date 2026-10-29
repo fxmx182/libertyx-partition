@@ -99,7 +99,7 @@ public static class PartitionFinder
                         for (long k = 1; k <= 64; k++) { long c = (e + align - 1) / align * align + k * align; if (!checkedSet.Contains(c)) candidates.Add(c); }
                     }
                 }
-                if (++iter % 64 == 0) progress?.Report(new("Procurando setores de boot", Math.Min(0.99, (double)l / sectors), found.Count, l, sectors));
+                if (++iter % 64 == 0) progress?.Report(new(L.T("Procurando setores de boot"), Math.Min(0.99, (double)l / sectors), found.Count, l, sectors));
             }
         }
         else
@@ -126,7 +126,7 @@ public static class PartitionFinder
                     bool f2 = o + 1024 + 512 <= got && U32(buf, o + 1024) == 0xF2F52010;
                     Consider((p + o) / ss, buf.AsSpan(o, Math.Min(4096, got - o)), ext || hfs || f2 ? buf.AsSpan(o + 1024) : default);
                 }
-                progress?.Report(new("Lendo o disco inteiro", (double)p / disk.Length, found.Count, p / ss, sectors));
+                progress?.Report(new(L.T("Lendo o disco inteiro"), (double)p / disk.Length, found.Count, p / ss, sectors));
             }
         }
 
@@ -149,7 +149,7 @@ public static class PartitionFinder
         }
         // volumes "dentro" de outros e só com estrutura quebrada (ex.: imagem guardada num arquivo) somem
         var result = list.Where(f => !(f.Conflicting && !f.Verified && keep.Any(k => f.StartLba > k.StartLba && f.EndLba <= k.EndLba))).ToList();
-        progress?.Report(new("Concluído", 1, result.Count, sectors, sectors));
+        progress?.Report(new(L.T("Concluído"), 1, result.Count, sectors, sectors));
         return result.OrderBy(f => f.StartLba).ToList();
     }
 
@@ -171,8 +171,8 @@ public static class PartitionFinder
             if (start >= 0 && start % ss == 0 && total > 0 && U64(sec, 0x88) == 1)
                 res.Add(new FoundPartition
                 {
-                    StartLba = start / ss, SectorCount = total / ss, FileSystem = FsKind.Btrfs, Variant = "Btrfs", Verified = true,
-                    Evidence = bytenr == 0x10000 ? "superbloco Btrfs" : $"cópia do superbloco Btrfs ({DiskSizeText(bytenr)})",
+                    StartLba = start / ss, SectorCount = total / ss, FileSystem = FsKind.Btrfs, Variant = L.T("Btrfs"), Verified = true,
+                    Evidence = bytenr == 0x10000 ? L.T("superbloco Btrfs") : L.T($"cópia do superbloco Btrfs ({DiskSizeText(bytenr)})"),
                     Label = Encoding.UTF8.GetString(sec.Slice(0x12B, 256)).TrimEnd('\0'),
                 });
             return res;
@@ -184,7 +184,7 @@ public static class PartitionFinder
             res.Add(new FoundPartition
             {
                 StartLba = lba, SectorCount = 1, FileSystem = FsKind.Luks, Variant = ver == 2 ? "LUKS2" : "LUKS1", Verified = ver is 1 or 2,
-                Evidence = "cabeçalho LUKS", LengthGuessed = true, Label = string.IsNullOrEmpty(label) ? null : label,
+                Evidence = L.T("cabeçalho LUKS"), LengthGuessed = true, Label = string.IsNullOrEmpty(label) ? null : label,
             });
             return res;
         }
@@ -209,7 +209,7 @@ public static class PartitionFinder
             long len = nb.TotalSectors * nb.BytesPerSector / ss + 1;
             var sub = disk.Slice(lba * ss, len * ss);
             bool mftOk = false; string? label = null;
-            var primary = new FoundPartition { StartLba = lba, SectorCount = len, FileSystem = FsKind.Ntfs, Evidence = "setor de boot" };
+            var primary = new FoundPartition { StartLba = lba, SectorCount = len, FileSystem = FsKind.Ntfs, Evidence = L.T("setor de boot") };
             try
             {
                 var rec = sub.ReadBytes(nb.MftLcn * nb.ClusterSize, 4);
@@ -231,7 +231,7 @@ public static class PartitionFinder
                         res.Add(new FoundPartition
                         {
                             StartLba = backupStart, SectorCount = len, FileSystem = FsKind.Ntfs, Verified = true,
-                            Evidence = "cópia do setor de boot", Label = v?.ReadLabel(), LooksLikeRecovery = IsRecoveryLabel(v?.ReadLabel()),
+                            Evidence = L.T("cópia do setor de boot"), Label = v?.ReadLabel(), LooksLikeRecovery = IsRecoveryLabel(v?.ReadLabel()),
                         });
                         return res;
                     }
@@ -253,9 +253,9 @@ public static class PartitionFinder
                 long len = (long)U64(sec, 72) * (1L << bpsShift) / ss;
                 // o setor 0 do exFAT é o principal; a reserva fica 12 setores depois
                 long start = lba;
-                string ev = "setor de boot";
+                string ev = L.T("setor de boot");
                 bool prevIsBoot = lba >= 12 && Match(disk.ReadBytes((lba - 12) * ss, 16), 3, "EXFAT   "u8);
-                if (prevIsBoot || (lba >= 12 && (long)U64(sec, 64) == lba - 12)) { start = lba - 12; ev = "cópia do setor de boot"; }
+                if (prevIsBoot || (lba >= 12 && (long)U64(sec, 64) == lba - 12)) { start = lba - 12; ev = L.T("cópia do setor de boot"); }
                 if (len > 0)
                 {
                     var f = new FoundPartition { StartLba = start, SectorCount = len, FileSystem = FsKind.ExFat, Evidence = ev, Verified = true };
@@ -273,7 +273,7 @@ public static class PartitionFinder
             long tot = U16(sec, 19) != 0 ? U16(sec, 19) : U32(sec, 32);
             long len = tot * bps / ss;
             long start = lba;
-            string ev = "setor de boot";
+            string ev = L.T("setor de boot");
             if (fat == FsKind.Fat32 && lba >= 6)
             {
                 // a cópia do FAT32 fica no setor 6: se o setor 6 antes também é boot igual, este é a cópia
@@ -305,7 +305,7 @@ public static class PartitionFinder
             res.Add(new FoundPartition
             {
                 StartLba = lba, SectorCount = tot > 0 ? tot * U16(sec, 11) / ss : 1, FileSystem = FsKind.BitLocker,
-                Evidence = "cabeçalho BitLocker", Verified = true, LengthGuessed = tot <= 0,
+                Evidence = L.T("cabeçalho BitLocker"), Verified = true, LengthGuessed = tot <= 0,
             });
             return res;
         }
@@ -314,14 +314,14 @@ public static class PartitionFinder
         {
             long n = (long)U64(sec, 0x18), bps = U32(sec, 0x20);
             if (n > 0 && bps is 512 or 4096)
-                res.Add(new FoundPartition { StartLba = lba, SectorCount = n * bps / ss, FileSystem = FsKind.ReFS, Variant = "ReFS", Evidence = "setor de boot ReFS", Verified = true });
+                res.Add(new FoundPartition { StartLba = lba, SectorCount = n * bps / ss, FileSystem = FsKind.ReFS, Variant = "ReFS", Evidence = L.T("setor de boot ReFS"), Verified = true });
             return res;
         }
         if (sec.Length >= 48 && Match(sec, 32, "NXSB"u8))
         {
             long bs = U32(sec, 36), count = (long)U64(sec, 40);
             if (bs is >= 4096 and <= 65536 && count > 0)
-                res.Add(new FoundPartition { StartLba = lba, SectorCount = bs * count / ss, FileSystem = FsKind.Apfs, Variant = "APFS", Evidence = "superbloco do contêiner APFS", Verified = true });
+                res.Add(new FoundPartition { StartLba = lba, SectorCount = bs * count / ss, FileSystem = FsKind.Apfs, Variant = "APFS", Evidence = L.T("superbloco do contêiner APFS"), Verified = true });
             return res;
         }
         if (sec.Length >= 4096 && Match(sec, 4086, "SWAPSPACE2"u8) && U32(sec, 1024) == 1)
@@ -330,7 +330,7 @@ public static class PartitionFinder
             if (last > 0)
                 res.Add(new FoundPartition
                 {
-                    StartLba = lba, SectorCount = (last + 1) * 4096 / ss, FileSystem = FsKind.LinuxSwap, Variant = "Linux swap", Evidence = "cabeçalho de swap",
+                    StartLba = lba, SectorCount = (last + 1) * 4096 / ss, FileSystem = FsKind.LinuxSwap, Variant = L.T("Linux swap"), Evidence = L.T("cabeçalho de swap"),
                     Verified = true, Label = Encoding.UTF8.GetString(sec.Slice(1024 + 28, 16)).TrimEnd('\0'),
                 });
             return res;
@@ -342,7 +342,7 @@ public static class PartitionFinder
                 res.Add(new FoundPartition
                 {
                     StartLba = lba, SectorCount = bs * total / ss, FileSystem = FsKind.HfsPlus, Variant = Match(plus1024, 0, "HX"u8) ? "HFSX" : "HFS+",
-                    Evidence = "cabeçalho de volume HFS+", Verified = true,
+                    Evidence = L.T("cabeçalho de volume HFS+"), Verified = true,
                 });
             return res;
         }
@@ -356,7 +356,7 @@ public static class PartitionFinder
                 res.Add(new FoundPartition
                 {
                     StartLba = primaryByte / ss, SectorCount = ext.Blocks * ext.BlockSize / ss, FileSystem = FsKind.Ext, Variant = ext.Variant,
-                    Evidence = ext.Group == 0 ? "superbloco " + ext.Variant : $"cópia do superbloco (grupo {ext.Group})",
+                    Evidence = ext.Group == 0 ? L.T("superbloco ") + ext.Variant : L.T($"cópia do superbloco (grupo {ext.Group})"),
                     Verified = true, Label = ext.Label,
                 });
         }
@@ -413,7 +413,7 @@ public static class PartitionFinder
         return new FoundPartition
         {
             StartLba = start / ss, SectorCount = blocks * bs / ss, FileSystem = FsKind.Xfs, Variant = (U16BE(sec, 100) & 0xF) >= 5 ? "XFS v5" : "XFS",
-            Verified = true, Evidence = copies == 0 ? "superbloco XFS" : $"cópia do superbloco XFS (grupo {copies})",
+            Verified = true, Evidence = copies == 0 ? L.T("superbloco XFS") : L.T($"cópia do superbloco XFS (grupo {copies})"),
             Label = Ascii(sec, 108, 12) is { Length: > 0 } l ? l : null,
         };
     }
@@ -549,7 +549,7 @@ public static class PartitionFinder
             long first = PartitionCodec.GptFirstUsable(t), last = PartitionCodec.GptLastUsable(t);
             foreach (var e in t.Entries)
                 if (e.StartLba < first || e.EndLba > last)
-                    throw new InvalidOperationException($"A partição em {e.StartLba} invade a área reservada do GPT. Use MBR para este disco.");
+                    throw new InvalidOperationException(L.T($"A partição em {e.StartLba} invade a área reservada do GPT. Use MBR para este disco."));
         }
         return t;
     }

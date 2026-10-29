@@ -20,8 +20,8 @@ public sealed class ApfsVolumeInfo
     public bool Sealed => (Incompat & 0x20) != 0;
     public string RoleName => Role switch
     {
-        0x1 => "Sistema", 0x2 => "Usuário", 0x4 => "Recuperação", 0x8 => "Memória virtual", 0x10 => "Preboot",
-        0x40 => "Dados", 0x80 => "Baseband", 0xC0 => "Atualização", 0x100 => "xART", 0x140 => "Hardware", 0x180 => "Backup",
+        0x1 => L.T("Sistema"), 0x2 => L.T("Usuário"), 0x4 => L.T("Recuperação"), 0x8 => L.T("Memória virtual"), 0x10 => "Preboot",
+        0x40 => L.T("Dados"), 0x80 => "Baseband", 0xC0 => L.T("Atualização"), 0x100 => "xART", 0x140 => L.T("Hardware"), 0x180 => L.T("Backup"),
         _ => "",
     };
 }
@@ -168,9 +168,9 @@ public sealed class ApfsContainer
         error = null;
         var c = new ApfsContainer(dev);
         var b0 = dev.ReadBytes(0, 4096);
-        if (!IsNxSuperblock(b0)) { error = "Superbloco do contêiner APFS não encontrado."; return null; }
+        if (!IsNxSuperblock(b0)) { error = L.T("Superbloco do contêiner APFS não encontrado."); return null; }
         uint bs = U32(b0, 36);
-        if (bs is < 4096 or > 65536 || (bs & (bs - 1)) != 0) { error = "Tamanho de bloco do APFS inválido."; return null; }
+        if (bs is < 4096 or > 65536 || (bs & (bs - 1)) != 0) { error = L.T("Tamanho de bloco do APFS inválido."); return null; }
         c.BlockSize = bs;
         if (bs != 4096) b0 = dev.ReadBytes(0, (int)bs);
         // o bloco 0 é só uma cópia: o superbloco atual é o de maior xid íntegro na área de pontos de verificação
@@ -188,7 +188,7 @@ public sealed class ApfsContainer
                 }
                 catch (MediaReadException) { }
             }
-        if (all.Count == 0) { error = "Nenhum superbloco APFS íntegro (soma de verificação)."; return null; }
+        if (all.Count == 0) { error = L.T("Nenhum superbloco APFS íntegro (soma de verificação)."); return null; }
         var ordered = all.GroupBy(b => U64(b, 16)).Select(g => g.First()).OrderByDescending(b => U64(b, 16)).ToList();
         c.CheckpointCount = ordered.Count;
         // o mais novo cujo mapa de objetos abre de verdade (um ponto de verificação pela metade é pulado)
@@ -203,7 +203,7 @@ public sealed class ApfsContainer
             catch (Exception) { c.Volumes.Clear(); }
             c.UsedOlderSuperblock = true;
         }
-        if (c.Volumes.Count == 0) { error = "Nenhum volume legível no contêiner APFS."; return null; }
+        if (c.Volumes.Count == 0) { error = L.T("Nenhum volume legível no contêiner APFS."); return null; }
         if (ordered[0] == c._nx) c.UsedOlderSuperblock = false;
         c.Xid = U64(c._nx, 16);
         c.BlockCount = U64(c._nx, 40);
@@ -246,7 +246,7 @@ public sealed class ApfsContainer
 
     public byte[] ReadBlock(ulong paddr)
     {
-        if (paddr == 0 || (paddr + 1) * BlockSize > (ulong)Dev.Length) throw new MediaReadException((long)paddr * BlockSize, (int)BlockSize, 0, "bloco APFS fora do volume");
+        if (paddr == 0 || (paddr + 1) * BlockSize > (ulong)Dev.Length) throw new MediaReadException((long)paddr * BlockSize, (int)BlockSize, 0, L.T("bloco APFS fora do volume"));
         return Dev.ReadBytes((long)paddr * BlockSize, (int)BlockSize);
     }
 
@@ -300,7 +300,7 @@ public sealed class ApfsContainer
     internal Dictionary<ulong, List<(ulong xid, ulong paddr, uint flags)>> LoadOmap(ulong omapPaddr)
     {
         var om = ReadBlock(omapPaddr);
-        if ((U32(om, 24) & 0xFFFF) != 0xB || !ChecksumOk(om)) throw new InvalidDataException("mapa de objetos ilegível");
+        if ((U32(om, 24) & 0xFFFF) != 0xB || !ChecksumOk(om)) throw new InvalidDataException(L.T("mapa de objetos ilegível"));
         var map = new Dictionary<ulong, List<(ulong, ulong, uint)>>();
         var stack = new Stack<ulong>();
         stack.Push(U64(om, 48));
@@ -333,9 +333,9 @@ public sealed class ApfsContainer
     internal void WalkFsTree(ApfsVolumeInfo vol, Dictionary<ulong, List<(ulong xid, ulong paddr, uint flags)>> volOmap, ulong maxXid, ApfsRecords into, bool keepNewest, CancellationToken ct)
     {
         var root = Lookup(volOmap, vol.RootTreeOid, maxXid);
-        if (root == null) throw new InvalidDataException("raiz da árvore de arquivos não está no mapa de objetos");
+        if (root == null) throw new InvalidDataException(L.T("raiz da árvore de arquivos não está no mapa de objetos"));
         var rb = ReadBlock(root.Value);
-        if (!ChecksumOk(rb)) throw new InvalidDataException("raiz da árvore de arquivos corrompida");
+        if (!ChecksumOk(rb)) throw new InvalidDataException(L.T("raiz da árvore de arquivos corrompida"));
         uint btFlags = U32(rb, rb.Length - 40);
         bool physical = (btFlags & 0x10) != 0;
         var stack = new Stack<byte[]>();
@@ -419,7 +419,7 @@ public sealed class ApfsContainer
                 if (!onlyVolume && !known.Contains(U64(b, 8))) continue;
                 into.Ingest(b, U64(b, 16), Entries(b, 0, 0), keepNewest: true);
             }
-            progress?.Report(new("Procurando versões antigas da árvore", (double)p / total, into.Inodes.Count, p, total));
+            progress?.Report(new(L.T("Procurando versões antigas da árvore"), (double)p / total, into.Inodes.Count, p, total));
         }
     }
 

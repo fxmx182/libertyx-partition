@@ -38,14 +38,14 @@ public static class DiskBenchmark
 {
     public static readonly BenchTest[] Tests =
     [
-        new("SEQ1M-Q8", "Sequencial 1 MiB · Q8", true, 1 << 20, 8, false),
-        new("SEQ1M-Q8", "Sequencial 1 MiB · Q8", true, 1 << 20, 8, true),
-        new("SEQ1M-Q1", "Sequencial 1 MiB · Q1", true, 1 << 20, 1, false),
-        new("SEQ1M-Q1", "Sequencial 1 MiB · Q1", true, 1 << 20, 1, true),
-        new("RND4K-Q32", "Aleatório 4 KiB · Q32", false, 4096, 32, false),
-        new("RND4K-Q32", "Aleatório 4 KiB · Q32", false, 4096, 32, true),
-        new("RND4K-Q1", "Aleatório 4 KiB · Q1", false, 4096, 1, false),
-        new("RND4K-Q1", "Aleatório 4 KiB · Q1", false, 4096, 1, true),
+        new("SEQ1M-Q8", L.T("Sequencial 1 MiB · Q8"), true, 1 << 20, 8, false),
+        new("SEQ1M-Q8", L.T("Sequencial 1 MiB · Q8"), true, 1 << 20, 8, true),
+        new("SEQ1M-Q1", L.T("Sequencial 1 MiB · Q1"), true, 1 << 20, 1, false),
+        new("SEQ1M-Q1", L.T("Sequencial 1 MiB · Q1"), true, 1 << 20, 1, true),
+        new("RND4K-Q32", L.T("Aleatório 4 KiB · Q32"), false, 4096, 32, false),
+        new("RND4K-Q32", L.T("Aleatório 4 KiB · Q32"), false, 4096, 32, true),
+        new("RND4K-Q1", L.T("Aleatório 4 KiB · Q1"), false, 4096, 1, false),
+        new("RND4K-Q1", L.T("Aleatório 4 KiB · Q1"), false, 4096, 1, true),
     ];
 
     private const FileOptions NoBuffering = (FileOptions)0x20000000;
@@ -59,7 +59,7 @@ public static class DiskBenchmark
         var opts = FileOptions.Asynchronous | FileOptions.WriteThrough | (OperatingSystem.IsWindows() ? NoBuffering : 0);
         try
         {
-            progress?.Report(new("Preparando arquivo de teste", 0, null));
+            progress?.Report(new(L.T("Preparando arquivo de teste"), 0, null));
             // sem pré-alocar: no FAT32/exFAT de cartões o Windows zeraria o arquivo inteiro antes de
             // devolver o controle (um minuto ou mais parado); gravar em sequência já estende o arquivo
             using (var h = OpenTestFile(path, true, opts))
@@ -71,14 +71,14 @@ public static class DiskBenchmark
                 {
                     ct.ThrowIfCancellationRequested();
                     await RandomAccess.WriteAsync(h, b.Memory[..(int)Math.Min(8 << 20, fileSize - p)], p, ct);
-                    progress?.Report(new("Preparando arquivo de teste", (double)p / fileSize * 0.1, null));
+                    progress?.Report(new(L.T("Preparando arquivo de teste"), (double)p / fileSize * 0.1, null));
                 }
             }
             var tests = Tests.Where(t => includeWrite || !t.Write).ToList();
             for (int i = 0; i < tests.Count; i++)
             {
                 var t = tests[i];
-                progress?.Report(new(t.Label + (t.Write ? " — escrita" : " — leitura"), 0.1 + 0.9 * i / tests.Count, null));
+                progress?.Report(new(t.Label + (t.Write ? L.T(" — escrita") : L.T(" — leitura")), 0.1 + 0.9 * i / tests.Count, null));
                 using var h = OpenTestFile(path, false, opts);
                 var r = await RunOne(h, fileSize, t, perTest, ct);
                 results.Add(r);
@@ -109,7 +109,7 @@ public static class DiskBenchmark
             fd = Platform.Linux.LinuxNative.Open(path, flags, Convert.ToInt32("644", 8));
             NoDirect = true;
         }
-        if (fd < 0) throw new IOException($"Não deu para abrir o arquivo de teste em {Path.GetDirectoryName(path)} (erro {Marshal.GetLastPInvokeError()}).");
+        if (fd < 0) throw new IOException(L.T($"Não deu para abrir o arquivo de teste em {Path.GetDirectoryName(path)} (erro {Marshal.GetLastPInvokeError()})."));
         return new SafeFileHandle(fd, ownsHandle: true);
     }
 

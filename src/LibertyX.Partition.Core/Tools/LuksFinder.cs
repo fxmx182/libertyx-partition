@@ -17,8 +17,8 @@ public enum LuksState { Active, Openable, Dead, InFile }
 /// <summary>Um pedaço do disco como ele está hoje: partição (com o sistema de arquivos atual) ou espaço livre.</summary>
 public sealed record LuksArea(long Offset, long Length, string Name, FsKind Fs, bool IsPartition, bool Critical, bool Whole = false)
 {
-    public string Of => Whole ? "do disco" : IsPartition ? $"da {Name}" : $"do {Name}";
-    public string In => Whole ? "no disco" : IsPartition ? $"na {Name}" : $"no {Name}";
+    public string Of => Whole ? L.T("do disco") : IsPartition ? L.T($"da {Name}") : L.T($"do {Name}");
+    public string In => Whole ? L.T("no disco") : IsPartition ? L.T($"na {Name}") : L.T($"no {Name}");
     public long End => Offset + Length;
     public bool Contains(long o) => o >= Offset && o < End;
 }
@@ -58,29 +58,29 @@ public sealed class LuksFinding
 
     public string StateText => State switch
     {
-        LuksState.Active => "Contêiner em uso",
-        LuksState.Openable => "Ainda abre com a senha",
-        LuksState.InFile => "Dentro de um arquivo",
-        _ => "Resto que não abre mais",
+        LuksState.Active => L.T("Contêiner em uso"),
+        LuksState.Openable => L.T("Ainda abre com a senha"),
+        LuksState.InFile => L.T("Dentro de um arquivo"),
+        _ => L.T("Resto que não abre mais"),
     };
 
     public string Explain()
     {
         if (State == LuksState.InFile)
-            return "Está guardado num arquivo que existe hoje nessa partição — um contêiner em arquivo ou um backup de cabeçalho (que, com a senha, reabre o volume original). "
-                   + "Por fora não se apaga sem estragar o sistema de arquivos: apague o arquivo pelo sistema e esvazie a lixeira.";
-        string hdr = Version == 1 ? (PrimaryOk ? "cabeçalho inteiro" : "cabeçalho danificado")
-            : PrimaryOk && SecondaryOk ? "as duas cópias do cabeçalho inteiras"
-            : PrimaryOk ? "cabeçalho principal inteiro (a cópia reserva sumiu)"
-            : SecondaryOk ? "só a cópia reserva do cabeçalho — a principal foi sobrescrita, mas o cryptsetup usa a reserva"
-            : "cabeçalho danificado (o checksum não confere)";
-        string keys = Slots.Count == 0 ? "nenhuma chave registrada" : $"{IntactSlots} de {Slots.Count} {(Slots.Count == 1 ? "chave" : "chaves")} com o material inteiro";
-        string data = DataRandom < 0 ? "" : DataRandom > 0.9 ? "; os dados cifrados ainda estão lá" : DataRandom > 0.2 ? "; parte dos dados cifrados ainda está lá" : "; a área de dados já foi reescrita";
+            return L.T("Está guardado num arquivo que existe hoje nessa partição — um contêiner em arquivo ou um backup de cabeçalho (que, com a senha, reabre o volume original). ")
+                   + L.T("Por fora não se apaga sem estragar o sistema de arquivos: apague o arquivo pelo sistema e esvazie a lixeira.");
+        string hdr = Version == 1 ? (PrimaryOk ? L.T("cabeçalho inteiro") : L.T("cabeçalho danificado"))
+            : PrimaryOk && SecondaryOk ? L.T("as duas cópias do cabeçalho inteiras")
+            : PrimaryOk ? L.T("cabeçalho principal inteiro (a cópia reserva sumiu)")
+            : SecondaryOk ? L.T("só a cópia reserva do cabeçalho — a principal foi sobrescrita, mas o cryptsetup usa a reserva")
+            : L.T("cabeçalho danificado (o checksum não confere)");
+        string keys = Slots.Count == 0 ? L.T("nenhuma chave registrada") : L.T($"{IntactSlots} de {Slots.Count} {(Slots.Count == 1 ? "chave" : "chaves")} com o material inteiro");
+        string data = DataRandom < 0 ? "" : DataRandom > 0.9 ? L.T("; os dados cifrados ainda estão lá") : DataRandom > 0.2 ? L.T("; parte dos dados cifrados ainda está lá") : L.T("; a área de dados já foi reescrita");
         string tail = State switch
         {
-            LuksState.Active => ". É um volume criptografado de verdade, em uso.",
-            LuksState.Openable => ". Quem tiver a senha (ou o arquivo de chave) ainda abre isso.",
-            _ => ". Sem chave inteira, não abre nem com a senha — mas ainda revela que o disco foi criptografado (UUID, rótulo, cifra).",
+            LuksState.Active => L.T(". É um volume criptografado de verdade, em uso."),
+            LuksState.Openable => L.T(". Quem tiver a senha (ou o arquivo de chave) ainda abre isso."),
+            _ => L.T(". Sem chave inteira, não abre nem com a senha — mas ainda revela que o disco foi criptografado (UUID, rótulo, cifra)."),
         };
         return char.ToUpperInvariant(hdr[0]) + $"{hdr[1..]}; {keys}{data}{tail}";
     }
@@ -135,7 +135,7 @@ public static class LuksFinder
     {
         var res = new List<LuksArea>();
         foreach (var p in d.Partitions.OrderBy(p => p.Offset))
-            res.Add(new LuksArea(p.Offset, p.Length, p.IsUnallocated ? "espaço não alocado" : p.IsWholeDisk ? "disco" : p.DisplayName == "*" ? $"partição em {DiskOperations.Size(p.Offset)}" : $"partição {p.DisplayName}",
+            res.Add(new LuksArea(p.Offset, p.Length, p.IsUnallocated ? L.T("espaço não alocado") : p.IsWholeDisk ? "disco" : p.DisplayName == "*" ? L.T($"partição em {DiskOperations.Size(p.Offset)}") : L.T($"partição {p.DisplayName}"),
                 p.FileSystem, !p.IsUnallocated, p.IsSystemCritical, p.IsWholeDisk));
         if (res.Count == 0) res.Add(new LuksArea(0, length, "disco", FsKind.Unknown, false, false));
         return res;
@@ -265,10 +265,10 @@ public static class LuksFinder
     private static string Describe(LuksFinding f)
     {
         var a = f.Area;
-        if (a == null) return $"a {DiskOperations.Size(f.Start)} do começo do disco";
-        if (!a.IsPartition) return $"{a.Name}, a {DiskOperations.Size(f.Start)} do começo do disco";
-        if (a.Offset == f.Start) return a.Fs == FsKind.Luks ? $"começo {a.Of}" : $"começo {a.Of}, que hoje é {FsDetect.Name(a.Fs)}";
-        return $"dentro {a.Of} ({FsDetect.Name(a.Fs)}), a {DiskOperations.Size(f.Start - a.Offset)} do começo dela";
+        if (a == null) return L.T($"a {DiskOperations.Size(f.Start)} do começo do disco");
+        if (!a.IsPartition) return L.T($"{a.Name}, a {DiskOperations.Size(f.Start)} do começo do disco");
+        if (a.Offset == f.Start) return a.Fs == FsKind.Luks ? L.T($"começo {a.Of}") : L.T($"começo {a.Of}, que hoje é {FsDetect.Name(a.Fs)}");
+        return L.T($"dentro {a.Of} ({FsDetect.Name(a.Fs)}), a {DiskOperations.Size(f.Start - a.Offset)} do começo dela");
     }
 
     private sealed record Parsed(long Start, int Version, bool Ok, long HeaderSize, string? Uuid, string? Label, string? Cipher, long DataOffset, List<LuksSlot> Slots);
@@ -414,7 +414,7 @@ public static class LuksFinder
                                         Func<LuksArea, List<(long off, long len)>?> usedRangesOf, Action<string> log, CancellationToken ct)
     {
         var res = new LuksEraseResult();
-        if (f.State == LuksState.InFile) { res.Skipped.Add("está dentro de um arquivo de hoje: apague o arquivo pelo sistema"); res.After = f; return res; }
+        if (f.State == LuksState.InFile) { res.Skipped.Add(L.T("está dentro de um arquivo de hoje: apague o arquivo pelo sistema")); res.After = f; return res; }
         var plan = new List<(long, long)>();
         var used = new Dictionary<LuksArea, List<(long off, long len)>?>();
         foreach (var (ro, rl) in f.Regions())
@@ -425,14 +425,14 @@ public static class LuksFinder
                 var a = layout.FirstOrDefault(x => x.Contains(p));
                 long pe = a == null ? re : Math.Min(re, a.End);
                 if (a == null || !a.IsPartition) plan.Add((p, pe - p));
-                else if (a.Critical) res.Skipped.Add($"{DiskOperations.Size(pe - p)} {a.In}, que está em uso pelo sistema");
+                else if (a.Critical) res.Skipped.Add(L.T($"{DiskOperations.Size(pe - p)} {a.In}, que está em uso pelo sistema"));
                 // o próprio contêiner (ou o que sobrou dele no começo da partição) e partição vazia: pode
                 else if ((a.Offset == f.Start && a.Fs is FsKind.Luks or FsKind.Unknown) || a.Fs == FsKind.Empty) plan.Add((p, pe - p));
-                else if (a.Fs == FsKind.Unknown) res.Skipped.Add($"{DiskOperations.Size(pe - p)} dentro {a.Of}, com um conteúdo que o app não reconhece: nada foi tocado ali");
+                else if (a.Fs == FsKind.Unknown) res.Skipped.Add(L.T($"{DiskOperations.Size(pe - p)} dentro {a.Of}, com um conteúdo que o app não reconhece: nada foi tocado ali"));
                 else
                 {
-                    if (!used.TryGetValue(a, out var u)) { log($"Lendo o mapa de uso {a.Of} ({FsDetect.Name(a.Fs)})…"); used[a] = u = usedRangesOf(a); }
-                    if (u == null) res.Skipped.Add($"{DiskOperations.Size(pe - p)} dentro {a.Of}: não deu para ler o mapa de uso de {FsDetect.Name(a.Fs)}, então nada foi tocado ali");
+                    if (!used.TryGetValue(a, out var u)) { log(L.T($"Lendo o mapa de uso {a.Of} ({FsDetect.Name(a.Fs)})…")); used[a] = u = usedRangesOf(a); }
+                    if (u == null) res.Skipped.Add(L.T($"{DiskOperations.Size(pe - p)} dentro {a.Of}: não deu para ler o mapa de uso de {FsDetect.Name(a.Fs)}, então nada foi tocado ali"));
                     else
                     {
                         long busy = 0;
@@ -443,7 +443,7 @@ public static class LuksFinder
                             long s = Math.Max(p, x.off + a.Offset), e = Math.Min(pe, x.off + a.Offset + x.len);
                             if (e > s) busy += e - s;
                         }
-                        if (busy > 0) res.Skipped.Add($"{DiskOperations.Size(busy)} dentro {a.Of} já pertencem a {FsDetect.Name(a.Fs)} (arquivos ou estruturas dele): ficaram como estão");
+                        if (busy > 0) res.Skipped.Add(L.T($"{DiskOperations.Size(busy)} dentro {a.Of} já pertencem a {FsDetect.Name(a.Fs)} (arquivos ou estruturas dele): ficaram como estão"));
                     }
                 }
                 p = pe;
